@@ -10,11 +10,14 @@ public class GcpSecret : ISecret
     public GcpSecret(string name, string value)
     {
         Name = name;
+        var projectId = GcpProjectConfig.ProjectId;
+    
         _secret = new Pulumi.Gcp.SecretManager.Secret(name, new Pulumi.Gcp.SecretManager.SecretArgs
         {
-            SecretId = name
+            SecretId = name,
+            Project = projectId
         });
-        
+    
         // GCP separates secret and secret version
         new Pulumi.Gcp.SecretManager.SecretVersion($"{name}-version", new Pulumi.Gcp.SecretManager.SecretVersionArgs
         {

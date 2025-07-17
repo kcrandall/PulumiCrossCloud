@@ -6,10 +6,14 @@ namespace PulumiCrossCloud.Gcp;
 public class GcpContainerRegistry : IContainerRegistry
 {
     private readonly Pulumi.Gcp.ArtifactRegistry.Repository _repository;
+    private readonly string _projectId;
+    private readonly string _region;
     
     public GcpContainerRegistry(string name)
     {
         Name = name;
+        _projectId = GcpProjectConfig.ProjectId;
+        _region = GcpProjectConfig.Region;
         _repository = new Pulumi.Gcp.ArtifactRegistry.Repository(name, new Pulumi.Gcp.ArtifactRegistry.RepositoryArgs
         {
             Format = "DOCKER",

@@ -14,15 +14,19 @@ public class GcpCloudRunCompute : ICompute
         ContainerRegistry = containerRegistry;
         ServiceType = ComputeServiceType.CloudRun;
         _requiredSecrets = new List<ISecret>();
-        
+    
+        var projectId = GcpProjectConfig.ProjectId;
+        var region = GcpProjectConfig.Region;
+    
         // Handle the registry URL as an Output
         var imageUri = containerRegistry is GcpContainerRegistry gcpRegistry 
             ? gcpRegistry.RegistryUrlOutput.Apply(url => $"{url}/{name}:{imageTag}")
-            : Output.Create($"PLACEHOLDER_REGISTRY_URL/{name}:{imageTag}");
-        
+            : Output.Create($"{region}-docker.pkg.dev/{projectId}/{name}:{imageTag}");
+    
         _service = new Pulumi.Gcp.CloudRun.Service(name, new Pulumi.Gcp.CloudRun.ServiceArgs
         {
-            Location = "us-central1",
+            Location = region,
+            Project = projectId,
             Template = new Pulumi.Gcp.CloudRun.Inputs.ServiceTemplateArgs
             {
                 Spec = new Pulumi.Gcp.CloudRun.Inputs.ServiceTemplateSpecArgs
