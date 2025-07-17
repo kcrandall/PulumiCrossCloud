@@ -1,0 +1,19 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    
+    <!-- Package metadata -->
+    <Authors>Your Name</Authors>
+    <Company>PulumiCrossCloud</Company>
+    <Product>PulumiCrossCloud</Product>
+    <Copyright>Copyright © 2025 PulumiCrossCloud</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/yourusername/PulumiCrossCloud</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/yourusername/PulumiCrossCloud</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>pulumi;cloud;aws;azure;gcp;infrastructure;iac;crosscloud</PackageTags>
+  </PropertyGroup>
+</Project>

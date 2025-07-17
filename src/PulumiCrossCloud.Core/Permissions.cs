@@ -1,0 +1,53 @@
+namespace PulumiCrossCloud.Core;
+
+public enum SecretPermissions
+{
+    Read,
+    Write,
+    Delete,
+    List,
+    GetMetadata
+}
+
+public enum ContainerRegistryPermissions
+{
+    Pull,
+    Push,
+    Delete,
+    List,
+    GetMetadata,
+    ManageRepository,
+    GetAuthToken
+}
+
+public enum ComputePermissions
+{
+    Start,
+    Stop,
+    Restart,
+    Terminate,
+    GetStatus,
+    GetLogs,
+    Connect,
+    UpdateConfiguration,
+    Scale
+}
+
+public enum ComputeServiceType
+{
+    // AWS
+    AppRunner,
+    Fargate,
+    EC2,
+    ECS,
+    
+    // Azure
+    ContainerApps,
+    ContainerInstances,
+    AppService,
+    
+    // GCP
+    CloudRun,
+    CloudRunJobs,
+    ComputeEngine
+}

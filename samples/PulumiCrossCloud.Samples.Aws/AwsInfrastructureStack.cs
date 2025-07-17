@@ -1,0 +1,47 @@
+using Pulumi;
+using PulumiCrossCloud.Core;
+using PulumiCrossCloud.Aws;
+
+namespace PulumiCrossCloud.Samples.Aws;
+
+public class AwsInfrastructureStack : Stack
+{
+    public AwsInfrastructureStack()
+    {
+        var factory = new AwsCloudResourceFactory();
+        
+        // Create resources - these will only be created once
+        var secret = factory.CreateSecret("app-secret", "my-secret-value");
+        var registry = factory.CreateContainerRegistry("app-registry");
+        
+        // Create different compute types based on needs
+        var appRunnerService = factory.CreateCompute("web-app", ComputeServiceType.AppRunner, registry);
+        var fargateService = factory.CreateCompute("background-worker", ComputeServiceType.Fargate, registry);
+        
+        var role = factory.CreateRole("app-role", @"{
+            ""Version"": ""2012-10-17"",
+            ""Statement"": [{
+                ""Effect"": ""Allow"",
+                ""Principal"": {
+                    ""Service"": [""apprunner.amazonaws.com"", ""ecs-tasks.amazonaws.com""]
+                },
+                ""Action"": ""sts:AssumeRole""
+            }]
+        }");
+        
+        // Add secret dependencies
+        ((AwsAppRunnerCompute)appRunnerService).AddRequiredSecret(secret);
+        ((AwsFargateCompute)fargateService).AddRequiredSecret(secret);
+        
+        // Configure permissions automatically - this generates least-privilege policies
+        appRunnerService.AttachRole(role);
+        fargateService.AttachRole(role);
+        
+        // Export some values - using public properties and Output types
+        this.AppRunnerUrl = ((AwsAppRunnerCompute)appRunnerService).ServiceUrl;
+        this.RegistryUrl = ((AwsContainerRegistry)registry).RegistryUrlOutput;
+    }
+    
+    [Output] public Output<string> AppRunnerUrl { get; set; }
+    [Output] public Output<string> RegistryUrl { get; set; }
+}
