@@ -13,12 +13,31 @@ PulumiCrossCloud is a .NET 9.0 library that provides cloud-agnostic infrastructu
 
 ### Project Structure
 ```
-src/
-├── PulumiCrossCloud.Core/          # Interfaces & abstractions
-├── PulumiCrossCloud.Aws/           # AWS implementations
-├── PulumiCrossCloud.Azure/         # Azure implementations  
-├── PulumiCrossCloud.Gcp/           # GCP implementations
-└── PulumiCrossCloud.Extensions/    # Helper extensions
+PulumiCrossCloud/
+├── src/
+│   ├── PulumiCrossCloud.Core/          # Interfaces & abstractions
+│   ├── PulumiCrossCloud.Aws/           # AWS implementations
+│   ├── PulumiCrossCloud.Azure/         # Azure implementations  
+│   ├── PulumiCrossCloud.Gcp/           # GCP implementations
+│   └── PulumiCrossCloud.Extensions/    # Helper extensions
+├── samples/
+│   ├── PulumiCrossCloud.Samples.Aws/       # AWS example projects
+│   ├── PulumiCrossCloud.Samples.Azure/     # Azure example projects
+│   └── PulumiCrossCloud.Samples.Gcp/       # GCP example projects
+├── tests/
+│   ├── PulumiCrossCloud.Core.Tests/        # Core library tests
+│   ├── PulumiCrossCloud.Aws.Tests/         # AWS implementation tests
+│   └── PulumiCrossCloud.Integration.Tests/ # Cross-cloud integration tests
+├── docs/                                   # Documentation files
+├── .github/
+│   ├── workflows/                           # CI/CD workflows
+│   └── copilot-instructions.md              # GitHub Copilot guidelines
+├── Directory.Build.props                    # Shared MSBuild properties
+├── .gitignore
+├── .copilotignore
+├── LICENSE
+├── README.md
+└── PulumiCrossCloud.sln                    # Solution file
 ```
 
 ### Key Interfaces
