@@ -24,13 +24,30 @@ public interface ICompute : ICloudResource, IPolicyProvider<ComputePermissions>
     void AddEnvironmentVariables(IDictionary<string, string> variables);
     
     /// <summary>
-    /// Configures the compute resource with appropriate permissions for its required secrets and container registry.
-    /// Each cloud provider handles this differently (AWS roles, Azure managed identities, GCP service accounts).
+    /// Adds a custom policy statement to the compute resource.
     /// </summary>
-    void ConfigurePermissions();
+    void AddPolicyStatement(IPolicyStatement statement);
+    
+    /// <summary>
+    /// Finalizes and builds the compute resource, applying all configuration and dependencies.
+    /// </summary>
+    void Build();
     
     void Start();
     void Stop();
     void Scale(int replicas);
-    void UpdateConfiguration(IDictionary<string, object> config);
+
+    /// <summary>
+    /// The minimum number of compute instances to run.
+    /// </summary>
+    int MinCount { get; set; }
+    /// <summary>
+    /// The maximum number of compute instances to run.
+    /// </summary>
+    int MaxCount { get; set; }
+
+    /// <summary>
+    /// Optional health check configuration for the compute resource.
+    /// </summary>
+    IHealthCheckConfiguration? HealthCheckConfiguration { get; set; }
 }

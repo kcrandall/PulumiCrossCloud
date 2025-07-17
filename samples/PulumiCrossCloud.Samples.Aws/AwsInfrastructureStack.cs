@@ -33,9 +33,6 @@ public class AwsInfrastructureStack : Stack
         ((AwsAppRunnerCompute)appRunnerService).AddRequiredSecret(secret);
         ((AwsFargateCompute)fargateService).AddRequiredSecret(secret);
         
-        // Configure permissions automatically - this generates least-privilege policies
-        appRunnerService.AttachRole(role);
-        fargateService.AttachRole(role);
         
         // Export some values - using public properties and Output types
         this.AppRunnerUrl = ((AwsAppRunnerCompute)appRunnerService).ServiceUrl;

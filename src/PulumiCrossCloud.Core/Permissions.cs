@@ -29,8 +29,8 @@ public enum ComputePermissions
     GetStatus,
     GetLogs,
     Connect,
+    Scale,
     UpdateConfiguration,
-    Scale
 }
 
 public enum ComputeServiceType

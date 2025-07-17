@@ -13,7 +13,9 @@ public class AwsAppRunnerCompute : ICompute
     private readonly string _name;
     private readonly IContainerRegistry _containerRegistry;
     private readonly string _imageTag;
-    
+    private readonly List<IPolicyStatement> _customPolicyStatements = new();
+    private Pulumi.Aws.AppRunner.AutoScalingConfigurationVersion? _autoScalingConfig;
+
     public AwsAppRunnerCompute(string name, IContainerRegistry containerRegistry, string imageTag = "latest")
     {
         _name = name;
@@ -24,10 +26,10 @@ public class AwsAppRunnerCompute : ICompute
         ServiceType = ComputeServiceType.AppRunner;
         _requiredSecrets = new List<ISecret>();
         _environmentVariables = new Dictionary<string, string>();
-        
+
         // Don't create the service yet - wait until ConfigurePermissions is called
     }
-    
+
     public string Name { get; }
     public ComputeServiceType ServiceType { get; }
     public IContainerRegistry ContainerRegistry { get; }
@@ -35,19 +37,24 @@ public class AwsAppRunnerCompute : ICompute
     public IDictionary<string, string> EnvironmentVariables => _environmentVariables;
     public Output<string> Arn => _service?.Arn ?? Output.Create("");
     public CloudProvider Provider => CloudProvider.AWS;
-    
+
     public Output<string> ServiceUrl => _service?.ServiceUrl ?? Output.Create("");
-    
+
+    public int MinCount { get; set; } = 1;
+    public int MaxCount { get; set; } = 1;
+
+    public IHealthCheckConfiguration? HealthCheckConfiguration { get; set; }
+
     public void AddRequiredSecret(ISecret secret)
     {
         _requiredSecrets.Add(secret);
     }
-    
+
     public void AddEnvironmentVariable(string name, string value)
     {
         _environmentVariables[name] = value;
     }
-    
+
     public void AddEnvironmentVariables(IDictionary<string, string> variables)
     {
         foreach (var kvp in variables)
@@ -55,24 +62,26 @@ public class AwsAppRunnerCompute : ICompute
             _environmentVariables[kvp.Key] = kvp.Value;
         }
     }
-    
-    public void ConfigurePermissions()
+
+    public void AddPolicyStatement(IPolicyStatement statement)
     {
-        // Create access role for ECR (App Runner needs this to pull images)
-        _accessRole = new Pulumi.Aws.Iam.Role($"{_name}-access-role", new Pulumi.Aws.Iam.RoleArgs
+        _customPolicyStatements.Add(statement);
+    }
+
+    public void Build()
+    {
+        // Aggregate all policy statements for the instance role
+        var allInstancePolicies = new List<IPolicyStatement>();
+        // Secrets access
+        foreach (var secret in RequiredSecrets)
         {
-            AssumeRolePolicy = @"{
-                ""Version"": ""2012-10-17"",
-                ""Statement"": [{
-                    ""Effect"": ""Allow"",
-                    ""Principal"": {
-                        ""Service"": ""build.apprunner.amazonaws.com""
-                    },
-                    ""Action"": ""sts:AssumeRole""
-                }]
-            }"
-        });
-        
+            allInstancePolicies.AddRange(secret.GetPolicy(SecretPermissions.Read));
+        }
+        // Custom policy statements
+        if (_customPolicyStatements.Any())
+        {
+            allInstancePolicies.AddRange(_customPolicyStatements);
+        }
         // Create instance role for the running service (for secrets access)
         _instanceRole = new Pulumi.Aws.Iam.Role($"{_name}-instance-role", new Pulumi.Aws.Iam.RoleArgs
         {
@@ -87,52 +96,57 @@ public class AwsAppRunnerCompute : ICompute
                 }]
             }"
         });
-        
-        // Create policies for ECR access (attach to access role)
+        if (allInstancePolicies.Any())
+        {
+            var instancePolicyDocument = CreatePolicyDocument(allInstancePolicies);
+            new Pulumi.Aws.Iam.RolePolicy($"{_name}-instance-policy", new Pulumi.Aws.Iam.RolePolicyArgs
+            {
+                Role = _instanceRole.Name,
+                Policy = instancePolicyDocument
+            });
+        }
+        // Aggregate all policy statements for the access role (ECR)
         var ecrPolicies = ContainerRegistry.GetPolicy(
-            ContainerRegistryPermissions.Pull, 
+            ContainerRegistryPermissions.Pull,
             ContainerRegistryPermissions.GetAuthToken
         );
-        
+        _accessRole = new Pulumi.Aws.Iam.Role($"{_name}-access-role", new Pulumi.Aws.Iam.RoleArgs
+        {
+            AssumeRolePolicy = @"{
+                ""Version"": ""2012-10-17"",
+                ""Statement"": [{
+                    ""Effect"": ""Allow"",
+                    ""Principal"": {
+                        ""Service"": ""build.apprunner.amazonaws.com""
+                    },
+                    ""Action"": ""sts:AssumeRole""
+                }]
+            }"
+        });
         if (ecrPolicies.Any())
         {
             var ecrPolicyDocument = CreatePolicyDocument(ecrPolicies);
-            
-            new Pulumi.Aws.Iam.RolePolicy($"{_name}-ecr-access", new Pulumi.Aws.Iam.RolePolicyArgs
+            new Pulumi.Aws.Iam.RolePolicy($"{_name}-access-policy", new Pulumi.Aws.Iam.RolePolicyArgs
             {
                 Role = _accessRole.Name,
                 Policy = ecrPolicyDocument
             });
         }
-        
-        // Create policies for secrets access (attach to instance role)
-        if (RequiredSecrets.Any())
+        // Create or update AutoScalingConfiguration with MinCount/MaxCount
+        _autoScalingConfig = new Pulumi.Aws.AppRunner.AutoScalingConfigurationVersion($"{_name}-autoscaling", new Pulumi.Aws.AppRunner.AutoScalingConfigurationVersionArgs()
         {
-            var secretPolicies = new List<IPolicyStatement>();
-            foreach (var secret in RequiredSecrets)
-            {
-                secretPolicies.AddRange(secret.GetPolicy(SecretPermissions.Read));
-            }
-            
-            var secretPolicyDocument = CreatePolicyDocument(secretPolicies);
-            
-            new Pulumi.Aws.Iam.RolePolicy($"{_name}-secrets-access", new Pulumi.Aws.Iam.RolePolicyArgs
-            {
-                Role = _instanceRole.Name,
-                Policy = secretPolicyDocument
-            });
-        }
-        
-        // NOW create the App Runner service with the roles attached
+            MaxConcurrency = MaxCount,
+        });
+        // NOW create the App Runner service with the roles and autoscaling config attached
         CreateAppRunnerService();
     }
-    
+
     private void CreateAppRunnerService()
     {
-        var imageIdentifier = _containerRegistry is AwsContainerRegistry awsRegistry 
+        var imageIdentifier = _containerRegistry is AwsContainerRegistry awsRegistry
             ? awsRegistry.RegistryUrlOutput.Apply(url => $"{url}:{_imageTag}")
             : Output.Create($"PLACEHOLDER_REGISTRY_URL:{_imageTag}");
-        
+
         // Convert secrets to proper InputMap format
         var secretsMap = new InputMap<string>();
         foreach (var secret in RequiredSecrets)
@@ -140,7 +154,7 @@ public class AwsAppRunnerCompute : ICompute
             var secretKey = $"SECRET_{secret.Name.ToUpper().Replace("-", "_")}";
             secretsMap.Add(secretKey, secret.Arn);
         }
-        
+
         _service = new Pulumi.Aws.AppRunner.Service(_name, new Pulumi.Aws.AppRunner.ServiceArgs
         {
             ServiceName = _name,
@@ -151,9 +165,7 @@ public class AwsAppRunnerCompute : ICompute
                     ImageConfiguration = new Pulumi.Aws.AppRunner.Inputs.ServiceSourceConfigurationImageRepositoryImageConfigurationArgs
                     {
                         Port = "8080",
-                        // Environment variables
                         RuntimeEnvironmentVariables = _environmentVariables,
-                        // Secret environment variables
                         RuntimeEnvironmentSecrets = secretsMap
                     },
                     ImageIdentifier = imageIdentifier,
@@ -161,32 +173,41 @@ public class AwsAppRunnerCompute : ICompute
                 },
                 AutoDeploymentsEnabled = true
             },
-            // Instance role for runtime access to secrets
             InstanceConfiguration = new Pulumi.Aws.AppRunner.Inputs.ServiceInstanceConfigurationArgs
             {
                 InstanceRoleArn = _instanceRole?.Arn,
                 Cpu = "256",
                 Memory = "512"
-            }
+            },
+            AutoScalingConfigurationArn = _autoScalingConfig?.Arn,
+            HealthCheckConfiguration = HealthCheckConfiguration is not null ? new Pulumi.Aws.AppRunner.Inputs.ServiceHealthCheckConfigurationArgs
+            {
+                Path = HealthCheckConfiguration.Path,
+                Interval = HealthCheckConfiguration.IntervalSeconds,
+                Timeout = HealthCheckConfiguration.TimeoutSeconds,
+                HealthyThreshold = HealthCheckConfiguration.HealthyThreshold,
+                UnhealthyThreshold = HealthCheckConfiguration.UnhealthyThreshold
+            } : null,
+            ObservabilityConfiguration = null // placeholder
         });
     }
-    
+
     private Output<string> CreatePolicyDocument(IEnumerable<IPolicyStatement> statements)
     {
         var statementsList = statements.ToList();
         var allResourceOutputs = statementsList.SelectMany(s => s.Resources).ToArray();
-        
+
         return Output.All(allResourceOutputs).Apply(allResources =>
         {
             var resourceIndex = 0;
             var policyStatements = new List<object>();
-            
+
             foreach (var statement in statementsList)
             {
                 var statementResourceCount = statement.Resources.Count();
                 var statementResources = allResources.Skip(resourceIndex).Take(statementResourceCount).ToArray();
                 resourceIndex += statementResourceCount;
-                
+
                 policyStatements.Add(new
                 {
                     Effect = statement.Effect,
@@ -194,26 +215,26 @@ public class AwsAppRunnerCompute : ICompute
                     Resource = statementResources
                 });
             }
-            
+
             var policy = new
             {
                 Version = "2012-10-17",
                 Statement = policyStatements
             };
-            
+
             return System.Text.Json.JsonSerializer.Serialize(policy);
         });
     }
-    
+
+
     public void Start() { /* App Runner auto-starts */ }
     public void Stop() { /* Implementation for pausing service */ }
     public void Scale(int replicas) { /* App Runner auto-scales, but can set min/max */ }
-    public void UpdateConfiguration(IDictionary<string, object> config) { /* Update service configuration */ }
-    
+
     public IEnumerable<IPolicyStatement> GetPolicy(params ComputePermissions[] permissions)
     {
         var statements = new List<IPolicyStatement>();
-        
+
         foreach (var permission in permissions)
         {
             switch (permission)
@@ -242,14 +263,6 @@ public class AwsAppRunnerCompute : ICompute
                         Resources = new Output<string>[] { Arn }
                     });
                     break;
-                case ComputePermissions.UpdateConfiguration:
-                    statements.Add(new AwsPolicyStatement
-                    {
-                        Effect = "Allow",
-                        Actions = new[] { "apprunner:UpdateService" },
-                        Resources = new Output<string>[] { Arn }
-                    });
-                    break;
                 case ComputePermissions.GetLogs:
                     statements.Add(new AwsPolicyStatement
                     {
@@ -268,7 +281,7 @@ public class AwsAppRunnerCompute : ICompute
                     break;
             }
         }
-        
+
         return statements;
     }
 }
