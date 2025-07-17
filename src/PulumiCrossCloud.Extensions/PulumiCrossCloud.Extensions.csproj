@@ -3,8 +3,6 @@
   <ItemGroup>
     <ProjectReference Include="..\PulumiCrossCloud.Core\PulumiCrossCloud.Core.csproj" />
     <ProjectReference Include="..\PulumiCrossCloud.Aws\PulumiCrossCloud.Aws.csproj" />
-    <ProjectReference Include="..\PulumiCrossCloud.Azure\PulumiCrossCloud.Azure.csproj" />
-    <ProjectReference Include="..\PulumiCrossCloud.Gcp\PulumiCrossCloud.Gcp.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

@@ -11,14 +11,19 @@ public static class CloudResourceExtensions
     {
         foreach (var secret in secrets)
         {
-            if (compute is Aws.AwsAppRunnerCompute awsAppRunner)
-                awsAppRunner.AddRequiredSecret(secret);
-            else if (compute is Aws.AwsFargateCompute awsFargate)
-                awsFargate.AddRequiredSecret(secret);
-            else if (compute is Gcp.GcpCloudRunCompute gcpCloudRun)
-                gcpCloudRun.AddRequiredSecret(secret);
-            else if (compute is Azure.AzureContainerAppsCompute azureContainerApps)
-                azureContainerApps.AddRequiredSecret(secret);
+            // Use reflection or pattern matching to call AddRequiredSecret
+            // This approach works without specific cloud provider dependencies
+            var computeType = compute.GetType();
+            var addSecretMethod = computeType.GetMethod("AddRequiredSecret");
+            
+            if (addSecretMethod != null)
+            {
+                addSecretMethod.Invoke(compute, new object[] { secret });
+            }
+            else
+            {
+                throw new NotSupportedException($"Compute type {computeType.Name} does not support adding secrets");
+            }
         }
         
         return compute;
