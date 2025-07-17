@@ -29,6 +29,9 @@ public class AzureCloudResourceFactory : CloudResourceFactory
     
     public override IRole CreateRole(string name, string assumeRolePolicy)
     {
-        return new AzureRole(name, assumeRolePolicy);
+        // Azure doesn't use assume role policies like AWS
+        // The assumeRolePolicy parameter is ignored
+        // TODO: Get resource group from configuration
+        return new AzureManagedIdentity(name, "default-rg");
     }
 }

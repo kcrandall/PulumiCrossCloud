@@ -29,6 +29,8 @@ public class GcpCloudResourceFactory : CloudResourceFactory
     
     public override IRole CreateRole(string name, string assumeRolePolicy)
     {
-        throw new NotImplementedException("GCP role creation not yet implemented");
+        // GCP doesn't have assume role policies like AWS
+        // Create a service account instead, which is the GCP equivalent
+        return new GcpServiceAccount(name);
     }
 }

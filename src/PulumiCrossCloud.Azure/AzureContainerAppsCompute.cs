@@ -32,16 +32,25 @@ public class AzureContainerAppsCompute : ICompute
     
     public void AttachRole(IRole role)
     {
+        if (role is not AzureManagedIdentity managedIdentity)
+        {
+            throw new ArgumentException("Azure compute resources require AzureManagedIdentity, not generic IRole");
+        }
+    
         var policies = new List<IPolicyStatement>();
-        
+    
         foreach (var secret in RequiredSecrets)
         {
             policies.AddRange(secret.GetPolicy(SecretPermissions.Read));
         }
-        
+    
         policies.AddRange(ContainerRegistry.GetPolicy(ContainerRegistryPermissions.Pull));
-        
-        role.AttachInlinePolicy($"{Name}-policy", policies);
+    
+        // Create role assignments for this managed identity
+        managedIdentity.AttachInlinePolicy($"{Name}-permissions", policies);
+    
+        // TODO: Configure the Container App to use this managed identity
+        // This would involve setting the identity property on the Container App
     }
     
     public void AddRequiredSecret(ISecret secret)
@@ -67,7 +76,7 @@ public class AzureContainerAppsCompute : ICompute
                     {
                         Effect = "Allow",
                         Actions = new[] { "Microsoft.App/containerApps/read" },
-                        Resources = new Output<string>[] { Arn }  // Fixed to use Output<string>[]
+                        Resources = new Output<string>[] { Arn }
                     });
                     break;
                 case ComputePermissions.Scale:
@@ -91,7 +100,7 @@ public class AzureContainerAppsCompute : ICompute
                     {
                         Effect = "Allow",
                         Actions = new[] { "Microsoft.Insights/logs/read" },
-                        Resources = new Output<string>[] { Output.Create("*") }  // Convert string to Output<string>
+                        Resources = new Output<string>[] { Output.Create("*") } 
                     });
                     break;
             }

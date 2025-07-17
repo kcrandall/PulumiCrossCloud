@@ -63,16 +63,29 @@ public class GcpCloudRunCompute : ICompute
     
     public void AttachRole(IRole role)
     {
+        if (role is not GcpServiceAccount serviceAccount)
+        {
+            throw new ArgumentException("GCP compute resources require GcpServiceAccount, not generic IRole");
+        }
+    
+        // In GCP, you'd typically:
+        // 1. Set the service account on the Cloud Run service
+        // 2. Create IAM bindings to give the service account permissions
+    
         var policies = new List<IPolicyStatement>();
-        
+    
         foreach (var secret in RequiredSecrets)
         {
             policies.AddRange(secret.GetPolicy(SecretPermissions.Read));
         }
-        
+    
         policies.AddRange(ContainerRegistry.GetPolicy(ContainerRegistryPermissions.Pull));
-        
-        role.AttachInlinePolicy($"{Name}-policy", policies);
+    
+        // For now, just log what would be created
+        Console.WriteLine($"Would create IAM bindings for service account {serviceAccount.ServiceAccountEmail}");
+        Console.WriteLine($"Policies needed: {policies.Count()}");
+    
+        // TODO: Actually create IAM bindings in GCP
     }
     
     public void AddRequiredSecret(ISecret secret)
