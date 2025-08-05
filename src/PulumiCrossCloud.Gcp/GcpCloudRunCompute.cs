@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Pulumi;
 using Pulumi.Gcp.Projects;
 using Pulumi.Gcp.ServiceAccount;
@@ -9,7 +10,7 @@ namespace PulumiCrossCloud.Gcp;
 
 public class GcpCloudRunCompute : ICompute
 {
-    private static readonly Dictionary<string, Service> _cloudRunApiEnabled = new();
+    private static readonly ConcurrentDictionary<string, Service> _cloudRunApiEnabled = new();
     private Pulumi.Gcp.CloudRun.Service _service;
     private readonly List<ISecret> _requiredSecrets;
     private readonly Dictionary<string, string> _environmentVariables = new();

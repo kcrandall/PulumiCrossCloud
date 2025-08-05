@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Pulumi;
 using PulumiCrossCloud.Core;
 
@@ -5,6 +6,7 @@ namespace PulumiCrossCloud.Gcp;
 
 public class GcpSecret : ISecret
 {
+    private static readonly ConcurrentDictionary<string, Pulumi.Gcp.Projects.Service> _secretManagerApiEnabled = new();
     private readonly Pulumi.Gcp.SecretManager.Secret _secret;
     
     public GcpSecret(string name, string value, bool ignoreChangesAfterCreate = false)
@@ -12,11 +14,23 @@ public class GcpSecret : ISecret
         Name = name;
         IgnoreChangesAfterCreate = ignoreChangesAfterCreate;
         var projectId = GcpProjectConfig.ProjectId;
+        // Ensure Secret Manager API is enabled for this project
+        if (!_secretManagerApiEnabled.ContainsKey(projectId))
+        {
+            var enableApi = new Pulumi.Gcp.Projects.Service($"secretmanager-api-{projectId}", new Pulumi.Gcp.Projects.ServiceArgs
+            {
+                Project = projectId,
+                ServiceName = "secretmanager.googleapis.com",
+                DisableDependentServices = false
+            });
+            _secretManagerApiEnabled[projectId] = enableApi;
+        }
+        var dependsOn = new[] { _secretManagerApiEnabled[projectId] };
         _secret = new Pulumi.Gcp.SecretManager.Secret(name, new Pulumi.Gcp.SecretManager.SecretArgs
         {
             SecretId = name,
             Project = projectId
-        });
+        }, new Pulumi.CustomResourceOptions { DependsOn = dependsOn });
         var secretVersionArgs = new Pulumi.Gcp.SecretManager.SecretVersionArgs
         {
             Secret = _secret.Id,

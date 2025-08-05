@@ -2,12 +2,13 @@ using Pulumi;
 using Pulumi.Gcp.Projects;
 using Pulumi.Command.Local;
 using PulumiCrossCloud.Core;
+using System.Collections.Concurrent;
 
 namespace PulumiCrossCloud.Gcp;
 
 public class GcpContainerRegistry : IContainerRegistry
 {
-    private static readonly Dictionary<string, Service> _artifactRegistryApiEnabled = new();
+    private static readonly ConcurrentDictionary<string, Service> _artifactRegistryApiEnabled = new();
     private static readonly HashSet<string> _importedHelloWorldImages = new();
     private readonly Pulumi.Gcp.ArtifactRegistry.Repository _repository;
     private readonly string _projectId;
