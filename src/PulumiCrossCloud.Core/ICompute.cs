@@ -1,3 +1,5 @@
+using Pulumi;
+
 namespace PulumiCrossCloud.Core;
 
 /// <summary>
@@ -55,7 +57,13 @@ public interface ICompute : ICloudResource, IPolicyProvider<ComputePermissions>
     void Start();
     void Deploy();
     void Stop();
-    void Scale(int replicas);
+
+    /// <summary>
+    /// Returns the DNS records required to add to your domain for this compute resource (e.g. CNAME, TXT for verification).
+    /// </summary>
+    /// <param name="names">List of domain names (e.g. app.example.com) to map to this compute resource.</param>
+    /// <returns>List of DNS record objects (type, name, value).</returns>
+    IEnumerable<DnsRecord> GetRequiredDnsRecords(IEnumerable<string> names);
 
     /// <summary>
     /// The minimum number of compute instances to run.

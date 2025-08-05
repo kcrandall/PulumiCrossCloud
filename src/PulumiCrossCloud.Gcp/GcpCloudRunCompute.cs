@@ -338,4 +338,13 @@ public class GcpCloudRunCompute : ICompute
             _allowedServiceAccounts.Add(serviceAccountEmail);
         }
     }
+    public IEnumerable<DnsRecord> GetRequiredDnsRecords(IEnumerable<string> names)
+    {
+        // For GCP Cloud Run, typically a CNAME record is needed to map a custom domain to the service URL.
+        // Example: CNAME app.example.com -> <service>.a.run.app
+        // ServiceUrl is Output<string>, so we use Output<string> in DnsRecord.
+        
+        // For each provided domain name, return a CNAME record pointing to the Cloud Run service URL
+        return names.Select(name => new DnsRecord(DnsRecordType.CNAME, name, ServiceUrl)).ToList();
+    }
 }

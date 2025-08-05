@@ -39,7 +39,15 @@ public class AwsAppRunnerCompute : ICompute
     public CloudProvider Provider => CloudProvider.AWS;
     public IList<PortForwardingConfiguration> PortForwardings { get; set; } = new List<PortForwardingConfiguration> { new PortForwardingConfiguration { ContainerPort = 8080 } };
 
-    public Output<string> ServiceUrl => _service?.ServiceUrl ?? Output.Create("");
+    public Output<string> ServiceUrl => _service.ServiceUrl;
+
+    public IEnumerable<DnsRecord> GetRequiredDnsRecords(IEnumerable<string> names)
+    {
+        // For AWS App Runner, a CNAME record is needed to map a custom domain to the App Runner service URL.
+        // Example: CNAME app.example.com -> <service>.awsapprunner.com
+        // For each provided domain name, return a CNAME record pointing to the App Runner service URL
+        return names.Select(name => new DnsRecord(DnsRecordType.CNAME, name, ServiceUrl)).ToList();
+    }
 
     public int MinCount { get; set; } = 1;
     public int MaxCount { get; set; } = 1;
