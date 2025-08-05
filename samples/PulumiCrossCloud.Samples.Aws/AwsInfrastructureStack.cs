@@ -31,7 +31,7 @@ public class AwsInfrastructureStack : Stack
         
         // Add secret dependencies
         ((AwsAppRunnerCompute)appRunnerService).AddRequiredSecret(secret);
-        ((AwsFargateCompute)fargateService).AddRequiredSecret(secret);
+        ((AwsAppRunnerCompute)fargateService).AddRequiredSecret(secret);
         
         
         // Export some values - using public properties and Output types

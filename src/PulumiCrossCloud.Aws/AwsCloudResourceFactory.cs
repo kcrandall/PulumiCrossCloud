@@ -8,12 +8,12 @@ public class AwsCloudResourceFactory : CloudResourceFactory
     {
     }
     
-    public override ISecret CreateSecret(string name, string value)
+    public override ISecret CreateSecret(string name, string value, bool ignoreChangesAfterCreate = false)
     {
         return new AwsSecret(name, value);
     }
     
-    public override IContainerRegistry CreateContainerRegistry(string name)
+    public override IContainerRegistry CreateContainerRegistry(string name, bool createDefaultImage = true)
     {
         return new AwsContainerRegistry(name);
     }
@@ -23,7 +23,7 @@ public class AwsCloudResourceFactory : CloudResourceFactory
         return serviceType switch
         {
             ComputeServiceType.AppRunner => new AwsAppRunnerCompute(name, registry, imageTag),
-            ComputeServiceType.Fargate => new AwsFargateCompute(name, registry, imageTag),
+            ComputeServiceType.Fargate => new AwsAppRunnerCompute(name, registry, imageTag),
             _ => throw new ArgumentException($"Unsupported AWS service type: {serviceType}")
         };
     }

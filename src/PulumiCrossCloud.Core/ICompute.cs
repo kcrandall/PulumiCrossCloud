@@ -1,5 +1,24 @@
 namespace PulumiCrossCloud.Core;
 
+/// <summary>
+/// Represents a port forwarding/mapping configuration for a compute resource.
+/// </summary>
+public struct PortForwardingConfiguration
+{
+    /// <summary>
+    /// The port inside the container to expose.
+    /// </summary>
+    public int ContainerPort { get; set; }
+    /// <summary>
+    /// The external port to map to (if supported by the cloud provider). Null means use default mapping.
+    /// </summary>
+    public int? ExternalPort { get; set; }
+    /// <summary>
+    /// The protocol for the port (e.g. "TCP", "UDP").
+    /// </summary>
+    public string? Protocol { get; set; }
+}
+
 public interface ICompute : ICloudResource, IPolicyProvider<ComputePermissions>
 {
     ComputeServiceType ServiceType { get; }
@@ -34,6 +53,7 @@ public interface ICompute : ICloudResource, IPolicyProvider<ComputePermissions>
     void Build();
     
     void Start();
+    void Deploy();
     void Stop();
     void Scale(int replicas);
 
@@ -50,4 +70,10 @@ public interface ICompute : ICloudResource, IPolicyProvider<ComputePermissions>
     /// Optional health check configuration for the compute resource.
     /// </summary>
     IHealthCheckConfiguration? HealthCheckConfiguration { get; set; }
+
+    /// <summary>
+    /// List of port forwarding configurations for the compute resource.
+    /// For clouds that only support a single port (e.g. GCP Cloud Run), only the first entry will be used.
+    /// </summary>
+    IList<PortForwardingConfiguration> PortForwardings { get; set; }
 }

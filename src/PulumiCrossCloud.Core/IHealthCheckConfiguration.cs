@@ -25,6 +25,21 @@ public interface IHealthCheckConfiguration
     /// The number of consecutive successes before marking healthy.
     /// </summary>
     int HealthyThreshold { get; set; }
+    /// <summary>
+    /// Startup probe 
+    /// Not all clouds support startup probes.
+    /// </summary>
+    int? StartupTimeoutSeconds { get; set; }
+    /// <summary>
+    /// Startup probe 
+    /// Not all clouds support startup probes.
+    /// </summary>
+    int? StartupIntervalSeconds { get; set; }
+    /// <summary>
+    /// Startup probe
+    /// Not all clouds support startup probes.
+    /// </summary>
+    int? StartupUnhealthyThreshold { get; set; }
 }
 
 /// <summary>
@@ -37,5 +52,7 @@ public class HealthCheckConfiguration : IHealthCheckConfiguration
     public int TimeoutSeconds { get; set; } = 5;
     public int UnhealthyThreshold { get; set; } = 3;
     public int HealthyThreshold { get; set; } = 2;
+    public int? StartupTimeoutSeconds { get; set; }
+    public int? StartupIntervalSeconds { get; set; }
+    public int? StartupUnhealthyThreshold { get; set; }
 }
-

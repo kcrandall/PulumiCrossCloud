@@ -7,38 +7,56 @@ public class GcpSecret : ISecret
 {
     private readonly Pulumi.Gcp.SecretManager.Secret _secret;
     
-    public GcpSecret(string name, string value)
+    public GcpSecret(string name, string value, bool ignoreChangesAfterCreate = false)
     {
         Name = name;
+        IgnoreChangesAfterCreate = ignoreChangesAfterCreate;
         var projectId = GcpProjectConfig.ProjectId;
-    
         _secret = new Pulumi.Gcp.SecretManager.Secret(name, new Pulumi.Gcp.SecretManager.SecretArgs
         {
             SecretId = name,
             Project = projectId
         });
-    
-        // GCP separates secret and secret version
-        new Pulumi.Gcp.SecretManager.SecretVersion($"{name}-version", new Pulumi.Gcp.SecretManager.SecretVersionArgs
+        var secretVersionArgs = new Pulumi.Gcp.SecretManager.SecretVersionArgs
         {
             Secret = _secret.Id,
             SecretData = value
-        });
+        };
+        var options = ignoreChangesAfterCreate
+            ? new CustomResourceOptions { IgnoreChanges =  [ "secretData" ] }
+            : null;
+        new Pulumi.Gcp.SecretManager.SecretVersion($"{name}-version", secretVersionArgs, options);
     }
     
     public string Name { get; }
     public Output<string> Arn => _secret.Name; // GCP uses resource names instead of ARNs
     public CloudProvider Provider => CloudProvider.GCP;
     public Output<string> Value => _secret.Name; // Would need to get version value
+    public bool IgnoreChangesAfterCreate { get; }
     
     public async Task<string> GetValueAsync()
     {
-        throw new NotImplementedException("Secret values are resolved during Pulumi deployment. Use the Value Output<string> property instead.");
+        var projectId = GcpProjectConfig.ProjectId;
+        var client = new Google.Cloud.SecretManager.V1.SecretManagerServiceClientBuilder().Build();
+        var secretName = Google.Cloud.SecretManager.V1.SecretName.FromProjectSecret(projectId, Name);
+        var versions = client.ListSecretVersions(secretName);
+        var latestVersion = versions.FirstOrDefault(v => v.State == Google.Cloud.SecretManager.V1.SecretVersion.Types.State.Enabled);
+        if (latestVersion is null)
+            throw new InvalidOperationException($"No enabled secret version found for {Name}");
+        var versionName = latestVersion.Name;
+        var accessResponse = await client.AccessSecretVersionAsync(versionName);
+        return accessResponse.Payload.Data.ToStringUtf8();
     }
-    
-    public void SetValue(string value) 
-    { 
-        throw new NotImplementedException("Use Pulumi resource updates to change secret values"); 
+
+    public void SetValue(string value)
+    {
+        var projectId = GcpProjectConfig.ProjectId;
+        var client = new Google.Cloud.SecretManager.V1.SecretManagerServiceClientBuilder().Build();
+        var secretName = Google.Cloud.SecretManager.V1.SecretName.FromProjectSecret(projectId, Name);
+        client.AddSecretVersion(secretName, new Google.Cloud.SecretManager.V1.SecretPayload
+        {
+            Data = Google.Protobuf.ByteString.CopyFromUtf8(value)
+        });
     }
     
     public IEnumerable<IPolicyStatement> GetPolicy(params SecretPermissions[] permissions)

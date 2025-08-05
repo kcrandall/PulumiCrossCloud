@@ -17,6 +17,4 @@ public interface IContainerRegistry : ICloudResource, IPolicyProvider<ContainerR
     
     void PushImage(string imageName, string tag);
     void PullImage(string imageName, string tag);
-    IEnumerable<string> ListRepositories();
-    void DeleteRepository(string repositoryName);
 }

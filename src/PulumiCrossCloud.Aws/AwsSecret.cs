@@ -8,27 +8,31 @@ public class AwsSecret : ISecret
     private readonly Pulumi.Aws.SecretsManager.Secret _secret;
     private readonly Pulumi.Aws.SecretsManager.SecretVersion _secretVersion;
     
-    public AwsSecret(string name, string value)
+    public AwsSecret(string name, string value, bool ignoreChangesAfterCreate = false)
     {
         Name = name;
+        IgnoreChangesAfterCreate = ignoreChangesAfterCreate;
         _secret = new Pulumi.Aws.SecretsManager.Secret(name, new Pulumi.Aws.SecretsManager.SecretArgs
         {
             Name = name,
             Description = $"Secret for {name}"
         });
-        
-        // AWS requires a separate SecretVersion to store the actual value
-        _secretVersion = new Pulumi.Aws.SecretsManager.SecretVersion($"{name}-version", new Pulumi.Aws.SecretsManager.SecretVersionArgs
+        var secretVersionArgs = new Pulumi.Aws.SecretsManager.SecretVersionArgs
         {
             SecretId = _secret.Id,
             SecretString = value
-        });
+        };
+        var options = ignoreChangesAfterCreate
+            ? new CustomResourceOptions { IgnoreChanges = [ "secretString" ] }
+            : null;
+        _secretVersion = new Pulumi.Aws.SecretsManager.SecretVersion($"{name}-version", secretVersionArgs, options);
     }
     
     public string Name { get; }
     public Output<string> Arn => _secret.Arn;
     public CloudProvider Provider => CloudProvider.AWS;
     public Output<string> Value => _secretVersion.SecretString;
+    public bool IgnoreChangesAfterCreate { get; }
     
     public async Task<string> GetValueAsync()
     {

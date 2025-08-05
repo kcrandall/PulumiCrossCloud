@@ -37,6 +37,7 @@ public class AwsAppRunnerCompute : ICompute
     public IDictionary<string, string> EnvironmentVariables => _environmentVariables;
     public Output<string> Arn => _service?.Arn ?? Output.Create("");
     public CloudProvider Provider => CloudProvider.AWS;
+    public IList<PortForwardingConfiguration> PortForwardings { get; set; } = new List<PortForwardingConfiguration> { new PortForwardingConfiguration { ContainerPort = 8080 } };
 
     public Output<string> ServiceUrl => _service?.ServiceUrl ?? Output.Create("");
 
@@ -228,6 +229,7 @@ public class AwsAppRunnerCompute : ICompute
 
 
     public void Start() { /* App Runner auto-starts */ }
+    public void Deploy() {  }
     public void Stop() { /* Implementation for pausing service */ }
     public void Scale(int replicas) { /* App Runner auto-scales, but can set min/max */ }
 

@@ -5,6 +5,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Google.Apis.CloudRun.v1" Version="1.70.0.3837" />
+    <PackageReference Include="Google.Cloud.SecretManager.V1" Version="2.6.0" />
     <PackageReference Include="Pulumi.Gcp" Version="7.38.0" />
   </ItemGroup>
 

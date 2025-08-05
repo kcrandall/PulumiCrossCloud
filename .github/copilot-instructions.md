@@ -1,4 +1,14 @@
 # GitHub Copilot Instructions for PulumiCrossCloud
+- Use file-scoped namespaces.
+- Prefer using `is null` and `is not null` instead of `== null` and `!= null` in if statements and other places where possible.
+- Prefer initializing arrays/lists with 
+- Always use collection expressions with square brackets [] instead of new() when initializing arrays, lists, and collections in C#:
+    - Use: `List<string> list = ["item1", "item2"];`
+    - Instead of: `var list = new List<string> {"item1", "item2"};`
+    - Use: `string[] array = ["a", "b", "c"];`
+    - Instead of: `string[] array = new string[] {"a", "b", "c"};`
+    - Use: `var emptyList = new List<string>();` for empty collections when type inference is needed
+
 
 ## Project Overview
 PulumiCrossCloud is a .NET 9.0 library that provides cloud-agnostic infrastructure abstractions for Pulumi with automatic IAM policy generation. It allows developers to write infrastructure code once and deploy to AWS, Azure, or GCP.

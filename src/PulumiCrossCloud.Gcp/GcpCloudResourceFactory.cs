@@ -8,14 +8,14 @@ public class GcpCloudResourceFactory : CloudResourceFactory
     {
     }
     
-    public override ISecret CreateSecret(string name, string value)
+    public override ISecret CreateSecret(string name, string value, bool ignoreChangesAfterCreate = false)
     {
-        return new GcpSecret(name, value);
+        return new GcpSecret(name, value, ignoreChangesAfterCreate);
     }
     
-    public override IContainerRegistry CreateContainerRegistry(string name)
+    public override IContainerRegistry CreateContainerRegistry(string name, bool createDefaultImage = true)
     {
-        return new GcpContainerRegistry(name);
+        return new GcpContainerRegistry(name, createDefaultImage);
     }
     
     public override ICompute CreateCompute(string name, ComputeServiceType serviceType, IContainerRegistry registry, string imageTag = "latest")
