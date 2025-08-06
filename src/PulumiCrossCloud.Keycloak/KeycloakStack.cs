@@ -56,7 +56,6 @@ public class KeycloakStack : Stack
         var compute = factory.CreateCompute(
             name: $"{name}-keycloak",
             registry: registry,
-            imageName: "keycloak",
             imageTag: "latest",
             containerImage: image,
             serviceType: null // Uses default per cloud

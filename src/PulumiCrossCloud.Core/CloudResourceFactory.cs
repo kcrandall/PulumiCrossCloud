@@ -38,7 +38,7 @@ public abstract class CloudResourceFactory
     /// <summary>
     /// Creates a container image resource. See implementation for details.
     /// </summary>
-    /// <param name="name">The name of the container image.</param>
+    /// <param name="name">The name of the container image. Not pulumi resource can be duplicated.</param>
     /// <param name="registry">The container registry to use.</param>
     /// <returns>An <see cref="IContainerImage"/> instance.</returns>
     public abstract IContainerImage CreateContainerImage(string name, IContainerRegistry registry);
@@ -53,7 +53,7 @@ public abstract class CloudResourceFactory
     /// <param name="containerImage">The container image resource (optional, for dependency tracking).</param>
     /// <param name="serviceType">The compute service type (optional).</param>
     /// <returns>An <see cref="ICompute"/> instance.</returns>
-    public abstract ICompute CreateCompute(string name, IContainerRegistry registry, string imageName, string imageTag = "latest", IContainerImage? containerImage = null, ComputeServiceType? serviceType = null);
+    public abstract ICompute CreateCompute(string name, IContainerRegistry registry, string? imageName = null, string imageTag = "latest", IContainerImage? containerImage = null, ComputeServiceType? serviceType = null);
     
     /// <summary>
     /// Creates a role resource. See implementation for details.

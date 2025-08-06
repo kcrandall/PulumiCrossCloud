@@ -23,12 +23,16 @@ public class AwsAppRunnerCompute : ICompute
     private readonly List<Func<ICompute, Task>> _onHealthyActions = [];
     private readonly List<Func<ICompute, Task>> _onReadyActions = [];
 
-    public AwsAppRunnerCompute(string name, IContainerRegistry containerRegistry, string imageName, string imageTag = "latest", IContainerImage? containerImage = null)
+    public AwsAppRunnerCompute(string name, IContainerRegistry containerRegistry, string? imageName = null, string imageTag = "latest", IContainerImage? containerImage = null)
     {
         _name = name;
         _containerRegistry = containerRegistry;
         _imageName = imageName;
         _imageTag = imageTag;
+        if(imageName is null && containerImage is not null)
+            _imageName = containerImage.Name;
+        else if(imageName is null && containerImage is null)
+            throw new ArgumentException("Either imageName or containerImage must be provided for GCP Cloud Run compute resource.");
         Name = name;
         ContainerRegistry = containerRegistry;
         ServiceType = ComputeServiceType.AppRunner;

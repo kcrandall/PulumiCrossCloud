@@ -58,7 +58,7 @@ public class GcpCloudRunCompute : ICompute
     private readonly string _imageTag;
     private readonly IContainerImage? _containerImage;
 
-    public GcpCloudRunCompute(string name, IContainerRegistry containerRegistry, string imageName, string imageTag = "latest", IContainerImage? containerImage = null, string? serviceAccountEmail = null)
+    public GcpCloudRunCompute(string name, IContainerRegistry containerRegistry, string? imageName = null, string imageTag = "latest", IContainerImage? containerImage = null, string? serviceAccountEmail = null)
     {
         Name = name;
         ContainerRegistry = containerRegistry;
@@ -66,6 +66,11 @@ public class GcpCloudRunCompute : ICompute
         _imageName = imageName;
         _imageTag = imageTag;
         _containerImage = containerImage;
+        if(imageName is null && containerImage is not null)
+            _imageName = containerImage.Name;
+        else if(imageName is null && containerImage is null)
+            throw new ArgumentException("Either imageName or containerImage must be provided for GCP Cloud Run compute resource.");
+        
         var projectId = GcpProjectConfig.ProjectId;
         // Ensure Cloud Run API is enabled for this project
         if (!_cloudRunApiEnabled.ContainsKey(projectId))
