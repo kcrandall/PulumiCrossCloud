@@ -38,11 +38,11 @@ public abstract class CloudResourceFactory
     /// Creates a compute resource (e.g., Cloud Run, App Runner). See implementation for details.
     /// </summary>
     /// <param name="name">The name of the compute resource.</param>
-    /// <param name="serviceType">The compute service type.</param>
     /// <param name="registry">The container registry to use.</param>
     /// <param name="imageTag">The image tag to deploy.</param>
+    /// <param name="serviceType">The compute service type (optional).</param>
     /// <returns>An <see cref="ICompute"/> instance.</returns>
-    public abstract ICompute CreateCompute(string name, ComputeServiceType serviceType, IContainerRegistry registry, string imageTag = "latest");
+    public abstract ICompute CreateCompute(string name, IContainerRegistry registry, string imageTag = "latest", ComputeServiceType? serviceType = null);
     
     /// <summary>
     /// Creates a role resource. See implementation for details.

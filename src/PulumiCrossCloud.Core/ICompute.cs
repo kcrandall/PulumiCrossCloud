@@ -31,8 +31,9 @@ public interface ICompute : ICloudResource, IPolicyProvider<ComputePermissions>
     /// <summary>
     /// Adds a secret that this compute resource requires access to.
     /// Read permissions will be automatically configured when ConfigurePermissions() is called.
+    /// Optionally, you can specify an environment variable name to inject the secret value.
     /// </summary>
-    void AddRequiredSecret(ISecret secret);
+    void AddRequiredSecret(ISecret secret, string? environmentVariableName = null);
     
     /// <summary>
     /// Adds an environment variable to the compute resource.

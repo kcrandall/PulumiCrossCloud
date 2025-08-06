@@ -15,8 +15,8 @@ public class AwsInfrastructureStack : Stack
         var registry = factory.CreateContainerRegistry("app-registry");
         
         // Create different compute types based on needs
-        var appRunnerService = factory.CreateCompute("web-app", ComputeServiceType.AppRunner, registry);
-        var fargateService = factory.CreateCompute("background-worker", ComputeServiceType.Fargate, registry);
+        var appRunnerService = factory.CreateCompute("web-app", registry);
+        var fargateService = factory.CreateCompute("background-worker", registry);
         
         var role = factory.CreateRole("app-role", @"{
             ""Version"": ""2012-10-17"",

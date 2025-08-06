@@ -7,6 +7,7 @@ using Pulumi.Gcp.SecretManager;
 using PulumiCrossCloud.Core;
 using System.Net.Http;
 using System.Threading.Tasks;
+using Pulumi.Gcp.CloudRun.Inputs;
 
 namespace PulumiCrossCloud.Gcp;
 
@@ -14,7 +15,7 @@ public class GcpCloudRunCompute : ICompute
 {
     private static readonly ConcurrentDictionary<string, Service> _cloudRunApiEnabled = new();
     private Pulumi.Gcp.CloudRun.Service _service;
-    private readonly List<ISecret> _requiredSecrets;
+    private readonly List<(ISecret secret, string? envVarName)> _requiredSecrets = [];
     private readonly Dictionary<string, string> _environmentVariables = new();
     private readonly List<IPolicyStatement> _customPolicyStatements = new();
     private GcpServiceAccount _serviceAccount;
@@ -40,7 +41,6 @@ public class GcpCloudRunCompute : ICompute
         Name = name;
         ContainerRegistry = containerRegistry;
         ServiceType = ComputeServiceType.CloudRun;
-        _requiredSecrets = new List<ISecret>();
         var projectId = GcpProjectConfig.ProjectId;
         // Ensure Cloud Run API is enabled for this project
         if (!_cloudRunApiEnabled.ContainsKey(projectId))
@@ -71,7 +71,7 @@ public class GcpCloudRunCompute : ICompute
     public string Name { get; }
     public ComputeServiceType ServiceType { get; }
     public IContainerRegistry ContainerRegistry { get; }
-    public IEnumerable<ISecret> RequiredSecrets => _requiredSecrets;
+    public IEnumerable<ISecret> RequiredSecrets => _requiredSecrets.Select(x => x.secret);
     public Output<string> Arn => _service.Name;
     public CloudProvider Provider => CloudProvider.GCP;
     
@@ -79,9 +79,9 @@ public class GcpCloudRunCompute : ICompute
     public Output<string> ServiceUrl => _service.Statuses.Apply(statuses => 
         statuses.FirstOrDefault()?.Url ?? "");
     
-    public void AddRequiredSecret(ISecret secret)
+    public void AddRequiredSecret(ISecret secret, string? environmentVariableName = null)
     {
-        _requiredSecrets.Add(secret);
+        _requiredSecrets.Add((secret, environmentVariableName));
     }
 
     public void AddPolicyStatement(IPolicyStatement statement)
@@ -104,6 +104,26 @@ public class GcpCloudRunCompute : ICompute
             ? gcpRegistry.RegistryUrlOutput.Apply(url => $"{url}:latest")
             : Output.Create($"{region}-docker.pkg.dev/{projectId}/{Name}:latest");
         var portConfig = PortForwardings.FirstOrDefault();
+        List<Pulumi.Gcp.CloudRun.Inputs.ServiceTemplateSpecContainerEnvArgs> envs = [
+            ..EnvironmentVariables.Select(kvp => new Pulumi.Gcp.CloudRun.Inputs.ServiceTemplateSpecContainerEnvArgs
+            {
+                Name = kvp.Key,
+                Value = kvp.Value
+            }),
+            .._requiredSecrets.Where(x => x.envVarName is not null && x.secret is GcpSecret)
+                .Select(x => new Pulumi.Gcp.CloudRun.Inputs.ServiceTemplateSpecContainerEnvArgs
+                {
+                    Name = x.envVarName!,
+                    ValueFrom = new ServiceTemplateSpecContainerEnvValueFromArgs
+                    {
+                        SecretKeyRef = new ServiceTemplateSpecContainerEnvValueFromSecretKeyRefArgs
+                        {
+                            Name = ((GcpSecret)x.secret).Name,
+                            Key = "latest" // Use the latest version of the secret
+                        }
+                    }
+                })
+        ];
         var containerArgs = new Pulumi.Gcp.CloudRun.Inputs.ServiceTemplateSpecContainerArgs
         {
             Image = imageUri,
@@ -113,11 +133,7 @@ public class GcpCloudRunCompute : ICompute
                     ContainerPort = portConfig.ContainerPort,
                 }
             ],
-            Envs = EnvironmentVariables.Select(kvp => new Pulumi.Gcp.CloudRun.Inputs.ServiceTemplateSpecContainerEnvArgs
-            {
-                Name = kvp.Key,
-                Value = kvp.Value
-            }).ToArray()
+            Envs = envs.ToArray()
         };
         if (HealthCheckConfiguration is not null)
         {
@@ -177,7 +193,7 @@ public class GcpCloudRunCompute : ICompute
         };
         var dependsOn = new List<Resource> { _cloudRunApiEnabled[projectId] };
         // IAM binding for registry
-        if (ContainerRegistry is GcpContainerRegistry gcpContainerRegistry && serviceAccountEmail != null)
+        if (ContainerRegistry is GcpContainerRegistry gcpContainerRegistry && serviceAccountEmail is not null)
         {
             _registryIamMember = new RepositoryIamMember($"cloudrun-registry-pull-{Name}", new RepositoryIamMemberArgs
             {
@@ -187,10 +203,18 @@ public class GcpCloudRunCompute : ICompute
             });
             dependsOn.Add(_registryIamMember);
         }
+        // Add secret resources to dependsOn so they are created before Cloud Run
+        foreach (var secret in _requiredSecrets)
+        {
+            if (secret.secret is GcpSecret gcpSecret)
+            {
+                dependsOn.Add(gcpSecret.Resource);
+            }
+        }
         // IAM bindings for secrets
         foreach (var secret in _requiredSecrets)
         {
-            if (secret is GcpSecret gcpSecret && serviceAccountEmail != null)
+            if (secret.secret is GcpSecret gcpSecret && serviceAccountEmail is not null)
             {
                 var secretIam = new SecretIamMember($"cloudrun-secret-read-{Name}-{gcpSecret.Name}", new SecretIamMemberArgs
                 {
@@ -384,7 +408,7 @@ public class GcpCloudRunCompute : ICompute
             }
             if (!healthy)
             {
-                Pulumi.Log.Error($"Cloud Run health check failed for {Name} at {healthUrl} after 5 minutes.");
+                Log.Error($"Cloud Run health check failed for {Name} at {healthUrl} after 5 minutes.");
             }
         });
     }

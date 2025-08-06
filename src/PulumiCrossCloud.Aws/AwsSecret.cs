@@ -33,6 +33,7 @@ public class AwsSecret : ISecret
     public CloudProvider Provider => CloudProvider.AWS;
     public Output<string> Value => _secretVersion.SecretString;
     public bool IgnoreChangesAfterCreate { get; }
+    public Pulumi.Resource Resource => _secret;
     
     public async Task<string> GetValueAsync()
     {

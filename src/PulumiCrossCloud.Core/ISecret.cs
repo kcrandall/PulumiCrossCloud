@@ -12,4 +12,6 @@ public interface ISecret : ICloudResource, IPolicyProvider<SecretPermissions>
     /// If true, the secret value will only be set on creation and ignored on future updates.
     /// </summary>
     bool IgnoreChangesAfterCreate { get; }
+
+    Pulumi.Resource Resource { get; }
 }

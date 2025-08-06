@@ -18,8 +18,12 @@ public class AwsCloudResourceFactory : CloudResourceFactory
         return new AwsContainerRegistry(name);
     }
     
-    public override ICompute CreateCompute(string name, ComputeServiceType serviceType, IContainerRegistry registry, string imageTag = "latest")
+    public override ICompute CreateCompute(string name, IContainerRegistry registry, string imageTag = "latest", ComputeServiceType? serviceType = null)
     {
+        if (serviceType is null)
+        {
+            serviceType = ComputeServiceType.AppRunner;
+        }
         return serviceType switch
         {
             ComputeServiceType.AppRunner => new AwsAppRunnerCompute(name, registry, imageTag),

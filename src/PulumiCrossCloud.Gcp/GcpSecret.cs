@@ -47,6 +47,7 @@ public class GcpSecret : ISecret
     public CloudProvider Provider => CloudProvider.GCP;
     public Output<string> Value => _secret.Name; // Would need to get version value
     public bool IgnoreChangesAfterCreate { get; }
+    public Pulumi.Resource Resource => _secret;
     
     public async Task<string> GetValueAsync()
     {

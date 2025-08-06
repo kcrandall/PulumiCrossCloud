@@ -7,7 +7,7 @@ namespace PulumiCrossCloud.Aws;
 
 public class AwsAppRunnerCompute : ICompute
 {
-    private readonly List<ISecret> _requiredSecrets;
+    private readonly List<(ISecret secret, string? envVarName)> _requiredSecrets = [];
     private readonly Dictionary<string, string> _environmentVariables;
     private Pulumi.Aws.Iam.Role? _instanceRole;
     private Pulumi.Aws.Iam.Role? _accessRole;
@@ -29,7 +29,6 @@ public class AwsAppRunnerCompute : ICompute
         Name = name;
         ContainerRegistry = containerRegistry;
         ServiceType = ComputeServiceType.AppRunner;
-        _requiredSecrets = new List<ISecret>();
         _environmentVariables = new Dictionary<string, string>();
 
         // Don't create the service yet - wait until ConfigurePermissions is called
@@ -38,7 +37,7 @@ public class AwsAppRunnerCompute : ICompute
     public string Name { get; }
     public ComputeServiceType ServiceType { get; }
     public IContainerRegistry ContainerRegistry { get; }
-    public IEnumerable<ISecret> RequiredSecrets => _requiredSecrets;
+    public IEnumerable<ISecret> RequiredSecrets => _requiredSecrets.Select(x => x.secret);
     public IDictionary<string, string> EnvironmentVariables => _environmentVariables;
     public Output<string> Arn => _service?.Arn ?? Output.Create("");
     public CloudProvider Provider => CloudProvider.AWS;
@@ -59,9 +58,9 @@ public class AwsAppRunnerCompute : ICompute
 
     public IHealthCheckConfiguration? HealthCheckConfiguration { get; set; }
 
-    public void AddRequiredSecret(ISecret secret)
+    public void AddRequiredSecret(ISecret secret, string? environmentVariableName = null)
     {
-        _requiredSecrets.Add(secret);
+        _requiredSecrets.Add((secret, environmentVariableName));
     }
 
     public void AddEnvironmentVariable(string name, string value)
@@ -163,12 +162,20 @@ public class AwsAppRunnerCompute : ICompute
 
         // Convert secrets to proper InputMap format
         var secretsMap = new InputMap<string>();
-        foreach (var secret in RequiredSecrets)
+        foreach (var (secret, envVarName) in _requiredSecrets)
         {
-            var secretKey = $"SECRET_{secret.Name.ToUpper().Replace("-", "_")}";
+            var secretKey = envVarName ?? $"SECRET_{secret.Name.ToUpper().Replace("-", "_")}";
             secretsMap.Add(secretKey, secret.Arn);
         }
-
+        // Collect all secret resources for dependsOn
+        var dependsOn = new List<Resource>();
+        foreach (var (secret, _) in _requiredSecrets)
+        {
+            if (secret.Resource is not null)
+            {
+                dependsOn.Add(secret.Resource);
+            }
+        }
         _service = new Pulumi.Aws.AppRunner.Service(_name, new Pulumi.Aws.AppRunner.ServiceArgs
         {
             ServiceName = _name,
@@ -203,7 +210,7 @@ public class AwsAppRunnerCompute : ICompute
                 UnhealthyThreshold = HealthCheckConfiguration.UnhealthyThreshold
             } : null,
             ObservabilityConfiguration = null // placeholder
-        });
+        }, new CustomResourceOptions { DependsOn = dependsOn });
     }
 
     private Output<string> CreatePolicyDocument(IEnumerable<IPolicyStatement> statements)

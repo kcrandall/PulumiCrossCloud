@@ -18,8 +18,12 @@ public class GcpCloudResourceFactory : CloudResourceFactory
         return new GcpContainerRegistry(name, createDefaultImage);
     }
     
-    public override ICompute CreateCompute(string name, ComputeServiceType serviceType, IContainerRegistry registry, string imageTag = "latest")
+    public override ICompute CreateCompute(string name, IContainerRegistry registry, string imageTag = "latest", ComputeServiceType? serviceType = null)
     {
+        if (serviceType is null)
+        {
+            serviceType = ComputeServiceType.CloudRun;
+        }
         return serviceType switch
         {
             ComputeServiceType.CloudRun => new GcpCloudRunCompute(name, registry, imageTag),
