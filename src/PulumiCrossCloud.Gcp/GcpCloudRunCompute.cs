@@ -13,6 +13,12 @@ namespace PulumiCrossCloud.Gcp;
 
 public class GcpCloudRunCompute : ICompute
 {
+    public string Name { get; }
+    public ComputeServiceType ServiceType { get; }
+    public IContainerRegistry ContainerRegistry { get; }
+    public IEnumerable<ISecret> RequiredSecrets => _requiredSecrets.Select(x => x.secret);
+    public Output<string> Arn => _service.Name;
+    public CloudProvider Provider => CloudProvider.GCP;
     private static readonly ConcurrentDictionary<string, Service> _cloudRunApiEnabled = new();
     private Pulumi.Gcp.CloudRun.Service _service;
     private readonly List<(ISecret secret, string? envVarName)> _requiredSecrets = [];
@@ -25,6 +31,10 @@ public class GcpCloudRunCompute : ICompute
     private readonly List<string> _allowedServiceAccounts = [];
     private readonly List<Func<ICompute, Task>> _onHealthyActions = [];
     private readonly List<Func<ICompute, Task>> _onReadyActions = [];
+    
+    // Add public property to access the service URL
+    public Output<string> ServiceUrl => _service.Statuses.Apply(statuses => 
+        statuses.FirstOrDefault()?.Url ?? "");
 
     /// <summary>
     /// Ingress setting for Cloud Run ("all", "internal", "internal-and-cloud-load-balancing")
@@ -35,6 +45,14 @@ public class GcpCloudRunCompute : ICompute
     /// The maximum number of concurrent requests allowed per container instance. Default is 80. If null, uses GCP default.
     /// </summary>
     public int? ContainerConcurrency { get; set; } = null;
+    
+    public int MinCount { get; set; } = 1;
+    public int MaxCount { get; set; } = 1;
+
+    public IHealthCheckConfiguration? HealthCheckConfiguration { get; set; }
+    public IDictionary<string, string> EnvironmentVariables => _environmentVariables;
+
+    public IList<PortForwardingConfiguration> PortForwardings { get; set; } = new List<PortForwardingConfiguration> { new PortForwardingConfiguration { ContainerPort = 8080 } };
 
     public GcpCloudRunCompute(string name, IContainerRegistry containerRegistry, string imageTag = "latest", string? serviceAccountEmail = null)
     {
@@ -68,17 +86,6 @@ public class GcpCloudRunCompute : ICompute
         }
     }
     
-    public string Name { get; }
-    public ComputeServiceType ServiceType { get; }
-    public IContainerRegistry ContainerRegistry { get; }
-    public IEnumerable<ISecret> RequiredSecrets => _requiredSecrets.Select(x => x.secret);
-    public Output<string> Arn => _service.Name;
-    public CloudProvider Provider => CloudProvider.GCP;
-    
-    // Add public property to access the service URL
-    public Output<string> ServiceUrl => _service.Statuses.Apply(statuses => 
-        statuses.FirstOrDefault()?.Url ?? "");
-    
     public void AddRequiredSecret(ISecret secret, string? environmentVariableName = null)
     {
         _requiredSecrets.Add((secret, environmentVariableName));
@@ -88,13 +95,6 @@ public class GcpCloudRunCompute : ICompute
     {
         _customPolicyStatements.Add(statement);
     }
-
-    public int MinCount { get; set; } = 1;
-    public int MaxCount { get; set; } = 1;
-
-    public IHealthCheckConfiguration? HealthCheckConfiguration { get; set; }
-
-    public IList<PortForwardingConfiguration> PortForwardings { get; set; } = new List<PortForwardingConfiguration> { new PortForwardingConfiguration { ContainerPort = 8080 } };
 
     public void Build()
     {
@@ -291,7 +291,6 @@ public class GcpCloudRunCompute : ICompute
         // GCP Cloud Run scaling logic would go here
     }
     
-    public IDictionary<string, string> EnvironmentVariables => _environmentVariables;
 
     public IEnumerable<IPolicyStatement> GetPolicy(params ComputePermissions[] permissions)
     {

@@ -53,5 +53,7 @@ public class KeycloakStack : Stack
         // Set scaling options
         compute.MinCount = 0;
         compute.MaxCount = 1;
+        
+        compute.Build();
     }
 }
