@@ -23,7 +23,7 @@ public class GcpCloudResourceFactory : CloudResourceFactory
         return new GcpContainerImage(name, registry);
     }
     
-    public override ICompute CreateCompute(string name, IContainerRegistry registry, string imageTag = "latest", ComputeServiceType? serviceType = null)
+    public override ICompute CreateCompute(string name, IContainerRegistry registry, string imageName, string imageTag = "latest", IContainerImage? containerImage = null, ComputeServiceType? serviceType = null)
     {
         if (serviceType is null)
         {
@@ -31,7 +31,7 @@ public class GcpCloudResourceFactory : CloudResourceFactory
         }
         return serviceType switch
         {
-            ComputeServiceType.CloudRun => new GcpCloudRunCompute(name, registry, imageTag),
+            ComputeServiceType.CloudRun => new GcpCloudRunCompute(name, registry, imageName, imageTag, containerImage),
             _ => throw new ArgumentException($"Unsupported GCP service type: {serviceType}")
         };
     }

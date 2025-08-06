@@ -15,8 +15,7 @@ public class AwsInfrastructureStack : Stack
         var registry = factory.CreateContainerRegistry("app-registry","app-registry");
         
         // Create different compute types based on needs
-        var appRunnerService = factory.CreateCompute("web-app",  registry);
-        var fargateService = factory.CreateCompute("background-worker", registry);
+        var appRunnerService = factory.CreateCompute("web-app",  registry, "web-app-image", "latest", serviceType: ComputeServiceType.AppRunner);
         
         var role = factory.CreateRole("app-role", @"{
             ""Version"": ""2012-10-17"",
@@ -31,7 +30,6 @@ public class AwsInfrastructureStack : Stack
         
         // Add secret dependencies
         ((AwsAppRunnerCompute)appRunnerService).AddRequiredSecret(secret);
-        ((AwsAppRunnerCompute)fargateService).AddRequiredSecret(secret);
         
         
         // Export some values - using public properties and Output types

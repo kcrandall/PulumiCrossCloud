@@ -8,6 +8,7 @@ namespace PulumiCrossCloud.Aws;
 
 public class AwsContainerImage : IContainerImage
 {
+    public Resource Resource { get; set; }
     public string Name { get; }
     public Output<string> Arn => DeploymentResult.Apply(result => result.ImageUrl ?? string.Empty);
     public CloudProvider Provider => CloudProvider.AWS;

@@ -14,17 +14,20 @@ public class AwsAppRunnerCompute : ICompute
     private Pulumi.Aws.AppRunner.Service? _service;
     private readonly string _name;
     private readonly IContainerRegistry _containerRegistry;
+    private readonly string _imageName;
     private readonly string _imageTag;
+    private readonly IContainerImage? _containerImage;
     private readonly List<IPolicyStatement> _customPolicyStatements = new();
     private Pulumi.Aws.AppRunner.AutoScalingConfigurationVersion? _autoScalingConfig;
 
     private readonly List<Func<ICompute, Task>> _onHealthyActions = [];
     private readonly List<Func<ICompute, Task>> _onReadyActions = [];
 
-    public AwsAppRunnerCompute(string name, IContainerRegistry containerRegistry, string imageTag = "latest")
+    public AwsAppRunnerCompute(string name, IContainerRegistry containerRegistry, string imageName, string imageTag = "latest", IContainerImage? containerImage = null)
     {
         _name = name;
         _containerRegistry = containerRegistry;
+        _imageName = imageName;
         _imageTag = imageTag;
         Name = name;
         ContainerRegistry = containerRegistry;

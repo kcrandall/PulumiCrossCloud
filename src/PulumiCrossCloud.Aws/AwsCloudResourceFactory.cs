@@ -23,7 +23,7 @@ public class AwsCloudResourceFactory : CloudResourceFactory
         return new AwsContainerImage(name, registry);
     }
     
-    public override ICompute CreateCompute(string name, IContainerRegistry registry, string imageTag = "latest", ComputeServiceType? serviceType = null)
+    public override ICompute CreateCompute(string name, IContainerRegistry registry, string imageName, string imageTag = "latest", IContainerImage? containerImage = null, ComputeServiceType? serviceType = null)
     {
         if (serviceType is null)
         {
@@ -31,8 +31,7 @@ public class AwsCloudResourceFactory : CloudResourceFactory
         }
         return serviceType switch
         {
-            ComputeServiceType.AppRunner => new AwsAppRunnerCompute(name, registry, imageTag),
-            ComputeServiceType.Fargate => new AwsAppRunnerCompute(name, registry, imageTag),
+            ComputeServiceType.AppRunner => new AwsAppRunnerCompute(name, registry, imageName, imageTag, containerImage),
             _ => throw new ArgumentException($"Unsupported AWS service type: {serviceType}")
         };
     }

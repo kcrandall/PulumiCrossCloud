@@ -7,6 +7,7 @@ namespace PulumiCrossCloud.Gcp;
 
 public class GcpContainerImage : IContainerImage
 {
+    public Resource Resource { get; set; }
     public string Name { get; }
     public Output<ImageDeploymentResult> DeploymentResult { get; protected set; }
     public Output<string> Arn => DeploymentResult.Apply(result => result.ImageUrl ?? string.Empty);

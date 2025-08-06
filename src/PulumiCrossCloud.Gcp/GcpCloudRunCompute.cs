@@ -54,11 +54,18 @@ public class GcpCloudRunCompute : ICompute
 
     public IList<PortForwardingConfiguration> PortForwardings { get; set; } = new List<PortForwardingConfiguration> { new PortForwardingConfiguration { ContainerPort = 8080 } };
 
-    public GcpCloudRunCompute(string name, IContainerRegistry containerRegistry, string imageTag = "latest", string? serviceAccountEmail = null)
+    private readonly string _imageName;
+    private readonly string _imageTag;
+    private readonly IContainerImage? _containerImage;
+
+    public GcpCloudRunCompute(string name, IContainerRegistry containerRegistry, string imageName, string imageTag = "latest", IContainerImage? containerImage = null, string? serviceAccountEmail = null)
     {
         Name = name;
         ContainerRegistry = containerRegistry;
         ServiceType = ComputeServiceType.CloudRun;
+        _imageName = imageName;
+        _imageTag = imageTag;
+        _containerImage = containerImage;
         var projectId = GcpProjectConfig.ProjectId;
         // Ensure Cloud Run API is enabled for this project
         if (!_cloudRunApiEnabled.ContainsKey(projectId))
@@ -101,8 +108,8 @@ public class GcpCloudRunCompute : ICompute
         var projectId = GcpProjectConfig.ProjectId;
         var region = GcpProjectConfig.Region;
         var imageUri = ContainerRegistry is GcpContainerRegistry gcpRegistry
-            ? gcpRegistry.RegistryUrlOutput.Apply(url => $"{url}:latest")
-            : Output.Create($"{region}-docker.pkg.dev/{projectId}/{Name}:latest");
+            ? gcpRegistry.RegistryUrlOutput.Apply(url => $"{url}/{_imageName}:{_imageTag}")
+            : Output.Create($"{region}-docker.pkg.dev/{projectId}/{Name}/{_imageName}:{_imageTag}");
         var portConfig = PortForwardings.FirstOrDefault();
         List<Pulumi.Gcp.CloudRun.Inputs.ServiceTemplateSpecContainerEnvArgs> envs = [
             ..EnvironmentVariables.Select(kvp => new Pulumi.Gcp.CloudRun.Inputs.ServiceTemplateSpecContainerEnvArgs
@@ -192,6 +199,11 @@ public class GcpCloudRunCompute : ICompute
             Traffics = [ trafficArgs ],
         };
         var dependsOn = new List<Resource> { _cloudRunApiEnabled[projectId] };
+        // Add container image resource to dependsOn if provided
+        if (_containerImage?.Resource is not null && _containerImage is GcpContainerImage gcpImage)
+        {
+            dependsOn.Add(gcpImage.Resource);
+        }
         // IAM binding for registry
         if (ContainerRegistry is GcpContainerRegistry gcpContainerRegistry && serviceAccountEmail is not null)
         {

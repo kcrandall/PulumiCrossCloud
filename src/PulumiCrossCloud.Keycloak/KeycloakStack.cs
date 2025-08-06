@@ -46,6 +46,7 @@ public class KeycloakStack : Stack
         // Create container registry for Keycloak
         var registry = factory.CreateContainerRegistry($"{name}-keycloak-registry", "{name}-keycloak-registry");
         var image = factory.CreateContainerImage("keycloak", registry);
+        
         image.PushImage(dockerfilePath, contextPath, []);
         // Generate a secure random password for Keycloak admin
         string keycloakAdminPassword = GenerateSecurePassword(24);
@@ -55,7 +56,9 @@ public class KeycloakStack : Stack
         var compute = factory.CreateCompute(
             name: $"{name}-keycloak",
             registry: registry,
+            imageName: "keycloak",
             imageTag: "latest",
+            containerImage: image,
             serviceType: null // Uses default per cloud
         );
 

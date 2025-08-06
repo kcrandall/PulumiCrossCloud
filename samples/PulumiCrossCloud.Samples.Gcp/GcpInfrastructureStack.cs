@@ -19,7 +19,7 @@ public class GcpInfrastructureStack : Stack
         // Create resources
         var secret = factory.CreateSecret("app-secret", "my-secret-value", ignoreChangesAfterCreate: true);
         var registry = factory.CreateContainerRegistry("app-registry",  "app-registry", createDefaultImage: true);
-        var cloudRunService = factory.CreateCompute("web-app", registry);
+        var cloudRunService = factory.CreateCompute("web-app", registry, "web-app-image", "latest", serviceType: ComputeServiceType.CloudRun);
         
         // Add secret dependency
         ((GcpCloudRunCompute)cloudRunService).AddRequiredSecret(secret);
