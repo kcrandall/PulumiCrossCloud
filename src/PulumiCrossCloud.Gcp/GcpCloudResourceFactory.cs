@@ -13,9 +13,9 @@ public class GcpCloudResourceFactory : CloudResourceFactory
         return new GcpSecret(name, value, ignoreChangesAfterCreate);
     }
     
-    public override IContainerRegistry CreateContainerRegistry(string name, string repositoryId, bool createDefaultImage = true)
+    public override IContainerRegistry CreateContainerRegistry(string name, bool createDefaultImage = true)
     {
-        return new GcpContainerRegistry(name, repositoryId, createDefaultImage);
+        return new GcpContainerRegistry(name, createDefaultImage);
     }
     
     public override IContainerImage CreateContainerImage(string name, IContainerRegistry registry)

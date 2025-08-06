@@ -10,9 +10,7 @@ public interface IContainerRegistry : ICloudResource, IPolicyProvider<ContainerR
     /// THe underlying resource representing the container registry.
     /// </summary>
     Resource Resource { get; }
-
-    // string ImageName { get; }
-
+    
     /// <summary>
     /// Gets the registry URL as an Output for Pulumi deployments.
     /// </summary>

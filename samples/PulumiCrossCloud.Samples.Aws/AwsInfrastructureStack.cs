@@ -12,7 +12,7 @@ public class AwsInfrastructureStack : Stack
         
         // Create resources - these will only be created once
         var secret = factory.CreateSecret("app-secret", "my-secret-value");
-        var registry = factory.CreateContainerRegistry("app-registry","app-registry");
+        var registry = factory.CreateContainerRegistry("app-registry");
         
         // Create different compute types based on needs
         var appRunnerService = factory.CreateCompute("web-app",  registry, "web-app-image", "latest", serviceType: ComputeServiceType.AppRunner);

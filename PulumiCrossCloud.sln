@@ -33,6 +33,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PulumiCrossCloud.Integratio
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PulumiCrossCloud.Keycloak", "src\PulumiCrossCloud.Keycloak\PulumiCrossCloud.Keycloak.csproj", "{E2E93349-480D-4458-92A0-5CCBE4068C97}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PulumiCrossCloud.Samples.OpenSourceStack", "samples\PulumiCrossCloud.Samples.OpenSourceStack\PulumiCrossCloud.Samples.OpenSourceStack.csproj", "{88F9B43D-BBC1-487A-BA72-257D217A425C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -90,6 +92,10 @@ Global
 		{E2E93349-480D-4458-92A0-5CCBE4068C97}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E2E93349-480D-4458-92A0-5CCBE4068C97}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{E2E93349-480D-4458-92A0-5CCBE4068C97}.Release|Any CPU.Build.0 = Release|Any CPU
+		{88F9B43D-BBC1-487A-BA72-257D217A425C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{88F9B43D-BBC1-487A-BA72-257D217A425C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{88F9B43D-BBC1-487A-BA72-257D217A425C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{88F9B43D-BBC1-487A-BA72-257D217A425C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{97F1A61C-10CB-4A0E-A7C2-F22CFE268D4A} = {EDEA3CCB-4303-4804-918F-A7E460A23FE2}
@@ -104,5 +110,6 @@ Global
 		{FDF28292-5625-44C6-8E4A-68C92AEEC253} = {FA044E03-A15B-408E-A1E7-B43B016DB9C6}
 		{4722330A-1A71-467F-83E5-9A5A222E5302} = {FA044E03-A15B-408E-A1E7-B43B016DB9C6}
 		{E2E93349-480D-4458-92A0-5CCBE4068C97} = {EDEA3CCB-4303-4804-918F-A7E460A23FE2}
+		{88F9B43D-BBC1-487A-BA72-257D217A425C} = {15B227EB-FAE3-43BB-98C0-1E6ABFE8034F}
 	EndGlobalSection
 EndGlobal

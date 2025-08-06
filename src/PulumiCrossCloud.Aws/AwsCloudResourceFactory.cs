@@ -13,9 +13,9 @@ public class AwsCloudResourceFactory : CloudResourceFactory
         return new AwsSecret(name, value);
     }
     
-    public override IContainerRegistry CreateContainerRegistry(string name, string repositoryId, bool createDefaultImage = true)
+    public override IContainerRegistry CreateContainerRegistry(string name, bool createDefaultImage = true)
     {
-        return new AwsContainerRegistry(name, repositoryId);
+        return new AwsContainerRegistry(name);
     }
     
     public override IContainerImage CreateContainerImage(string name, IContainerRegistry registry)

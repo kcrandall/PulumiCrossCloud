@@ -9,13 +9,13 @@ public class AwsContainerRegistry : IContainerRegistry
     private readonly Pulumi.Aws.Ecr.Repository _repository;
     public Resource Resource => _repository;
 
-    public AwsContainerRegistry(string name, string repositoryId)
+    public AwsContainerRegistry(string name)
     {
         Name = name;
-        RepositoryId = repositoryId;
+        RepositoryId = name;
         _repository = new Pulumi.Aws.Ecr.Repository(name, new Pulumi.Aws.Ecr.RepositoryArgs
         {
-            Name = repositoryId
+            Name = RepositoryId
         });
     }
     

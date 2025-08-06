@@ -33,7 +33,7 @@ public abstract class CloudResourceFactory
     /// <param name="repositoryId">The name of the registry.</param>
     /// <param name="createDefaultImage">If true, imports a default image (e.g., Hello World) into the registry.</param>
     /// <returns>An <see cref="IContainerRegistry"/> instance.</returns>
-    public abstract IContainerRegistry CreateContainerRegistry(string name, string repositoryId, bool createDefaultImage = true);
+    public abstract IContainerRegistry CreateContainerRegistry(string name, bool createDefaultImage = true);
     
     /// <summary>
     /// Creates a container image resource. See implementation for details.

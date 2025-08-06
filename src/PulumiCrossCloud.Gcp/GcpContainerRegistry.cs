@@ -21,10 +21,10 @@ public class GcpContainerRegistry : IContainerRegistry
     /// </summary>
     /// <param name="name">The resource name</param>
     /// <param name="useDefaultHelloWorldImage"></param>
-    public GcpContainerRegistry(string name, string repositoryId, bool useDefaultHelloWorldImage = false)
+    public GcpContainerRegistry(string name, bool useDefaultHelloWorldImage = false)
     {
         Name = name;
-        RepositoryId = repositoryId;
+        RepositoryId = name;
         _projectId = GcpProjectConfig.ProjectId;
         _region = GcpProjectConfig.Region;
         _useDefaultHelloWorldImage = useDefaultHelloWorldImage;
@@ -43,7 +43,7 @@ public class GcpContainerRegistry : IContainerRegistry
         _repository = new Pulumi.Gcp.ArtifactRegistry.Repository(name, new Pulumi.Gcp.ArtifactRegistry.RepositoryArgs
         {
             Format = "DOCKER",
-            RepositoryId = repositoryId,
+            RepositoryId = RepositoryId,
             Location = _region
         }, new CustomResourceOptions { DependsOn = dependsOn });
 

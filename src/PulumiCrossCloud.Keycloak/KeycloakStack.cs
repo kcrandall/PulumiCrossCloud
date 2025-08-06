@@ -33,6 +33,12 @@ namespace PulumiCrossCloud.Keycloak;
 /// </summary>
 public class KeycloakStack : Stack
 {
+    private ICompute compute;
+    private ISecret keycloakAdminPasswordSecret;
+    private ISecret postgresUrlSecret;
+    private ISecret postgresUserSecret;
+    private ISecret postgresPasswordSecret;
+
     public KeycloakStack(
         CloudResourceFactory factory,
         string name,
@@ -40,20 +46,23 @@ public class KeycloakStack : Stack
         ISecret postgresUserSecret,
         ISecret postgresPasswordSecret)
     {
+        this.postgresUrlSecret = postgresUrlSecret;
+        this.postgresUserSecret = postgresUserSecret;
+        this.postgresPasswordSecret = postgresPasswordSecret;
         // Write embedded Dockerfile to a temp file
         var dockerfilePath = WriteEmbeddedDockerfileToTemp();
         var contextPath = Path.GetDirectoryName(dockerfilePath)!;
         // Create container registry for Keycloak
-        var registry = factory.CreateContainerRegistry($"{name}-keycloak-registry", "{name}-keycloak-registry");
+        var registry = factory.CreateContainerRegistry($"{name}-keycloak-registry");
         var image = factory.CreateContainerImage("keycloak", registry);
         
         image.PushImage(dockerfilePath, contextPath, []);
         // Generate a secure random password for Keycloak admin
         string keycloakAdminPassword = GenerateSecurePassword(24);
-        var keycloakAdminPasswordSecret = factory.CreateSecret($"{name}-keycloak-admin-password", keycloakAdminPassword, ignoreChangesAfterCreate: true);
+        keycloakAdminPasswordSecret = factory.CreateSecret($"{name}-keycloak-admin-password", keycloakAdminPassword, ignoreChangesAfterCreate: true);
 
         // Create compute resource for Keycloak
-        var compute = factory.CreateCompute(
+        compute = factory.CreateCompute(
             name: $"{name}-keycloak",
             registry: registry,
             imageTag: "latest",
@@ -61,15 +70,14 @@ public class KeycloakStack : Stack
             serviceType: null // Uses default per cloud
         );
 
-        // Add required secrets and inject as environment variables
+        // Add required secrets/vars
         compute.AddEnvironmentVariable("KEYCLOAK_ADMIN", "admin");
+        compute.AddRequiredSecret(keycloakAdminPasswordSecret, "KEYCLOAK_ADMIN_PASSWORD");
+        compute.AddEnvironmentVariable("KC_DB", "postgres");
         compute.AddRequiredSecret(postgresUrlSecret, "KC_DB_URL");
         compute.AddRequiredSecret(postgresUserSecret, "KC_DB_USERNAME");
         compute.AddRequiredSecret(postgresPasswordSecret, "KC_DB_PASSWORD");
-        compute.AddRequiredSecret(keycloakAdminPasswordSecret, "KEYCLOAK_ADMIN_PASSWORD");
 
-        // Set KC_DB as a plain environment variable
-        compute.AddEnvironmentVariable("KC_DB", "postgres");
 
         // Configure health check using cross-cloud abstraction
         compute.HealthCheckConfiguration = new HealthCheckConfiguration
