@@ -6,6 +6,7 @@ using FS.Keycloak.RestApiClient.Model;
 
 // Install NuGet Package: Schick.Keycloak.RestApiClient
 
+namespace PulumiCrossCloud.keycloak;
 public class IdempotentKeycloakSetup
 {
     private readonly string _keycloakUrl;
