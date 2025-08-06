@@ -10,6 +10,7 @@
     <PackageReference Include="Pulumi" Version="3.87.0" />
     <PackageReference Include="Pulumi.Command" Version="1.1.0" />
     <PackageReference Include="Pulumi.Docker" Version="4.8.0" />
+    <PackageReference Include="Pulumi.DockerBuild" Version="0.1.0-alpha.1754459522" />
     <PackageReference Include="System.Text.Json" Version="9.0.0" />
   </ItemGroup>
 

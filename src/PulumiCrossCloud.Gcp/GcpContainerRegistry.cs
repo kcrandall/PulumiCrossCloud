@@ -3,6 +3,7 @@ using Pulumi.Gcp.Projects;
 using Pulumi.Command.Local;
 using PulumiCrossCloud.Core;
 using System.Collections.Concurrent;
+using Pulumi.DockerBuild.Inputs;
 
 namespace PulumiCrossCloud.Gcp;
 
@@ -15,9 +16,15 @@ public class GcpContainerRegistry : IContainerRegistry
     private readonly string _region;
     private readonly bool _useDefaultHelloWorldImage;
     
-    public GcpContainerRegistry(string name, bool useDefaultHelloWorldImage = false)
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="name">The resource name</param>
+    /// <param name="useDefaultHelloWorldImage"></param>
+    public GcpContainerRegistry(string name, string repositoryId, bool useDefaultHelloWorldImage = false)
     {
         Name = name;
+        RepositoryId = repositoryId;
         _projectId = GcpProjectConfig.ProjectId;
         _region = GcpProjectConfig.Region;
         _useDefaultHelloWorldImage = useDefaultHelloWorldImage;
@@ -36,7 +43,7 @@ public class GcpContainerRegistry : IContainerRegistry
         _repository = new Pulumi.Gcp.ArtifactRegistry.Repository(name, new Pulumi.Gcp.ArtifactRegistry.RepositoryArgs
         {
             Format = "DOCKER",
-            RepositoryId = name,
+            RepositoryId = repositoryId,
             Location = _region
         }, new CustomResourceOptions { DependsOn = dependsOn });
 
@@ -47,14 +54,16 @@ public class GcpContainerRegistry : IContainerRegistry
     }
     
     public string Name { get; }
+    public string RepositoryId { get; }
     public Output<string> Arn => _repository.Name;
+    public Resource Resource => _repository;
     public CloudProvider Provider => CloudProvider.GCP;
     public string RegistryUrl => throw new NotImplementedException("Use RegistryUrlOutput property for Pulumi deployments");
-    public Output<string> RegistryUrlOutput => _repository.Name.Apply(name => $"{_region}-docker.pkg.dev/{_projectId}/{Name}/{Name}");
+    public Output<string> RegistryUrlOutput => _repository.Name.Apply(name => $"{_region}-docker.pkg.dev/{_projectId}/{RepositoryId}/{RepositoryId}");
 
     public void ImportHelloWorldImage()
     {
-        var repoPath = $"{_region}-docker.pkg.dev/{_projectId}/{Name}";
+        var repoPath = $"{_region}-docker.pkg.dev/{_projectId}/{RepositoryId}";
         var registryUrl = $"{repoPath}:latest";
         // Only run if the registry is completely empty
         var checkEmptyCmd = $"[ $(gcloud artifacts docker images list {repoPath} --format='get(NAME)' | wc -l) -eq 0 ]";
@@ -62,13 +71,19 @@ public class GcpContainerRegistry : IContainerRegistry
         var tagCmd = $"docker tag gcr.io/google-samples/hello-app:1.0 {registryUrl}";
         var pushCmd = $"docker push {registryUrl}";
         var fullCmd = $"{checkEmptyCmd} && {pullCmd} && {tagCmd} && {pushCmd}";
-        var importImage = new Pulumi.Command.Local.Command($"import-hello-world-image-{Name}", new Pulumi.Command.Local.CommandArgs
+        var importImage = new Pulumi.Command.Local.Command($"import-hello-world-image-{RepositoryId}", new Pulumi.Command.Local.CommandArgs
         {
             Create = fullCmd,
             Triggers = new[] { registryUrl }
         }, new CustomResourceOptions { DependsOn = new[] { _repository } });
     }
-
+    
+    public InputList<RegistryArgs> GetDockerBuildRegistryConfig()
+    {
+        // GCP uses default gcloud authentication, no explicit credentials needed
+        return new InputList<RegistryArgs>();
+    }
+    
     public void PushImage(string imageName, string tag) { /* Implementation */ }
     public void PullImage(string imageName, string tag) { /* Implementation */ }
     public IEnumerable<string> ListRepositories() => new List<string>();

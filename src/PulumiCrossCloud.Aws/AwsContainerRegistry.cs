@@ -1,4 +1,5 @@
 using Pulumi;
+using Pulumi.DockerBuild.Inputs;
 using PulumiCrossCloud.Core;
 
 namespace PulumiCrossCloud.Aws;
@@ -6,17 +7,20 @@ namespace PulumiCrossCloud.Aws;
 public class AwsContainerRegistry : IContainerRegistry
 {
     private readonly Pulumi.Aws.Ecr.Repository _repository;
-    
-    public AwsContainerRegistry(string name)
+    public Resource Resource => _repository;
+
+    public AwsContainerRegistry(string name, string repositoryId)
     {
         Name = name;
+        RepositoryId = repositoryId;
         _repository = new Pulumi.Aws.Ecr.Repository(name, new Pulumi.Aws.Ecr.RepositoryArgs
         {
-            Name = name
+            Name = repositoryId
         });
     }
     
     public string Name { get; }
+    public string RepositoryId { get; }
     public Output<string> Arn => _repository.Arn;
     public CloudProvider Provider => CloudProvider.AWS;
     
@@ -27,6 +31,25 @@ public class AwsContainerRegistry : IContainerRegistry
     public void PullImage(string imageName, string tag) { /* Implementation */ }
     public IEnumerable<string> ListRepositories() => new List<string>();
     public void DeleteRepository(string repositoryName) { /* Implementation */ }
+    
+    public InputList<RegistryArgs> GetDockerBuildRegistryConfig()
+    {
+        // Get ECR auth token
+        var authToken = Pulumi.Aws.Ecr.GetAuthorizationToken.Invoke(new()
+        {
+            RegistryId = _repository.RegistryId,
+        });
+    
+        return new InputList<RegistryArgs>
+        {
+            new RegistryArgs
+            {
+                Address = RegistryUrlOutput.Apply(url => url.Split('/')[0]), // Just the registry domain
+                Username = authToken.Apply(token => token.UserName),
+                Password = authToken.Apply(token => token.Password)
+            }
+        };
+    }
     
     public IEnumerable<IPolicyStatement> GetPolicy(params ContainerRegistryPermissions[] permissions)
     {

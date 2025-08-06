@@ -29,10 +29,19 @@ public abstract class CloudResourceFactory
     /// <summary>
     /// Creates a container registry resource. See implementation for details.
     /// </summary>
-    /// <param name="name">The name of the registry.</param>
+    /// <param name="name">The name of the resource.</param>
+    /// <param name="repositoryId">The name of the registry.</param>
     /// <param name="createDefaultImage">If true, imports a default image (e.g., Hello World) into the registry.</param>
     /// <returns>An <see cref="IContainerRegistry"/> instance.</returns>
-    public abstract IContainerRegistry CreateContainerRegistry(string name, bool createDefaultImage = true);
+    public abstract IContainerRegistry CreateContainerRegistry(string name, string repositoryId, bool createDefaultImage = true);
+    
+    /// <summary>
+    /// Creates a container image resource. See implementation for details.
+    /// </summary>
+    /// <param name="name">The name of the container image.</param>
+    /// <param name="registry">The container registry to use.</param>
+    /// <returns>An <see cref="IContainerImage"/> instance.</returns>
+    public abstract IContainerImage CreateContainerImage(string name, IContainerRegistry registry);
     
     /// <summary>
     /// Creates a compute resource (e.g., Cloud Run, App Runner). See implementation for details.

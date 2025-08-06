@@ -5,6 +5,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="AWSSDK.ECR" Version="4.0.3.2" />
     <PackageReference Include="Pulumi.Aws" Version="6.50.1" />
   </ItemGroup>
 

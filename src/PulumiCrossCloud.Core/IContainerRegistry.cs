@@ -1,20 +1,22 @@
 using Pulumi;
+using Pulumi.DockerBuild;
+using Pulumi.DockerBuild.Inputs;
 
 namespace PulumiCrossCloud.Core;
 
 public interface IContainerRegistry : ICloudResource, IPolicyProvider<ContainerRegistryPermissions>
 {
     /// <summary>
-    /// Gets the registry URL. May throw NotImplementedException in Pulumi contexts.
-    /// Use RegistryUrlOutput for deployment scenarios.
+    /// THe underlying resource representing the container registry.
     /// </summary>
-    string RegistryUrl { get; }
-    
+    Resource Resource { get; }
+
+    // string ImageName { get; }
+
     /// <summary>
     /// Gets the registry URL as an Output for Pulumi deployments.
     /// </summary>
     Output<string> RegistryUrlOutput { get; }
+
     
-    void PushImage(string imageName, string tag);
-    void PullImage(string imageName, string tag);
 }

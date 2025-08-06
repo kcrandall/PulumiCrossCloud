@@ -13,9 +13,14 @@ public class AwsCloudResourceFactory : CloudResourceFactory
         return new AwsSecret(name, value);
     }
     
-    public override IContainerRegistry CreateContainerRegistry(string name, bool createDefaultImage = true)
+    public override IContainerRegistry CreateContainerRegistry(string name, string repositoryId, bool createDefaultImage = true)
     {
-        return new AwsContainerRegistry(name);
+        return new AwsContainerRegistry(name, repositoryId);
+    }
+    
+    public override IContainerImage CreateContainerImage(string name, IContainerRegistry registry)
+    {
+        return new AwsContainerImage(name, registry);
     }
     
     public override ICompute CreateCompute(string name, IContainerRegistry registry, string imageTag = "latest", ComputeServiceType? serviceType = null)

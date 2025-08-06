@@ -1,3 +1,5 @@
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using Pulumi;
 using PulumiCrossCloud.Core;
 using PulumiCrossCloud.Core;
@@ -38,9 +40,13 @@ public class KeycloakStack : Stack
         ISecret postgresUserSecret,
         ISecret postgresPasswordSecret)
     {
+        // Write embedded Dockerfile to a temp file
+        var dockerfilePath = WriteEmbeddedDockerfileToTemp();
+        var contextPath = Path.GetDirectoryName(dockerfilePath)!;
         // Create container registry for Keycloak
-        var registry = factory.CreateContainerRegistry($"{name}-keycloak-registry");
-
+        var registry = factory.CreateContainerRegistry($"{name}-keycloak-registry", "{name}-keycloak-registry");
+        var image = factory.CreateContainerImage("keycloak", registry);
+        image.PushImage(dockerfilePath, contextPath, []);
         // Generate a secure random password for Keycloak admin
         string keycloakAdminPassword = GenerateSecurePassword(24);
         var keycloakAdminPasswordSecret = factory.CreateSecret($"{name}-keycloak-admin-password", keycloakAdminPassword, ignoreChangesAfterCreate: true);
@@ -100,5 +106,23 @@ public class KeycloakStack : Stack
             chars[i] = allowedChars[bytes[i] % allowedChars.Length];
         }
         return new string(chars);
+    }
+
+    /// <summary>
+    /// Writes the embedded Dockerfile to a temporary file and returns its path.
+    /// </summary>
+    private static string WriteEmbeddedDockerfileToTemp([CallerFilePath] string sourceFilePath = "")
+    {
+        var assembly = Assembly.GetExecutingAssembly();
+        var resourceName = assembly.GetManifestResourceNames()
+            .FirstOrDefault(n => n.EndsWith("Dockerfile"));
+        if (resourceName is null)
+            throw new InvalidOperationException("Dockerfile not embedded as resource.");
+        using var stream = assembly.GetManifestResourceStream(resourceName);
+        using var reader = new StreamReader(stream!);
+        var dockerfileContent = reader.ReadToEnd();
+        var tempPath = Path.Combine(Path.GetTempPath(), $"Dockerfile-{Guid.NewGuid():N}");
+        File.WriteAllText(tempPath, dockerfileContent);
+        return tempPath;
     }
 }
