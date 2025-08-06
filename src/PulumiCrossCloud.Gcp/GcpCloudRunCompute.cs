@@ -5,6 +5,8 @@ using Pulumi.Gcp.ServiceAccount;
 using Pulumi.Gcp.ArtifactRegistry;
 using Pulumi.Gcp.SecretManager;
 using PulumiCrossCloud.Core;
+using System.Net.Http;
+using System.Threading.Tasks;
 
 namespace PulumiCrossCloud.Gcp;
 
@@ -20,6 +22,8 @@ public class GcpCloudRunCompute : ICompute
     private RepositoryIamMember? _registryIamMember;
     private readonly List<SecretIamMember> _secretIamMembers = new();
     private readonly List<string> _allowedServiceAccounts = [];
+    private readonly List<Func<ICompute, Task>> _onHealthyActions = [];
+    private readonly List<Func<ICompute, Task>> _onReadyActions = [];
 
     /// <summary>
     /// Ingress setting for Cloud Run ("all", "internal", "internal-and-cloud-load-balancing")
@@ -346,5 +350,56 @@ public class GcpCloudRunCompute : ICompute
         
         // For each provided domain name, return a CNAME record pointing to the Cloud Run service URL
         return names.Select(name => new DnsRecord(DnsRecordType.CNAME, name, ServiceUrl)).ToList();
+    }
+
+    public void OnHealthy(params Func<ICompute, Task>[] actions)
+    {
+        _onHealthyActions.AddRange(actions);
+        ServiceUrl.Apply(async url =>
+        {
+            var healthPath = HealthCheckConfiguration?.Path ?? string.Empty;
+            var healthUrl = $"{url}{(healthPath.StartsWith("/") ? healthPath : "/" + healthPath)}";
+            using var http = new HttpClient();
+            var healthy = false;
+            for (int i = 0; i < 60; i++)
+            {
+                try
+                {
+                    var response = await http.GetAsync(healthUrl);
+                    if (response.IsSuccessStatusCode)
+                    {
+                        healthy = true;
+                        foreach (var action in _onHealthyActions)
+                        {
+                            await action(this);
+                        }
+                        break;
+                    }
+                }
+                catch
+                {
+                    // ignore connection failures, retry
+                }
+                await Task.Delay(5000);
+            }
+            if (!healthy)
+            {
+                Pulumi.Log.Error($"Cloud Run health check failed for {Name} at {healthUrl} after 5 minutes.");
+            }
+        });
+    }
+
+    public void OnReady(params Func<ICompute, Task>[] actions)
+    {
+        _onReadyActions.AddRange(actions);
+        // Register ready logic to run after deployment
+        ServiceUrl.Apply(async url =>
+        {
+            // Fire all registered actions after service is deployed and URL is available
+            foreach (var action in _onReadyActions)
+            {
+                await action(this);
+            }
+        });
     }
 }

@@ -1,5 +1,7 @@
 using Pulumi;
 using PulumiCrossCloud.Core;
+using System.Net.Http;
+using System.Threading.Tasks;
 
 namespace PulumiCrossCloud.Aws;
 
@@ -15,6 +17,9 @@ public class AwsAppRunnerCompute : ICompute
     private readonly string _imageTag;
     private readonly List<IPolicyStatement> _customPolicyStatements = new();
     private Pulumi.Aws.AppRunner.AutoScalingConfigurationVersion? _autoScalingConfig;
+
+    private readonly List<Func<ICompute, Task>> _onHealthyActions = [];
+    private readonly List<Func<ICompute, Task>> _onReadyActions = [];
 
     public AwsAppRunnerCompute(string name, IContainerRegistry containerRegistry, string imageTag = "latest")
     {
@@ -240,6 +245,56 @@ public class AwsAppRunnerCompute : ICompute
     public void Deploy() {  }
     public void Stop() { /* Implementation for pausing service */ }
     public void Scale(int replicas) { /* App Runner auto-scales, but can set min/max */ }
+
+    public void OnReady(params Func<ICompute, Task>[] actions)
+    {
+        _onReadyActions.AddRange(actions);
+        // Register ready logic to run after deployment
+        ServiceUrl.Apply(async url =>
+        {
+            foreach (var action in _onReadyActions)
+            {
+                await action(this);
+            }
+        });
+    }
+
+    public void OnHealthy(params Func<ICompute, Task>[] actions)
+    {
+        _onHealthyActions.AddRange(actions);
+        ServiceUrl.Apply(async url =>
+        {
+            var healthPath = HealthCheckConfiguration?.Path ?? "";
+            var healthUrl = $"{url}{(healthPath.StartsWith("/") ? healthPath : "/" + healthPath)}";
+            using var http = new HttpClient();
+            var healthy = false;
+            for (int i = 0; i < 60; i++)
+            {
+                try
+                {
+                    var response = await http.GetAsync(healthUrl);
+                    if (response.IsSuccessStatusCode)
+                    {
+                        healthy = true;
+                        foreach (var action in _onHealthyActions)
+                        {
+                            await action(this);
+                        }
+                        break;
+                    }
+                }
+                catch
+                {
+                    // ignore connection failures, retry
+                }
+                await Task.Delay(5000);
+            }
+            if (!healthy)
+            {
+                Pulumi.Log.Error($"App Runner health check failed for {Name} at {healthUrl} after 5 minutes.");
+            }
+        });
+    }
 
     public IEnumerable<IPolicyStatement> GetPolicy(params ComputePermissions[] permissions)
     {

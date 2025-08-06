@@ -84,4 +84,18 @@ public interface ICompute : ICloudResource, IPolicyProvider<ComputePermissions>
     /// For clouds that only support a single port (e.g. GCP Cloud Run), only the first entry will be used.
     /// </summary>
     IList<PortForwardingConfiguration> PortForwardings { get; set; }
+
+    /// <summary>
+    /// Registers actions to be executed after the compute resource is healthy.
+    /// Each action receives the ICompute instance and is fired after health checks pass.
+    /// </summary>
+    /// <param name="actions">List of actions to execute post-health-check.</param>
+    void OnHealthy(params Func<ICompute, Task>[] actions);
+
+    /// <summary>
+    /// Registers actions to be executed after the compute resource is deployed and ready (but before health checks).
+    /// Each action receives the ICompute instance and is fired after deployment is successful.
+    /// </summary>
+    /// <param name="actions">List of actions to execute post-deployment.</param>
+    void OnReady(params Func<ICompute, Task>[] actions);
 }
