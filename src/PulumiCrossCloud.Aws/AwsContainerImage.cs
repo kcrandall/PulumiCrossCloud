@@ -1,7 +1,7 @@
 using Pulumi;
-using Pulumi.DockerBuild.Inputs;
 using Pulumi.Aws;
 using Pulumi.DockerBuild;
+using Pulumi.DockerBuild.Inputs;
 using PulumiCrossCloud.Core;
 
 namespace PulumiCrossCloud.Aws;
@@ -19,17 +19,26 @@ public class AwsContainerImage : IContainerImage
     {
         Name = name;
         Registry = registry ?? throw new ArgumentNullException(nameof(registry));
-        
+
         if (registry.Provider != CloudProvider.AWS)
         {
             throw new ArgumentException("Registry must be an AWS registry", nameof(registry));
         }
     }
 
-    Output<ImageDeploymentResult> PushImage(string dockerfilePath, string contextPath,
-        IEnumerable<string> additionalFilesToHash, ImageArgs? imageArgs = null)
+    Output<ImageDeploymentResult> PushImage(
+        string dockerfilePath,
+        string contextPath,
+        IEnumerable<string> additionalFilesToHash,
+        ImageArgs? imageArgs = null
+    )
     {
-        var result= ((IContainerImage)this).PushImage(dockerfilePath, contextPath, additionalFilesToHash, imageArgs);
+        var result = ((IContainerImage)this).PushImage(
+            dockerfilePath,
+            contextPath,
+            additionalFilesToHash,
+            imageArgs
+        );
         DeploymentResult = result;
         return result;
     }
@@ -42,11 +51,10 @@ public class AwsContainerImage : IContainerImage
         var awsRegistry = Registry as AwsContainerRegistry;
         var repository = awsRegistry?.Resource as Pulumi.Aws.Ecr.Repository;
         // Get ECR auth token
-        var authToken = Pulumi.Aws.Ecr.GetAuthorizationToken.Invoke(new()
-        {
-            RegistryId = repository!.RegistryId,
-        });
-    
+        var authToken = Pulumi.Aws.Ecr.GetAuthorizationToken.Invoke(
+            new() { RegistryId = repository!.RegistryId, }
+        );
+
         return new InputList<RegistryArgs>
         {
             new RegistryArgs
@@ -57,13 +65,15 @@ public class AwsContainerImage : IContainerImage
             }
         };
     }
-    
+
     private static string ExtractRegistryServer(string registryUrl)
     {
         try
         {
             // Handle URLs that may or may not have protocol
-            var urlToParse = registryUrl.StartsWith("http") ? registryUrl : $"https://{registryUrl}";
+            var urlToParse = registryUrl.StartsWith("http")
+                ? registryUrl
+                : $"https://{registryUrl}";
             var uri = new Uri(urlToParse);
             return uri.Host;
         }

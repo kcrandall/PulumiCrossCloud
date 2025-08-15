@@ -14,7 +14,10 @@ public class AwsPolicyStatement : BasePolicyStatement
             Resource = Resources,
             Condition = Conditions.Count > 0 ? Conditions : null
         };
-        
-        return JsonSerializer.Serialize(statement, new JsonSerializerOptions { WriteIndented = true });
+
+        return JsonSerializer.Serialize(
+            statement,
+            new JsonSerializerOptions { WriteIndented = true }
+        );
     }
 }

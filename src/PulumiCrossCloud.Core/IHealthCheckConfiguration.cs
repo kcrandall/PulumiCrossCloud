@@ -9,32 +9,39 @@ public interface IHealthCheckConfiguration
     /// The path to check for health (e.g. "/healthz").
     /// </summary>
     string Path { get; set; }
+
     /// <summary>
     /// The interval in seconds between health checks.
     /// </summary>
     int IntervalSeconds { get; set; }
+
     /// <summary>
     /// The timeout in seconds for each health check.
     /// </summary>
     int TimeoutSeconds { get; set; }
+
     /// <summary>
     /// The number of consecutive failures before marking unhealthy.
     /// </summary>
     int UnhealthyThreshold { get; set; }
+
     /// <summary>
     /// The number of consecutive successes before marking healthy.
     /// </summary>
     int HealthyThreshold { get; set; }
+
     /// <summary>
-    /// Startup probe 
+    /// Startup probe
     /// Not all clouds support startup probes.
     /// </summary>
     int? StartupTimeoutSeconds { get; set; }
+
     /// <summary>
-    /// Startup probe 
+    /// Startup probe
     /// Not all clouds support startup probes.
     /// </summary>
     int? StartupIntervalSeconds { get; set; }
+
     /// <summary>
     /// Startup probe
     /// Not all clouds support startup probes.

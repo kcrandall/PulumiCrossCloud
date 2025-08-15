@@ -1,6 +1,7 @@
 namespace PulumiCrossCloud.Core;
 
-public interface IPolicyProvider<TPermission> where TPermission : Enum
+public interface IPolicyProvider<TPermission>
+    where TPermission : Enum
 {
     /// <summary>
     /// Gets the policy statements needed for the specified permissions

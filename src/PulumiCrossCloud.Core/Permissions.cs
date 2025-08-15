@@ -40,12 +40,12 @@ public enum ComputeServiceType
     Fargate,
     EC2,
     ECS,
-    
+
     // Azure
     ContainerApps,
     ContainerInstances,
     AppService,
-    
+
     // GCP
     CloudRun,
     CloudRunJobs,
