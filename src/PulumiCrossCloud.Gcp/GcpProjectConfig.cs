@@ -8,9 +8,9 @@ public static class GcpProjectConfig
     private static string? _projectId;
     private static string? _region;
     private static string? _zone;
-    
+
     /// <summary>
-    /// Gets or sets the GCP project ID. 
+    /// Gets or sets the GCP project ID.
     /// When getting: returns programmatic value, Pulumi config, environment variable, or throws exception.
     /// </summary>
     public static string ProjectId
@@ -22,7 +22,7 @@ public static class GcpProjectConfig
             {
                 return _projectId;
             }
-            
+
             // Fallback to Pulumi config
             var config = new Config("gcp");
             var configProject = config.Get("project");
@@ -30,23 +30,24 @@ public static class GcpProjectConfig
             {
                 return configProject;
             }
-            
+
             // Fallback to environment variable
             var envProject = System.Environment.GetEnvironmentVariable("GOOGLE_CLOUD_PROJECT");
             if (!string.IsNullOrEmpty(envProject))
             {
                 return envProject;
             }
-            
+
             throw new InvalidOperationException(
-                "GCP Project ID not configured. Set via:\n" +
-                "1. GcpProjectConfig.ProjectId = \"your-project-id\"\n" +
-                "2. pulumi config set gcp:project YOUR_PROJECT_ID\n" +
-                "3. Environment variable GOOGLE_CLOUD_PROJECT");
+                "GCP Project ID not configured. Set via:\n"
+                    + "1. GcpProjectConfig.ProjectId = \"your-project-id\"\n"
+                    + "2. pulumi config set gcp:project YOUR_PROJECT_ID\n"
+                    + "3. Environment variable GOOGLE_CLOUD_PROJECT"
+            );
         }
         set => _projectId = value;
     }
-    
+
     /// <summary>
     /// Gets or sets the GCP region.
     /// When getting: returns programmatic value, Pulumi config, or default us-central1.
@@ -60,7 +61,7 @@ public static class GcpProjectConfig
             {
                 return _region;
             }
-            
+
             // Fallback to Pulumi config
             var config = new Config("gcp");
             var configRegion = config.Get("region");
@@ -68,13 +69,13 @@ public static class GcpProjectConfig
             {
                 return configRegion;
             }
-            
+
             // Default fallback
             return "us-central1";
         }
         set => _region = value;
     }
-    
+
     /// <summary>
     /// Gets or sets the GCP zone.
     /// When getting: returns programmatic value, Pulumi config, or default us-central1-a.
@@ -88,7 +89,7 @@ public static class GcpProjectConfig
             {
                 return _zone;
             }
-            
+
             // Fallback to Pulumi config
             var config = new Config("gcp");
             var configZone = config.Get("zone");
@@ -96,13 +97,13 @@ public static class GcpProjectConfig
             {
                 return configZone;
             }
-            
+
             // Default fallback
             return "us-central1-a";
         }
         set => _zone = value;
     }
-    
+
     /// <summary>
     /// Clears all programmatically set values, forcing fallback to config
     /// </summary>
@@ -112,13 +113,13 @@ public static class GcpProjectConfig
         _region = null;
         _zone = null;
     }
-    
+
     /// <summary>
     /// Gets the current configuration as a summary string
     /// </summary>
     public static string ConfigSummary =>
-        $"GCP Configuration:\n" +
-        $"  Project: {ProjectId} {(string.IsNullOrEmpty(_projectId) ? "(from config/env)" : "(programmatic)")}\n" +
-        $"  Region:  {Region} {(string.IsNullOrEmpty(_region) ? "(from config/default)" : "(programmatic)")}\n" +
-        $"  Zone:    {Zone} {(string.IsNullOrEmpty(_zone) ? "(from config/default)" : "(programmatic)")}";
+        $"GCP Configuration:\n"
+        + $"  Project: {ProjectId} {(string.IsNullOrEmpty(_projectId) ? "(from config/env)" : "(programmatic)")}\n"
+        + $"  Region:  {Region} {(string.IsNullOrEmpty(_region) ? "(from config/default)" : "(programmatic)")}\n"
+        + $"  Zone:    {Zone} {(string.IsNullOrEmpty(_zone) ? "(from config/default)" : "(programmatic)")}";
 }
