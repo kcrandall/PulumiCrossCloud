@@ -66,8 +66,13 @@ public class DockerImageHashTracker : ComponentResource
         // Hash Dockerfile
         if (File.Exists(dockerfilePath))
         {
-            var fileHash = ComputeFileHash(File.ReadAllText(dockerfilePath));
+            var fileHash = ComputeFileHash(dockerfilePath);
             combinedContent.Append($"DOCKERFILE:{fileHash}");
+        }
+        else
+        {
+            Console.WriteLine($"[ERROR] Dockerfile path does not exist: {dockerfilePath}");
+            throw new FileNotFoundException($"Dockerfile path does not exist: {dockerfilePath}");
         }
         
         // Hash additional files

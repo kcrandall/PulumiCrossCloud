@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Pulumi;
+using Pulumi.Gcp.SecretManager.Inputs;
 using PulumiCrossCloud.Core;
 
 namespace PulumiCrossCloud.Gcp;
@@ -21,7 +22,7 @@ public class GcpSecret : ISecret
             {
                 Project = projectId,
                 ServiceName = "secretmanager.googleapis.com",
-                DisableDependentServices = false
+                DisableDependentServices = false,
             });
             _secretManagerApiEnabled[projectId] = enableApi;
         }
@@ -29,7 +30,11 @@ public class GcpSecret : ISecret
         _secret = new Pulumi.Gcp.SecretManager.Secret(name, new Pulumi.Gcp.SecretManager.SecretArgs
         {
             SecretId = name,
-            Project = projectId
+            Project = projectId,
+            Replication = new SecretReplicationArgs
+            {
+                Auto = new SecretReplicationAutoArgs { }
+            }
         }, new Pulumi.CustomResourceOptions { DependsOn = dependsOn });
         var secretVersionArgs = new Pulumi.Gcp.SecretManager.SecretVersionArgs
         {

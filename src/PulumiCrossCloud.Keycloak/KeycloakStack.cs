@@ -31,7 +31,7 @@ namespace PulumiCrossCloud.Keycloak;
 /// KC_DB_URL format:
 ///   export KC_DB_URL="jdbc:postgresql://${pg_host}:${pg_port}/${pg_db}"
 /// </summary>
-public class KeycloakStack : Stack
+public class KeycloakStack : ComponentResource
 {
     private ICompute compute;
     private ISecret keycloakAdminPasswordSecret;
@@ -44,7 +44,7 @@ public class KeycloakStack : Stack
         string name,
         ISecret postgresUrlSecret,
         ISecret postgresUserSecret,
-        ISecret postgresPasswordSecret)
+        ISecret postgresPasswordSecret): base("keycloak:Stack", name, null, null)
     {
         this.postgresUrlSecret = postgresUrlSecret;
         this.postgresUserSecret = postgresUserSecret;
@@ -124,8 +124,8 @@ public class KeycloakStack : Stack
     private static string WriteEmbeddedDockerfileToTemp([CallerFilePath] string sourceFilePath = "")
     {
         var assembly = Assembly.GetExecutingAssembly();
-        var resourceName = assembly.GetManifestResourceNames()
-            .FirstOrDefault(n => n.EndsWith("Dockerfile"));
+        var resourceNames = assembly.GetManifestResourceNames();
+        var resourceName = resourceNames.FirstOrDefault(n => n.EndsWith("Dockerfile"));
         if (resourceName is null)
             throw new InvalidOperationException("Dockerfile not embedded as resource.");
         using var stream = assembly.GetManifestResourceStream(resourceName);
@@ -133,6 +133,7 @@ public class KeycloakStack : Stack
         var dockerfileContent = reader.ReadToEnd();
         var tempPath = Path.Combine(Path.GetTempPath(), $"Dockerfile-{Guid.NewGuid():N}");
         File.WriteAllText(tempPath, dockerfileContent);
+        Console.WriteLine($"[KeycloakStack] Dockerfile written to temp path: {tempPath}");
         return tempPath;
     }
 }

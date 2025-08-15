@@ -1,0 +1,3 @@
+name: PulumiCrossCloud.Samples.OpenSourceStack
+runtime: dotnet
+description: A Pulumi program for deploying open source stack

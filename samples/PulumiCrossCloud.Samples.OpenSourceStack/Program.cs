@@ -2,12 +2,11 @@ using System.Threading.Tasks;
 using Pulumi;
 using PulumiCrossCloud.Samples.OpenSourceStack;
 
-namespace PulumiCrossCloud.Samples.OpenSourceStack;
 
-internal static class Program
-{
-    public static async Task<int> Main(string[] args)
-    {
-        return await Deployment.RunAsync<OpenSourceStack>();
-    }
-}
+return await Deployment.RunAsync(() => {
+    // Create your stack components
+    var openSourceStack = new PulumiCrossCloud.Samples.OpenSourceStack.OpenSourceStack();
+    
+    // Return any outputs you want to expose (optional)
+    return new Dictionary<string, object?>();
+});
