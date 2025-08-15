@@ -3,13 +3,15 @@ using Pulumi.DockerBuild;
 using Pulumi.DockerBuild.Inputs;
 
 namespace PulumiCrossCloud.Core;
+
 public class ImageDeploymentResult
 {
     public string? ImageUrl { get; set; }
     public string? ImageTag { get; set; }
-    
+
     public Image? Image { get; set; }
 }
+
 public interface IContainerImage : ICloudResource
 {
     /// <summary>
@@ -35,12 +37,26 @@ public interface IContainerImage : ICloudResource
     /// <param name="additionalFilesToHash">Additional files to include in the hash.</param>
     /// <param name="imageArgs">Build args for different cloud's auth etc</param>
     /// <returns>Output containing the deployed image URL.</returns>
-    Output<ImageDeploymentResult> PushImage(string dockerfilePath, string contextPath, IEnumerable<string> additionalFilesToHash, ImageArgs? imageArgs = null)
+    Output<ImageDeploymentResult> PushImage(
+        string dockerfilePath,
+        string contextPath,
+        IEnumerable<string> additionalFilesToHash,
+        ImageArgs? imageArgs = null
+    )
     {
-        var buildResource = new ContainerImageBuildResource($"{Registry.Name}-build-{Name}", Registry, Name, dockerfilePath, contextPath, additionalFilesToHash, imageArgs);
+        var buildResource = new ContainerImageBuildResource(
+            $"{Registry.Name}-build-{Name}",
+            Registry,
+            Name,
+            dockerfilePath,
+            contextPath,
+            additionalFilesToHash,
+            imageArgs
+        );
         Resource = buildResource;
-        var deploymentResult = Output.Tuple(buildResource.ImageUrl, buildResource.ImageTag, buildResource.ImageResource).Apply(tuple =>
-            new ImageDeploymentResult
+        var deploymentResult = Output
+            .Tuple(buildResource.ImageUrl, buildResource.ImageTag, buildResource.ImageResource)
+            .Apply(tuple => new ImageDeploymentResult
             {
                 ImageUrl = tuple.Item1,
                 ImageTag = tuple.Item2,

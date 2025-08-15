@@ -58,7 +58,6 @@ public class GcpContainerRegistry : IContainerRegistry
     public string RepositoryId { get; }
     public Output<string> Arn => _repository.Name;
     public Resource Resource => _repository;
-    public Resource ReadyResource => _readyResource;
     public CloudProvider Provider => CloudProvider.GCP;
     public string RegistryUrl =>
         throw new NotImplementedException("Use RegistryUrlOutput property for Pulumi deployments");
@@ -67,11 +66,58 @@ public class GcpContainerRegistry : IContainerRegistry
 
     public void ImportHelloWorldImage()
     {
-        var address = $"{_region}-docker.pkg.dev";
-        var repoPath = $"{address}/{_projectId}/{RepositoryId}";
-        var registryUrl = $"{repoPath}/keycloak:latest";
+        // var address = $"{_region}-docker.pkg.dev";
+        // var repoPath = $"{address}/{_projectId}/{RepositoryId}";
+        // var registryUrl = $"{repoPath}/keycloak:latest";
 
-        // Get access token via ADC to login docker to Artifact Registry
+        // // Get access token via ADC to login docker to Artifact Registry
+        // var token = Output.Create(
+        //     Task.Run(async () =>
+        //     {
+        //         var credential = await GoogleCredential.GetApplicationDefaultAsync();
+        //         if (credential.IsCreateScopedRequired)
+        //         {
+        //             credential = credential.CreateScoped(
+        //                 new[] { "https://www.googleapis.com/auth/cloud-platform" }
+        //             );
+        //         }
+        //         var access = await credential.UnderlyingCredential.GetAccessTokenForRequestAsync();
+        //         return access ?? string.Empty;
+        //     })
+        // );
+
+        // var dockerLogin = new Pulumi.Command.Local.Command(
+        //     $"docker-login-{RepositoryId}",
+        //     new Pulumi.Command.Local.CommandArgs
+        //     {
+        //         Create =
+        //             $"sh -c \"echo \"$GOOGLE_ACCESS_TOKEN\" | docker login -u oauth2accesstoken --password-stdin https://{address}\"",
+        //         Environment = { { "GOOGLE_ACCESS_TOKEN", token } },
+        //         Triggers = new[] { address }
+        //     },
+        //     new CustomResourceOptions { DependsOn = new[] { _repository } }
+        // );
+
+        // // Pull, tag, and push hello world image
+        // var pullCmd = "docker pull gcr.io/google-samples/hello-app:1.0";
+        // var tagCmd = $"docker tag gcr.io/google-samples/hello-app:1.0 {registryUrl}";
+        // var pushCmd = $"docker push {registryUrl}";
+        // var fullCmd = $"{pullCmd} && {tagCmd} && {pushCmd}";
+        // var importImage = new Pulumi.Command.Local.Command(
+        //     $"import-hello-world-image-{RepositoryId}",
+        //     new Pulumi.Command.Local.CommandArgs
+        //     {
+        //         Create = fullCmd,
+        //         Triggers = new[] { registryUrl }
+        //     },
+        //     new CustomResourceOptions { DependsOn = new Resource[] { _repository, dockerLogin } }
+        // );
+        // _readyResource = importImage;
+    }
+
+    public InputList<RegistryArgs> GetDockerBuildRegistryConfig()
+    {
+        // Get access token via ADC for Docker build authentication
         var token = Output.Create(
             Task.Run(async () =>
             {
@@ -87,39 +133,15 @@ public class GcpContainerRegistry : IContainerRegistry
             })
         );
 
-        var dockerLogin = new Pulumi.Command.Local.Command(
-            $"docker-login-{RepositoryId}",
-            new Pulumi.Command.Local.CommandArgs
+        return new InputList<RegistryArgs>
+        {
+            new RegistryArgs
             {
-                Create =
-                    $"sh -c \"echo \"$GOOGLE_ACCESS_TOKEN\" | docker login -u oauth2accesstoken --password-stdin https://{address}\"",
-                Environment = { { "GOOGLE_ACCESS_TOKEN", token } },
-                Triggers = new[] { address }
-            },
-            new CustomResourceOptions { DependsOn = new[] { _repository } }
-        );
-
-        // Pull, tag, and push hello world image
-        var pullCmd = "docker pull gcr.io/google-samples/hello-app:1.0";
-        var tagCmd = $"docker tag gcr.io/google-samples/hello-app:1.0 {registryUrl}";
-        var pushCmd = $"docker push {registryUrl}";
-        var fullCmd = $"{pullCmd} && {tagCmd} && {pushCmd}";
-        var importImage = new Pulumi.Command.Local.Command(
-            $"import-hello-world-image-{RepositoryId}",
-            new Pulumi.Command.Local.CommandArgs
-            {
-                Create = fullCmd,
-                Triggers = new[] { registryUrl }
-            },
-            new CustomResourceOptions { DependsOn = new Resource[] { _repository, dockerLogin } }
-        );
-        _readyResource = importImage;
-    }
-
-    public InputList<RegistryArgs> GetDockerBuildRegistryConfig()
-    {
-        // GCP uses default gcloud authentication, no explicit credentials needed
-        return new InputList<RegistryArgs>();
+                Address = $"{_region}-docker.pkg.dev",
+                Username = "oauth2accesstoken",
+                Password = token
+            }
+        };
     }
 
     public void PushImage(

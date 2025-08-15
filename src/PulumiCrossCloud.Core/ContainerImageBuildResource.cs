@@ -82,6 +82,7 @@ public class ContainerImageBuildResource : ComponentResource
                         ],
                         Platforms = [Platform.Linux_amd64],
                         Push = true,
+                        Registries = registry.GetDockerBuildRegistryConfig()
                     },
                 new CustomResourceOptions { DependsOn = [registry.Resource, HashTracker] }
             );
