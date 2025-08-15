@@ -44,6 +44,7 @@ public class GcpContainerRegistry : IContainerRegistry
         {
             Format = "DOCKER",
             RepositoryId = RepositoryId,
+            Project = _projectId,
             Location = _region
         }, new CustomResourceOptions { DependsOn = dependsOn });
 

@@ -53,17 +53,17 @@ public class KeycloakStack : ComponentResource
         var dockerfilePath = WriteEmbeddedDockerfileToTemp();
         var contextPath = Path.GetDirectoryName(dockerfilePath)!;
         // Create container registry for Keycloak
-        var registry = factory.CreateContainerRegistry($"{name}-keycloak-registry");
+        var registry = factory.CreateContainerRegistry($"{name}-registry");
         var image = factory.CreateContainerImage("keycloak", registry);
         
         image.PushImage(dockerfilePath, contextPath, []);
         // Generate a secure random password for Keycloak admin
         string keycloakAdminPassword = GenerateSecurePassword(24);
-        keycloakAdminPasswordSecret = factory.CreateSecret($"{name}-keycloak-admin-password", keycloakAdminPassword, ignoreChangesAfterCreate: true);
+        keycloakAdminPasswordSecret = factory.CreateSecret($"{name}-admin-password", keycloakAdminPassword, ignoreChangesAfterCreate: true);
 
         // Create compute resource for Keycloak
         compute = factory.CreateCompute(
-            name: $"{name}-keycloak",
+            name: name ?? "keycloak",
             registry: registry,
             imageTag: "latest",
             containerImage: image,

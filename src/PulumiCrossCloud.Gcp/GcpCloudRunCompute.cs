@@ -88,7 +88,7 @@ public class GcpCloudRunCompute : ICompute
         {
             _serviceAccountResource = new Pulumi.Gcp.ServiceAccount.Account($"cloudrun-sa-{name}", new Pulumi.Gcp.ServiceAccount.AccountArgs
             {
-                AccountId = $"cloudrun-sa-{name}",
+                AccountId = $"cloudrn-sa-{name}",
                 Project = projectId
             });
         }
