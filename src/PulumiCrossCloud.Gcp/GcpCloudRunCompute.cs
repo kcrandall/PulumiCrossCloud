@@ -239,6 +239,12 @@ public class GcpCloudRunCompute : ICompute
             Traffics = [trafficArgs],
         };
         var dependsOn = new List<Resource> { _cloudRunApiEnabled[projectId] };
+        // Ensure the container registry (including any default image import) is ready before creating the service
+        if (ContainerRegistry is GcpContainerRegistry readyRegistry)
+        {
+            if (readyRegistry.ReadyResource is not null)
+                dependsOn.Add(readyRegistry.ReadyResource);
+        }
         // Add container image resource to dependsOn if provided
         if (_containerImage?.Resource is not null && _containerImage is GcpContainerImage gcpImage)
         {

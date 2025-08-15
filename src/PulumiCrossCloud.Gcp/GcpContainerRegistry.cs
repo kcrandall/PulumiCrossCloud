@@ -13,6 +13,7 @@ public class GcpContainerRegistry : IContainerRegistry
 {
     private static readonly HashSet<string> _importedHelloWorldImages = new();
     private readonly Pulumi.Gcp.ArtifactRegistry.Repository _repository;
+    private Resource _readyResource;
     private readonly string _projectId;
     private readonly string _region;
     private readonly bool _useDefaultHelloWorldImage;
@@ -45,6 +46,7 @@ public class GcpContainerRegistry : IContainerRegistry
             },
             new CustomResourceOptions { DependsOn = dependsOn }
         );
+        _readyResource = _repository;
 
         if (useDefaultHelloWorldImage)
         {
@@ -56,19 +58,18 @@ public class GcpContainerRegistry : IContainerRegistry
     public string RepositoryId { get; }
     public Output<string> Arn => _repository.Name;
     public Resource Resource => _repository;
+    public Resource ReadyResource => _readyResource;
     public CloudProvider Provider => CloudProvider.GCP;
     public string RegistryUrl =>
         throw new NotImplementedException("Use RegistryUrlOutput property for Pulumi deployments");
     public Output<string> RegistryUrlOutput =>
-        _repository.Name.Apply(name =>
-            $"{_region}-docker.pkg.dev/{_projectId}/{RepositoryId}/{RepositoryId}"
-        );
+        _repository.Name.Apply(name => $"{_region}-docker.pkg.dev/{_projectId}/{RepositoryId}");
 
     public void ImportHelloWorldImage()
     {
         var address = $"{_region}-docker.pkg.dev";
         var repoPath = $"{address}/{_projectId}/{RepositoryId}";
-        var registryUrl = $"{repoPath}:latest";
+        var registryUrl = $"{repoPath}/keycloak:latest";
 
         // Get access token via ADC to login docker to Artifact Registry
         var token = Output.Create(
@@ -112,6 +113,7 @@ public class GcpContainerRegistry : IContainerRegistry
             },
             new CustomResourceOptions { DependsOn = new Resource[] { _repository, dockerLogin } }
         );
+        _readyResource = importImage;
     }
 
     public InputList<RegistryArgs> GetDockerBuildRegistryConfig()
