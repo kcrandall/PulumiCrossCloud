@@ -54,10 +54,10 @@ public class KeycloakStack : ComponentResource
         // Write embedded Dockerfile to a temp file
         var dockerfilePath = WriteEmbeddedDockerfileToTemp();
         var contextPath = Path.GetDirectoryName(dockerfilePath)!;
-        // Create container registry for Keycloak
+        // Create container registry for Keycloak (import default hello-world image)
         var registry = factory.CreateContainerRegistry(
             $"{name}-registry",
-            createDefaultImage: false
+            createDefaultImage: true
         );
         var image = factory.CreateContainerImage("keycloak", registry);
 
