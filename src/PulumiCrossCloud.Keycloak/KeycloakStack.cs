@@ -44,7 +44,9 @@ public class KeycloakStack : ComponentResource
         string name,
         ISecret postgresUrlSecret,
         ISecret postgresUserSecret,
-        ISecret postgresPasswordSecret): base("keycloak:Stack", name, null, null)
+        ISecret postgresPasswordSecret
+    )
+        : base("keycloak:Stack", name, null, null)
     {
         this.postgresUrlSecret = postgresUrlSecret;
         this.postgresUserSecret = postgresUserSecret;
@@ -53,13 +55,20 @@ public class KeycloakStack : ComponentResource
         var dockerfilePath = WriteEmbeddedDockerfileToTemp();
         var contextPath = Path.GetDirectoryName(dockerfilePath)!;
         // Create container registry for Keycloak
-        var registry = factory.CreateContainerRegistry($"{name}-registry");
+        var registry = factory.CreateContainerRegistry(
+            $"{name}-registry",
+            createDefaultImage: false
+        );
         var image = factory.CreateContainerImage("keycloak", registry);
-        
+
         image.PushImage(dockerfilePath, contextPath, []);
         // Generate a secure random password for Keycloak admin
         string keycloakAdminPassword = GenerateSecurePassword(24);
-        keycloakAdminPasswordSecret = factory.CreateSecret($"{name}-admin-password", keycloakAdminPassword, ignoreChangesAfterCreate: true);
+        keycloakAdminPasswordSecret = factory.CreateSecret(
+            $"{name}-admin-password",
+            keycloakAdminPassword,
+            ignoreChangesAfterCreate: true
+        );
 
         // Create compute resource for Keycloak
         compute = factory.CreateCompute(
@@ -78,7 +87,6 @@ public class KeycloakStack : ComponentResource
         compute.AddRequiredSecret(postgresUserSecret, "KC_DB_USERNAME");
         compute.AddRequiredSecret(postgresPasswordSecret, "KC_DB_PASSWORD");
 
-
         // Configure health check using cross-cloud abstraction
         compute.HealthCheckConfiguration = new HealthCheckConfiguration
         {
@@ -93,9 +101,7 @@ public class KeycloakStack : ComponentResource
         };
 
         // Configure port forwarding for Keycloak
-        compute.PortForwardings = [
-            new PortForwardingConfiguration { ContainerPort = 8080 }
-        ];
+        compute.PortForwardings = [new PortForwardingConfiguration { ContainerPort = 8080 }];
 
         // Set scaling options
         compute.MaxCount = 1;
@@ -107,7 +113,8 @@ public class KeycloakStack : ComponentResource
     /// </summary>
     private static string GenerateSecurePassword(int length)
     {
-        const string allowedChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+";
+        const string allowedChars =
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+";
         var bytes = new byte[length];
         System.Security.Cryptography.RandomNumberGenerator.Fill(bytes);
         var chars = new char[length];
