@@ -18,17 +18,28 @@ public class ContainerImageBuildResource : ComponentResource
         string dockerfilePath,
         string contextPath,
         IEnumerable<string> additionalFilesToHash,
-        ImageArgs? imageArgs = null) : base("crosscloud:core:ContainerImageBuildResource", name)
+        ImageArgs? imageArgs = null
+    )
+        : base("crosscloud:core:ContainerImageBuildResource", name)
     {
         var additionalFiles = additionalFilesToHash?.ToList() ?? new List<string>();
-        HashTracker = new DockerImageHashTracker($"docker-hash-{registry.Name}", new DockerImageHashTrackerArgs
-        {
-            DockerfilePath = dockerfilePath,
-            ContextPath = contextPath,
-            AdditionalFiles = additionalFiles
-        }, new ComponentResourceOptions { DependsOn = [registry.Resource] });
+        HashTracker = new DockerImageHashTracker(
+            $"docker-hash-{registry.Name}",
+            new DockerImageHashTrackerArgs
+            {
+                DockerfilePath = dockerfilePath,
+                ContextPath = contextPath,
+                AdditionalFiles = additionalFiles
+            },
+            new ComponentResourceOptions { DependsOn = [registry.Resource] }
+        );
 
-        var deploymentInfo = Output.Tuple(HashTracker.CombinedHash, HashTracker.ImageTag, HashTracker.ShouldDeploy, registry.RegistryUrlOutput);
+        var deploymentInfo = Output.Tuple(
+            HashTracker.CombinedHash,
+            HashTracker.ImageTag,
+            HashTracker.ShouldDeploy,
+            registry.RegistryUrlOutput
+        );
 
         var imageResult = deploymentInfo.Apply(tuple =>
         {
@@ -48,24 +59,32 @@ public class ContainerImageBuildResource : ComponentResource
             }
 
             Log.Info("Hash changed - deploying Docker image...");
-            var dockerImage = new Image($"{registry.Name}-image-{imageTag}", imageArgs ?? new ImageArgs
-            {
-                Tags = [hashTaggedImage, latestTaggedImage],
-                Context = new BuildContextArgs { Location = contextPath },
-                Dockerfile = new DockerfileArgs { Location = dockerfilePath },
-                BuildArgs = new InputMap<string>
-                {
-                    ["BUILDTIME"] = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"),
-                    ["CONTENT_HASH"] = hash
-                },
-                CacheTo = [new CacheToArgs { Inline = null }],
-                CacheFrom = [new CacheFromArgs
-                {
-                    Registry = new CacheFromRegistryArgs { Ref = latestTaggedImage }
-                }],
-                Platforms = [Platform.Linux_amd64],
-                Push = true,
-            }, new CustomResourceOptions { DependsOn = [registry.Resource, HashTracker] });
+            var dockerImage = new Image(
+                $"{registry.Name}-image-{imageTag}",
+                imageArgs
+                    ?? new ImageArgs
+                    {
+                        Tags = [hashTaggedImage, latestTaggedImage],
+                        Context = new BuildContextArgs { Location = contextPath },
+                        Dockerfile = new DockerfileArgs { Location = dockerfilePath },
+                        BuildArgs = new InputMap<string>
+                        {
+                            ["BUILDTIME"] = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"),
+                            ["CONTENT_HASH"] = hash
+                        },
+                        CacheTo = [new CacheToArgs { Inline = null }],
+                        CacheFrom =
+                        [
+                            new CacheFromArgs
+                            {
+                                Registry = new CacheFromRegistryArgs { Ref = latestTaggedImage }
+                            }
+                        ],
+                        Platforms = [Platform.Linux_amd64],
+                        Push = true,
+                    },
+                new CustomResourceOptions { DependsOn = [registry.Resource, HashTracker] }
+            );
             return new ImageDeploymentResult
             {
                 ImageUrl = hashTaggedImage,
@@ -79,4 +98,3 @@ public class ContainerImageBuildResource : ComponentResource
         ImageResource = imageResult.Apply(r => r.Image);
     }
 }
-
