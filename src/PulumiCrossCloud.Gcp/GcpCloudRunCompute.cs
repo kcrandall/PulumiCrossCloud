@@ -1,13 +1,13 @@
 using System.Collections.Concurrent;
-using Pulumi;
-using Pulumi.Gcp.Projects;
-using Pulumi.Gcp.ServiceAccount;
-using Pulumi.Gcp.ArtifactRegistry;
-using Pulumi.Gcp.SecretManager;
-using PulumiCrossCloud.Core;
 using System.Net.Http;
 using System.Threading.Tasks;
+using Pulumi;
+using Pulumi.Gcp.ArtifactRegistry;
 using Pulumi.Gcp.CloudRun.Inputs;
+using Pulumi.Gcp.Projects;
+using Pulumi.Gcp.SecretManager;
+using Pulumi.Gcp.ServiceAccount;
+using PulumiCrossCloud.Core;
 
 namespace PulumiCrossCloud.Gcp;
 
@@ -31,10 +31,10 @@ public class GcpCloudRunCompute : ICompute
     private readonly List<string> _allowedServiceAccounts = [];
     private readonly List<Func<ICompute, Task>> _onHealthyActions = [];
     private readonly List<Func<ICompute, Task>> _onReadyActions = [];
-    
+
     // Add public property to access the service URL
-    public Output<string> ServiceUrl => _service.Statuses.Apply(statuses => 
-        statuses.FirstOrDefault()?.Url ?? "");
+    public Output<string> ServiceUrl =>
+        _service.Statuses.Apply(statuses => statuses.FirstOrDefault()?.Url ?? "");
 
     /// <summary>
     /// Ingress setting for Cloud Run ("all", "internal", "internal-and-cloud-load-balancing")
@@ -45,20 +45,31 @@ public class GcpCloudRunCompute : ICompute
     /// The maximum number of concurrent requests allowed per container instance. Default is 80. If null, uses GCP default.
     /// </summary>
     public int? ContainerConcurrency { get; set; } = null;
-    
+
     public int MinCount { get; set; } = 1;
     public int MaxCount { get; set; } = 1;
 
     public IHealthCheckConfiguration? HealthCheckConfiguration { get; set; }
     public IDictionary<string, string> EnvironmentVariables => _environmentVariables;
 
-    public IList<PortForwardingConfiguration> PortForwardings { get; set; } = new List<PortForwardingConfiguration> { new PortForwardingConfiguration { ContainerPort = 8080 } };
+    public IList<PortForwardingConfiguration> PortForwardings { get; set; } =
+        new List<PortForwardingConfiguration>
+        {
+            new PortForwardingConfiguration { ContainerPort = 8080 }
+        };
 
     private readonly string _imageName;
     private readonly string _imageTag;
     private readonly IContainerImage? _containerImage;
 
-    public GcpCloudRunCompute(string name, IContainerRegistry containerRegistry, string? imageName = null, string imageTag = "latest", IContainerImage? containerImage = null, string? serviceAccountEmail = null)
+    public GcpCloudRunCompute(
+        string name,
+        IContainerRegistry containerRegistry,
+        string? imageName = null,
+        string imageTag = "latest",
+        IContainerImage? containerImage = null,
+        string? serviceAccountEmail = null
+    )
     {
         Name = name;
         ContainerRegistry = containerRegistry;
@@ -66,38 +77,43 @@ public class GcpCloudRunCompute : ICompute
         _imageName = imageName;
         _imageTag = imageTag;
         _containerImage = containerImage;
-        if(imageName is null && containerImage is not null)
+        if (imageName is null && containerImage is not null)
             _imageName = containerImage.Name;
-        else if(imageName is null && containerImage is null)
-            throw new ArgumentException("Either imageName or containerImage must be provided for GCP Cloud Run compute resource.");
-        
+        else if (imageName is null && containerImage is null)
+            throw new ArgumentException(
+                "Either imageName or containerImage must be provided for GCP Cloud Run compute resource."
+            );
+
         var projectId = GcpProjectConfig.ProjectId;
-        // Ensure Cloud Run API is enabled for this project
+        // Ensure Cloud Run API is enabled for this project (via central manager)
         if (!_cloudRunApiEnabled.ContainsKey(projectId))
         {
-            var enableApi = new Service($"cloudrun-api-{projectId}", new ServiceArgs
-            {
-                Project = projectId,
-                ServiceName = "run.googleapis.com",
-                DisableDependentServices = true
-            });
+            var enableApi = GcpProjectServices.EnsureEnabled("run.googleapis.com");
             _cloudRunApiEnabled[projectId] = enableApi;
         }
         // Create or use provided service account
         if (string.IsNullOrEmpty(serviceAccountEmail))
         {
-            _serviceAccountResource = new Pulumi.Gcp.ServiceAccount.Account($"cloudrun-sa-{name}", new Pulumi.Gcp.ServiceAccount.AccountArgs
-            {
-                AccountId = $"cloudrn-sa-{name}",
-                Project = projectId
-            });
+            var iamApi = GcpProjectServices.EnsureEnabled("iam.googleapis.com");
+            _serviceAccountResource = new Pulumi.Gcp.ServiceAccount.Account(
+                $"cloudrun-sa-{name}",
+                new Pulumi.Gcp.ServiceAccount.AccountArgs
+                {
+                    AccountId = $"cloudrn-sa-{name}",
+                    Project = projectId
+                },
+                new CustomResourceOptions { DependsOn = new[] { iamApi } }
+            );
         }
         else
         {
-            _serviceAccountResource = Pulumi.Gcp.ServiceAccount.Account.Get($"cloudrun-sa-imported-{name}", serviceAccountEmail);
+            _serviceAccountResource = Pulumi.Gcp.ServiceAccount.Account.Get(
+                $"cloudrun-sa-imported-{name}",
+                serviceAccountEmail
+            );
         }
     }
-    
+
     public void AddRequiredSecret(ISecret secret, string? environmentVariableName = null)
     {
         _requiredSecrets.Add((secret, environmentVariableName));
@@ -116,13 +132,17 @@ public class GcpCloudRunCompute : ICompute
             ? gcpRegistry.RegistryUrlOutput.Apply(url => $"{url}/{_imageName}:{_imageTag}")
             : Output.Create($"{region}-docker.pkg.dev/{projectId}/{Name}/{_imageName}:{_imageTag}");
         var portConfig = PortForwardings.FirstOrDefault();
-        List<Pulumi.Gcp.CloudRun.Inputs.ServiceTemplateSpecContainerEnvArgs> envs = [
-            ..EnvironmentVariables.Select(kvp => new Pulumi.Gcp.CloudRun.Inputs.ServiceTemplateSpecContainerEnvArgs
-            {
-                Name = kvp.Key,
-                Value = kvp.Value
-            }),
-            .._requiredSecrets.Where(x => x.envVarName is not null && x.secret is GcpSecret)
+        List<Pulumi.Gcp.CloudRun.Inputs.ServiceTemplateSpecContainerEnvArgs> envs =
+        [
+            .. EnvironmentVariables.Select(
+                kvp => new Pulumi.Gcp.CloudRun.Inputs.ServiceTemplateSpecContainerEnvArgs
+                {
+                    Name = kvp.Key,
+                    Value = kvp.Value
+                }
+            ),
+            .. _requiredSecrets
+                .Where(x => x.envVarName is not null && x.secret is GcpSecret)
                 .Select(x => new Pulumi.Gcp.CloudRun.Inputs.ServiceTemplateSpecContainerEnvArgs
                 {
                     Name = x.envVarName!,
@@ -139,7 +159,8 @@ public class GcpCloudRunCompute : ICompute
         var containerArgs = new Pulumi.Gcp.CloudRun.Inputs.ServiceTemplateSpecContainerArgs
         {
             Image = imageUri,
-            Ports = [
+            Ports =
+            [
                 new Pulumi.Gcp.CloudRun.Inputs.ServiceTemplateSpecContainerPortArgs
                 {
                     ContainerPort = portConfig.ContainerPort,
@@ -150,31 +171,43 @@ public class GcpCloudRunCompute : ICompute
         if (HealthCheckConfiguration is not null)
         {
             // Use startup probe only if supported and values provided, fallback to liveness values if null
-            containerArgs.StartupProbe = new Pulumi.Gcp.CloudRun.Inputs.ServiceTemplateSpecContainerStartupProbeArgs
-            {
-                InitialDelaySeconds = 0,
-                TimeoutSeconds = HealthCheckConfiguration.StartupTimeoutSeconds ?? HealthCheckConfiguration.TimeoutSeconds,
-                PeriodSeconds = HealthCheckConfiguration.StartupIntervalSeconds ?? HealthCheckConfiguration.IntervalSeconds,
-                FailureThreshold = HealthCheckConfiguration.StartupUnhealthyThreshold ?? HealthCheckConfiguration.UnhealthyThreshold,
-                HttpGet = new Pulumi.Gcp.CloudRun.Inputs.ServiceTemplateSpecContainerStartupProbeHttpGetArgs
+            containerArgs.StartupProbe =
+                new Pulumi.Gcp.CloudRun.Inputs.ServiceTemplateSpecContainerStartupProbeArgs
                 {
-                    Path = HealthCheckConfiguration.Path,
-                    Port = 8080
-                }
-            };
-            containerArgs.LivenessProbe = new Pulumi.Gcp.CloudRun.Inputs.ServiceTemplateSpecContainerLivenessProbeArgs
-            {
-                FailureThreshold = HealthCheckConfiguration.UnhealthyThreshold,
-                HttpGet = new Pulumi.Gcp.CloudRun.Inputs.ServiceTemplateSpecContainerLivenessProbeHttpGetArgs
+                    InitialDelaySeconds = 0,
+                    TimeoutSeconds =
+                        HealthCheckConfiguration.StartupTimeoutSeconds
+                        ?? HealthCheckConfiguration.TimeoutSeconds,
+                    PeriodSeconds =
+                        HealthCheckConfiguration.StartupIntervalSeconds
+                        ?? HealthCheckConfiguration.IntervalSeconds,
+                    FailureThreshold =
+                        HealthCheckConfiguration.StartupUnhealthyThreshold
+                        ?? HealthCheckConfiguration.UnhealthyThreshold,
+                    HttpGet =
+                        new Pulumi.Gcp.CloudRun.Inputs.ServiceTemplateSpecContainerStartupProbeHttpGetArgs
+                        {
+                            Path = HealthCheckConfiguration.Path,
+                            Port = 8080
+                        }
+                };
+            containerArgs.LivenessProbe =
+                new Pulumi.Gcp.CloudRun.Inputs.ServiceTemplateSpecContainerLivenessProbeArgs
                 {
-                    Path = HealthCheckConfiguration.Path,
-                    Port = 8080
-                },
-                TimeoutSeconds = HealthCheckConfiguration.TimeoutSeconds,
-                PeriodSeconds = HealthCheckConfiguration.IntervalSeconds,
-            };
+                    FailureThreshold = HealthCheckConfiguration.UnhealthyThreshold,
+                    HttpGet =
+                        new Pulumi.Gcp.CloudRun.Inputs.ServiceTemplateSpecContainerLivenessProbeHttpGetArgs
+                        {
+                            Path = HealthCheckConfiguration.Path,
+                            Port = 8080
+                        },
+                    TimeoutSeconds = HealthCheckConfiguration.TimeoutSeconds,
+                    PeriodSeconds = HealthCheckConfiguration.IntervalSeconds,
+                };
         }
-        var serviceAccountEmail = _serviceAccountResource is not null ? _serviceAccountResource.Email : null;
+        var serviceAccountEmail = _serviceAccountResource is not null
+            ? _serviceAccountResource.Email
+            : null;
         var trafficArgs = new Pulumi.Gcp.CloudRun.Inputs.ServiceTrafficArgs
         {
             LatestRevision = true,
@@ -193,7 +226,9 @@ public class GcpCloudRunCompute : ICompute
             {
                 Containers = [containerArgs],
                 ServiceAccountName = serviceAccountEmail,
-                ContainerConcurrency = ContainerConcurrency is not null ? ContainerConcurrency : null
+                ContainerConcurrency = ContainerConcurrency is not null
+                    ? ContainerConcurrency
+                    : null
             }
         };
         var serviceArgs = new Pulumi.Gcp.CloudRun.ServiceArgs
@@ -201,7 +236,7 @@ public class GcpCloudRunCompute : ICompute
             Location = region,
             Project = projectId,
             Template = templateArgs,
-            Traffics = [ trafficArgs ],
+            Traffics = [trafficArgs],
         };
         var dependsOn = new List<Resource> { _cloudRunApiEnabled[projectId] };
         // Add container image resource to dependsOn if provided
@@ -210,14 +245,20 @@ public class GcpCloudRunCompute : ICompute
             dependsOn.Add(gcpImage.Resource);
         }
         // IAM binding for registry
-        if (ContainerRegistry is GcpContainerRegistry gcpContainerRegistry && serviceAccountEmail is not null)
+        if (
+            ContainerRegistry is GcpContainerRegistry gcpContainerRegistry
+            && serviceAccountEmail is not null
+        )
         {
-            _registryIamMember = new RepositoryIamMember($"cloudrun-registry-pull-{Name}", new RepositoryIamMemberArgs
-            {
-                Repository = gcpContainerRegistry.Name,
-                Role = "roles/artifactregistry.reader",
-                Member = Output.Format($"serviceAccount:{serviceAccountEmail}")
-            });
+            _registryIamMember = new RepositoryIamMember(
+                $"cloudrun-registry-pull-{Name}",
+                new RepositoryIamMemberArgs
+                {
+                    Repository = gcpContainerRegistry.Name,
+                    Role = "roles/artifactregistry.reader",
+                    Member = Output.Format($"serviceAccount:{serviceAccountEmail}")
+                }
+            );
             dependsOn.Add(_registryIamMember);
         }
         // Add secret resources to dependsOn so they are created before Cloud Run
@@ -233,12 +274,15 @@ public class GcpCloudRunCompute : ICompute
         {
             if (secret.secret is GcpSecret gcpSecret && serviceAccountEmail is not null)
             {
-                var secretIam = new SecretIamMember($"cloudrun-secret-read-{Name}-{gcpSecret.Name}", new SecretIamMemberArgs
-                {
-                    SecretId = gcpSecret.Name,
-                    Role = "roles/secretmanager.secretAccessor",
-                    Member = Output.Format($"serviceAccount:{serviceAccountEmail}")
-                });
+                var secretIam = new SecretIamMember(
+                    $"cloudrun-secret-read-{Name}-{gcpSecret.Name}",
+                    new SecretIamMemberArgs
+                    {
+                        SecretId = gcpSecret.Name,
+                        Role = "roles/secretmanager.secretAccessor",
+                        Member = Output.Format($"serviceAccount:{serviceAccountEmail}")
+                    }
+                );
                 _secretIamMembers.Add(secretIam);
                 dependsOn.Add(secretIam);
             }
@@ -246,16 +290,23 @@ public class GcpCloudRunCompute : ICompute
         // IAM bindings for allowed Cloud Run service accounts
         foreach (var allowed in _allowedServiceAccounts)
         {
-            var invokerBinding = new Pulumi.Gcp.CloudRun.IamMember($"cloudrun-allow-invoke-{Name}-{allowed}", new Pulumi.Gcp.CloudRun.IamMemberArgs
-            {
-                Service = Name,
-                Location = region,
-                Role = "roles/run.invoker",
-                Member = Output.Format($"serviceAccount:{allowed}")
-            });
+            var invokerBinding = new Pulumi.Gcp.CloudRun.IamMember(
+                $"cloudrun-allow-invoke-{Name}-{allowed}",
+                new Pulumi.Gcp.CloudRun.IamMemberArgs
+                {
+                    Service = Name,
+                    Location = region,
+                    Role = "roles/run.invoker",
+                    Member = Output.Format($"serviceAccount:{allowed}")
+                }
+            );
             dependsOn.Add(invokerBinding);
         }
-        _service = new Pulumi.Gcp.CloudRun.Service(Name, serviceArgs, new CustomResourceOptions { DependsOn = dependsOn });
+        _service = new Pulumi.Gcp.CloudRun.Service(
+            Name,
+            serviceArgs,
+            new CustomResourceOptions { DependsOn = dependsOn }
+        );
     }
 
     public void AddEnvironmentVariable(string name, string value)
@@ -277,12 +328,18 @@ public class GcpCloudRunCompute : ICompute
         var projectId = GcpProjectConfig.ProjectId;
         var region = GcpProjectConfig.Region;
         var serviceName = $"projects/{projectId}/locations/{region}/services/{Name}";
-        var cloudRunService = new Google.Apis.CloudRun.v1.CloudRunService(new Google.Apis.Services.BaseClientService.Initializer());
+        var cloudRunService = new Google.Apis.CloudRun.v1.CloudRunService(
+            new Google.Apis.Services.BaseClientService.Initializer()
+        );
         var getRequest = cloudRunService.Namespaces.Services.Get(serviceName);
         var service = getRequest.Execute();
         service.Metadata.Annotations ??= new Dictionary<string, string>();
-        service.Metadata.Annotations["autoscaling.knative.dev/minScale"] = MinCount > 0 ? MinCount.ToString() : "1";
-        var updateRequest = cloudRunService.Namespaces.Services.ReplaceService(service, serviceName);
+        service.Metadata.Annotations["autoscaling.knative.dev/minScale"] =
+            MinCount > 0 ? MinCount.ToString() : "1";
+        var updateRequest = cloudRunService.Namespaces.Services.ReplaceService(
+            service,
+            serviceName
+        );
         updateRequest.Execute();
     }
 
@@ -292,12 +349,17 @@ public class GcpCloudRunCompute : ICompute
         var projectId = GcpProjectConfig.ProjectId;
         var region = GcpProjectConfig.Region;
         var serviceName = $"projects/{projectId}/locations/{region}/services/{Name}";
-        var cloudRunService = new Google.Apis.CloudRun.v1.CloudRunService(new Google.Apis.Services.BaseClientService.Initializer());
+        var cloudRunService = new Google.Apis.CloudRun.v1.CloudRunService(
+            new Google.Apis.Services.BaseClientService.Initializer()
+        );
         var getRequest = cloudRunService.Namespaces.Services.Get(serviceName);
         var service = getRequest.Execute();
         service.Metadata.Annotations ??= new Dictionary<string, string>();
         service.Metadata.Annotations["autoscaling.knative.dev/minScale"] = "0";
-        var updateRequest = cloudRunService.Namespaces.Services.ReplaceService(service, serviceName);
+        var updateRequest = cloudRunService.Namespaces.Services.ReplaceService(
+            service,
+            serviceName
+        );
         updateRequest.Execute();
     }
 
@@ -307,7 +369,6 @@ public class GcpCloudRunCompute : ICompute
         var count = Math.Max(MinCount, Math.Min(MaxCount, replicas));
         // GCP Cloud Run scaling logic would go here
     }
-    
 
     public IEnumerable<IPolicyStatement> GetPolicy(params ComputePermissions[] permissions)
     {
@@ -317,28 +378,34 @@ public class GcpCloudRunCompute : ICompute
             switch (permission)
             {
                 case ComputePermissions.GetStatus:
-                    statements.Add(new GcpPolicyStatement
-                    {
-                        Effect = "Allow",
-                        Actions = new[] { "roles/run.viewer" },
-                        Resources = new[] { Arn }
-                    });
+                    statements.Add(
+                        new GcpPolicyStatement
+                        {
+                            Effect = "Allow",
+                            Actions = new[] { "roles/run.viewer" },
+                            Resources = new[] { Arn }
+                        }
+                    );
                     break;
                 case ComputePermissions.Scale:
-                    statements.Add(new GcpPolicyStatement
-                    {
-                        Effect = "Allow",
-                        Actions = new[] { "roles/run.developer" },
-                        Resources = new[] { Arn }
-                    });
+                    statements.Add(
+                        new GcpPolicyStatement
+                        {
+                            Effect = "Allow",
+                            Actions = new[] { "roles/run.developer" },
+                            Resources = new[] { Arn }
+                        }
+                    );
                     break;
                 case ComputePermissions.GetLogs:
-                    statements.Add(new GcpPolicyStatement
-                    {
-                        Effect = "Allow",
-                        Actions = new[] { "roles/logging.viewer" },
-                        Resources = new[] { Output.Create("*") }
-                    });
+                    statements.Add(
+                        new GcpPolicyStatement
+                        {
+                            Effect = "Allow",
+                            Actions = new[] { "roles/logging.viewer" },
+                            Resources = new[] { Output.Create("*") }
+                        }
+                    );
                     break;
             }
         }
@@ -350,10 +417,18 @@ public class GcpCloudRunCompute : ICompute
         var projectId = GcpProjectConfig.ProjectId;
         var region = GcpProjectConfig.Region;
         var serviceName = $"projects/{projectId}/locations/{region}/services/{Name}";
-        var cloudRunService = new Google.Apis.CloudRun.v1.CloudRunService(new Google.Apis.Services.BaseClientService.Initializer());
+        var cloudRunService = new Google.Apis.CloudRun.v1.CloudRunService(
+            new Google.Apis.Services.BaseClientService.Initializer()
+        );
         var getRequest = cloudRunService.Namespaces.Services.Get(serviceName);
         var service = getRequest.Execute();
-        if (service.Spec is not null && service.Spec.Template is not null && service.Spec.Template.Spec is not null && service.Spec.Template.Spec.Containers is not null && service.Spec.Template.Spec.Containers.Count > 0)
+        if (
+            service.Spec is not null
+            && service.Spec.Template is not null
+            && service.Spec.Template.Spec is not null
+            && service.Spec.Template.Spec.Containers is not null
+            && service.Spec.Template.Spec.Containers.Count > 0
+        )
         {
             var container = service.Spec.Template.Spec.Containers[0];
             if (ContainerRegistry is GcpContainerRegistry gcpRegistry)
@@ -361,7 +436,10 @@ public class GcpCloudRunCompute : ICompute
                 gcpRegistry.RegistryUrlOutput.Apply(url =>
                 {
                     container.Image = $"{url}:latest";
-                    var updateRequest = cloudRunService.Namespaces.Services.ReplaceService(service, serviceName);
+                    var updateRequest = cloudRunService.Namespaces.Services.ReplaceService(
+                        service,
+                        serviceName
+                    );
                     updateRequest.Execute();
                     return 0; // dummy return for Apply
                 });
@@ -369,7 +447,10 @@ public class GcpCloudRunCompute : ICompute
             else
             {
                 container.Image = $"{region}-docker.pkg.dev/{projectId}/{Name}:latest";
-                var updateRequest = cloudRunService.Namespaces.Services.ReplaceService(service, serviceName);
+                var updateRequest = cloudRunService.Namespaces.Services.ReplaceService(
+                    service,
+                    serviceName
+                );
                 updateRequest.Execute();
             }
         }
@@ -382,12 +463,13 @@ public class GcpCloudRunCompute : ICompute
             _allowedServiceAccounts.Add(serviceAccountEmail);
         }
     }
+
     public IEnumerable<DnsRecord> GetRequiredDnsRecords(IEnumerable<string> names)
     {
         // For GCP Cloud Run, typically a CNAME record is needed to map a custom domain to the service URL.
         // Example: CNAME app.example.com -> <service>.a.run.app
         // ServiceUrl is Output<string>, so we use Output<string> in DnsRecord.
-        
+
         // For each provided domain name, return a CNAME record pointing to the Cloud Run service URL
         return names.Select(name => new DnsRecord(DnsRecordType.CNAME, name, ServiceUrl)).ToList();
     }
@@ -424,7 +506,9 @@ public class GcpCloudRunCompute : ICompute
             }
             if (!healthy)
             {
-                Log.Error($"Cloud Run health check failed for {Name} at {healthUrl} after 5 minutes.");
+                Log.Error(
+                    $"Cloud Run health check failed for {Name} at {healthUrl} after 5 minutes."
+                );
             }
         });
     }
