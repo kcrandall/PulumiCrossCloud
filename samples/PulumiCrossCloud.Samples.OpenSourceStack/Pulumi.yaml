@@ -1,3 +1,6 @@
 name: PulumiCrossCloud.Samples.OpenSourceStack
 runtime: dotnet
 description: A Pulumi program for deploying open source stack
+config:
+  # Increase protobuf recursion limit to prevent nesting errors
+  protobuf:recursion-limit: "1000"

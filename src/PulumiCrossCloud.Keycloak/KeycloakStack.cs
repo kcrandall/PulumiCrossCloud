@@ -51,17 +51,19 @@ public class KeycloakStack : ComponentResource
         this.postgresUrlSecret = postgresUrlSecret;
         this.postgresUserSecret = postgresUserSecret;
         this.postgresPasswordSecret = postgresPasswordSecret;
+
         // Write embedded Dockerfile to a temp file
         var dockerfilePath = WriteEmbeddedDockerfileToTemp();
         var contextPath = Path.GetDirectoryName(dockerfilePath)!;
+
         // Create container registry for Keycloak (import default hello-world image)
         var registry = factory.CreateContainerRegistry(
             $"{name}-registry",
             createDefaultImage: false
         );
+
         var image = factory.CreateContainerImage("keycloak", registry);
 
-        image.PushImage(dockerfilePath, contextPath, []);
         // Generate a secure random password for Keycloak admin
         string keycloakAdminPassword = GenerateSecurePassword(24);
         keycloakAdminPasswordSecret = factory.CreateSecret(
@@ -109,7 +111,10 @@ public class KeycloakStack : ComponentResource
         compute.PortForwardings = [new PortForwardingConfiguration { ContainerPort = 8080 }];
 
         // Set scaling options
+        compute.MinCount = 0;
         compute.MaxCount = 1;
+
+        image.PushImage(dockerfilePath, contextPath, []);
         compute.Build();
     }
 

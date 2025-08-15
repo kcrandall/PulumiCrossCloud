@@ -1,4 +1,5 @@
 using Pulumi;
+using Pulumi.Command.Local;
 using Pulumi.DockerBuild;
 using Pulumi.DockerBuild.Inputs;
 
@@ -9,7 +10,6 @@ public class ContainerImageBuildResource : ComponentResource
     public Output<string> ImageUrl { get; }
     public Output<string> ImageTag { get; }
     public Output<Image?> ImageResource { get; }
-    public DockerImageHashTracker HashTracker { get; }
 
     public ContainerImageBuildResource(
         string name,
@@ -22,77 +22,107 @@ public class ContainerImageBuildResource : ComponentResource
     )
         : base("crosscloud:core:ContainerImageBuildResource", name)
     {
-        var additionalFiles = additionalFilesToHash?.ToList() ?? new List<string>();
-        HashTracker = new DockerImageHashTracker(
-            $"docker-hash-{registry.Name}",
-            new DockerImageHashTrackerArgs
+        var registryUrl = registry.RegistryUrlOutput; // Output<string>
+        var latestImageRef = registryUrl.Apply(url => $"{url}/{imageName}:latest");
+
+        // 1) Remote digest of :latest
+        var manifestInspect = new Command(
+            $"inspect-manifest-{registry.Name}-{imageName}",
+            new CommandArgs
             {
-                DockerfilePath = dockerfilePath,
-                ContextPath = contextPath,
-                AdditionalFiles = additionalFiles
-            },
-            new ComponentResourceOptions { DependsOn = [registry.Resource] }
+                Create = latestImageRef.Apply(img =>
+                    $"docker manifest inspect {img} 2>/dev/null | jq -r '.config.digest // empty' || echo 'no-manifest'"
+                ),
+                Update = latestImageRef.Apply(img =>
+                    $"docker manifest inspect {img} 2>/dev/null | jq -r '.config.digest // empty' || echo 'no-manifest'"
+                ),
+                Delete = "echo 'no-manifest'",
+                Triggers = new[] { imageName }
+            }
         );
+        var remoteDigest = manifestInspect.Stdout.Apply(o => (o ?? string.Empty).Trim());
 
-        var deploymentInfo = Output.Tuple(
-            HashTracker.CombinedHash,
-            HashTracker.ImageTag,
-            HashTracker.ShouldDeploy,
-            registry.RegistryUrlOutput
-        );
-
-        var imageResult = deploymentInfo.Apply(tuple =>
-        {
-            var (hash, imageTag, shouldDeploy, registryUrl) = tuple;
-            var hashTaggedImage = $"{registryUrl}/{imageName}:{imageTag}";
-            var latestTaggedImage = $"{registryUrl}/{imageName}:latest";
-
-            if (!shouldDeploy)
+        // 2) Local digest for current Docker context (no push). Build temp image, get Id via jq, then remove temp image
+        var localDigestCmd = new Command(
+            $"compute-local-digest-{registry.Name}-{imageName}",
+            new CommandArgs
             {
-                Log.Info("Hash unchanged - skipping Docker image deployment");
+                Create =
+                    $"TMP_TAG=cc-temp-{name}-$(date +%s); "
+                    + $"docker buildx build --provenance=false --load -f '{dockerfilePath}' '{contextPath}' -t $TMP_TAG >/dev/null && "
+                    + "docker inspect $TMP_TAG | jq -r '.[0].Id' && docker rmi $TMP_TAG >/dev/null 2>&1 || true",
+                Update =
+                    $"TMP_TAG=cc-temp-{name}-$(date +%s); "
+                    + $"docker buildx build --provenance=false --load -f '{dockerfilePath}' '{contextPath}' -t $TMP_TAG >/dev/null && "
+                    + "docker inspect $TMP_TAG | jq -r '.[0].Id' && docker rmi $TMP_TAG >/dev/null 2>&1 || true",
+                Delete = "echo ''",
+                Triggers = new[] { dockerfilePath, contextPath }
+            }
+        );
+        var localDigest = localDigestCmd.Stdout.Apply(o => (o ?? string.Empty).Trim());
+
+        // 3) Decide whether to build/push based on digest equality
+        var imageResult = Output
+            .Tuple(remoteDigest, localDigest, latestImageRef)
+            .Apply(tuple =>
+            {
+                var (remote, local, latestRef) = tuple;
+
+                bool remoteValid =
+                    !string.IsNullOrWhiteSpace(remote)
+                    && remote != "no-manifest"
+                    && remote != "null";
+                bool localValid = !string.IsNullOrWhiteSpace(local);
+
+                if (
+                    remoteValid
+                    && localValid
+                    && string.Equals(remote, local, StringComparison.OrdinalIgnoreCase)
+                )
+                {
+                    Log.Info(
+                        $"Image digests match ({local[..Math.Min(12, local.Length)]}) - skipping Docker build/push for {latestRef}"
+                    );
+                    return new ImageDeploymentResult
+                    {
+                        ImageUrl = latestRef,
+                        ImageTag = "latest",
+                        Image = null
+                    };
+                }
+
+                Log.Info(
+                    $"Digest differs or remote missing (remote='{remote}', local='{local}') - building and pushing {latestRef}..."
+                );
+                var dockerImage = new Image(
+                    $"{registry.Name}-image-latest",
+                    imageArgs
+                        ?? new ImageArgs
+                        {
+                            Tags = [latestRef],
+                            Context = new BuildContextArgs { Location = contextPath },
+                            Dockerfile = new DockerfileArgs { Location = dockerfilePath },
+                            CacheTo = [new CacheToArgs { Inline = null }],
+                            CacheFrom =
+                            [
+                                new CacheFromArgs
+                                {
+                                    Registry = new CacheFromRegistryArgs { Ref = latestRef }
+                                }
+                            ],
+                            Platforms = [Platform.Linux_amd64],
+                            Push = true,
+                            Registries = registry.GetDockerBuildRegistryConfig()
+                        },
+                    new CustomResourceOptions { DependsOn = [registry.Resource] }
+                );
                 return new ImageDeploymentResult
                 {
-                    ImageUrl = hashTaggedImage,
-                    ImageTag = imageTag,
-                    Image = null
+                    ImageUrl = latestRef,
+                    ImageTag = "latest",
+                    Image = dockerImage
                 };
-            }
-
-            Log.Info("Hash changed - deploying Docker image...");
-            var dockerImage = new Image(
-                $"{registry.Name}-image-{imageTag}",
-                imageArgs
-                    ?? new ImageArgs
-                    {
-                        Tags = [hashTaggedImage, latestTaggedImage],
-                        Context = new BuildContextArgs { Location = contextPath },
-                        Dockerfile = new DockerfileArgs { Location = dockerfilePath },
-                        BuildArgs = new InputMap<string>
-                        {
-                            ["BUILDTIME"] = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"),
-                            ["CONTENT_HASH"] = hash
-                        },
-                        CacheTo = [new CacheToArgs { Inline = null }],
-                        CacheFrom =
-                        [
-                            new CacheFromArgs
-                            {
-                                Registry = new CacheFromRegistryArgs { Ref = latestTaggedImage }
-                            }
-                        ],
-                        Platforms = [Platform.Linux_amd64],
-                        Push = true,
-                        Registries = registry.GetDockerBuildRegistryConfig()
-                    },
-                new CustomResourceOptions { DependsOn = [registry.Resource, HashTracker] }
-            );
-            return new ImageDeploymentResult
-            {
-                ImageUrl = hashTaggedImage,
-                ImageTag = imageTag,
-                Image = dockerImage
-            };
-        });
+            });
 
         ImageUrl = imageResult.Apply(r => r.ImageUrl ?? "");
         ImageTag = imageResult.Apply(r => r.ImageTag ?? "");
