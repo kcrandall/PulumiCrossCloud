@@ -215,13 +215,6 @@ public class GcpCloudRunCompute : ICompute
         };
         var templateArgs = new Pulumi.Gcp.CloudRun.Inputs.ServiceTemplateArgs
         {
-            Metadata = new Pulumi.Gcp.CloudRun.Inputs.ServiceTemplateMetadataArgs
-            {
-                Annotations = new InputMap<string>
-                {
-                    { "run.googleapis.com/ingress", IngressSetting }
-                }
-            },
             Spec = new Pulumi.Gcp.CloudRun.Inputs.ServiceTemplateSpecArgs
             {
                 Containers = [containerArgs],
@@ -235,6 +228,13 @@ public class GcpCloudRunCompute : ICompute
         {
             Location = region,
             Project = projectId,
+            Metadata = new Pulumi.Gcp.CloudRun.Inputs.ServiceMetadataArgs
+            {
+                Annotations = new InputMap<string>
+                {
+                    { "run.googleapis.com/ingress", IngressSetting }
+                }
+            },
             Template = templateArgs,
             Traffics = [trafficArgs],
         };
@@ -254,7 +254,9 @@ public class GcpCloudRunCompute : ICompute
                 $"cloudrun-registry-pull-{Name}",
                 new RepositoryIamMemberArgs
                 {
-                    Repository = gcpContainerRegistry.Name,
+                    Project = projectId,
+                    Location = region,
+                    Repository = gcpContainerRegistry.RepositoryId,
                     Role = "roles/artifactregistry.reader",
                     Member = Output.Format($"serviceAccount:{serviceAccountEmail}")
                 }
@@ -278,6 +280,7 @@ public class GcpCloudRunCompute : ICompute
                     $"cloudrun-secret-read-{Name}-{gcpSecret.Name}",
                     new SecretIamMemberArgs
                     {
+                        Project = projectId,
                         SecretId = gcpSecret.Name,
                         Role = "roles/secretmanager.secretAccessor",
                         Member = Output.Format($"serviceAccount:{serviceAccountEmail}")

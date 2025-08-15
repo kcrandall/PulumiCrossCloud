@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using System.Threading.Tasks;
+using Google.Apis.Auth.OAuth2;
 using Pulumi;
 using Pulumi.Command.Local;
 using Pulumi.DockerBuild.Inputs;
@@ -64,15 +66,43 @@ public class GcpContainerRegistry : IContainerRegistry
 
     public void ImportHelloWorldImage()
     {
-        var repoPath = $"{_region}-docker.pkg.dev/{_projectId}/{RepositoryId}";
+        var address = $"{_region}-docker.pkg.dev";
+        var repoPath = $"{address}/{_projectId}/{RepositoryId}";
         var registryUrl = $"{repoPath}:latest";
-        // Only run if the registry is completely empty
-        var checkEmptyCmd =
-            $"[ $(gcloud artifacts docker images list {repoPath} --format='get(NAME)' | wc -l) -eq 0 ]";
+
+        // Get access token via ADC to login docker to Artifact Registry
+        var token = Output.Create(
+            Task.Run(async () =>
+            {
+                var credential = await GoogleCredential.GetApplicationDefaultAsync();
+                if (credential.IsCreateScopedRequired)
+                {
+                    credential = credential.CreateScoped(
+                        new[] { "https://www.googleapis.com/auth/cloud-platform" }
+                    );
+                }
+                var access = await credential.UnderlyingCredential.GetAccessTokenForRequestAsync();
+                return access ?? string.Empty;
+            })
+        );
+
+        var dockerLogin = new Pulumi.Command.Local.Command(
+            $"docker-login-{RepositoryId}",
+            new Pulumi.Command.Local.CommandArgs
+            {
+                Create =
+                    $"sh -c \"echo \"$GOOGLE_ACCESS_TOKEN\" | docker login -u oauth2accesstoken --password-stdin https://{address}\"",
+                Environment = { { "GOOGLE_ACCESS_TOKEN", token } },
+                Triggers = new[] { address }
+            },
+            new CustomResourceOptions { DependsOn = new[] { _repository } }
+        );
+
+        // Pull, tag, and push hello world image
         var pullCmd = "docker pull gcr.io/google-samples/hello-app:1.0";
         var tagCmd = $"docker tag gcr.io/google-samples/hello-app:1.0 {registryUrl}";
         var pushCmd = $"docker push {registryUrl}";
-        var fullCmd = $"{checkEmptyCmd} && {pullCmd} && {tagCmd} && {pushCmd}";
+        var fullCmd = $"{pullCmd} && {tagCmd} && {pushCmd}";
         var importImage = new Pulumi.Command.Local.Command(
             $"import-hello-world-image-{RepositoryId}",
             new Pulumi.Command.Local.CommandArgs
@@ -80,7 +110,7 @@ public class GcpContainerRegistry : IContainerRegistry
                 Create = fullCmd,
                 Triggers = new[] { registryUrl }
             },
-            new CustomResourceOptions { DependsOn = new[] { _repository } }
+            new CustomResourceOptions { DependsOn = new Resource[] { _repository, dockerLogin } }
         );
     }
 
