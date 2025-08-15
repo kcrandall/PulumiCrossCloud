@@ -1,7 +1,7 @@
-using Pulumi;
-using PulumiCrossCloud.Core;
 using System.Net.Http;
 using System.Threading.Tasks;
+using Pulumi;
+using PulumiCrossCloud.Core;
 
 namespace PulumiCrossCloud.Aws;
 
@@ -23,16 +23,24 @@ public class AwsAppRunnerCompute : ICompute
     private readonly List<Func<ICompute, Task>> _onHealthyActions = [];
     private readonly List<Func<ICompute, Task>> _onReadyActions = [];
 
-    public AwsAppRunnerCompute(string name, IContainerRegistry containerRegistry, string? imageName = null, string imageTag = "latest", IContainerImage? containerImage = null)
+    public AwsAppRunnerCompute(
+        string name,
+        IContainerRegistry containerRegistry,
+        string? imageName = null,
+        string imageTag = "latest",
+        IContainerImage? containerImage = null
+    )
     {
         _name = name;
         _containerRegistry = containerRegistry;
         _imageName = imageName;
         _imageTag = imageTag;
-        if(imageName is null && containerImage is not null)
+        if (imageName is null && containerImage is not null)
             _imageName = containerImage.Name;
-        else if(imageName is null && containerImage is null)
-            throw new ArgumentException("Either imageName or containerImage must be provided for GCP Cloud Run compute resource.");
+        else if (imageName is null && containerImage is null)
+            throw new ArgumentException(
+                "Either imageName or containerImage must be provided for GCP Cloud Run compute resource."
+            );
         Name = name;
         ContainerRegistry = containerRegistry;
         ServiceType = ComputeServiceType.AppRunner;
@@ -48,7 +56,11 @@ public class AwsAppRunnerCompute : ICompute
     public IDictionary<string, string> EnvironmentVariables => _environmentVariables;
     public Output<string> Arn => _service?.Arn ?? Output.Create("");
     public CloudProvider Provider => CloudProvider.AWS;
-    public IList<PortForwardingConfiguration> PortForwardings { get; set; } = new List<PortForwardingConfiguration> { new PortForwardingConfiguration { ContainerPort = 8080 } };
+    public IList<PortForwardingConfiguration> PortForwardings { get; set; } =
+        new List<PortForwardingConfiguration>
+        {
+            new PortForwardingConfiguration { ContainerPort = 8080 }
+        };
 
     public Output<string> ServiceUrl => _service.ServiceUrl;
 
@@ -62,6 +74,9 @@ public class AwsAppRunnerCompute : ICompute
 
     public int MinCount { get; set; } = 1;
     public int MaxCount { get; set; } = 1;
+
+    public string? MemoryLimit { get; set; }
+    public string? CpuLimit { get; set; }
 
     public IHealthCheckConfiguration? HealthCheckConfiguration { get; set; }
 
@@ -103,9 +118,12 @@ public class AwsAppRunnerCompute : ICompute
             allInstancePolicies.AddRange(_customPolicyStatements);
         }
         // Create instance role for the running service (for secrets access)
-        _instanceRole = new Pulumi.Aws.Iam.Role($"{_name}-instance-role", new Pulumi.Aws.Iam.RoleArgs
-        {
-            AssumeRolePolicy = @"{
+        _instanceRole = new Pulumi.Aws.Iam.Role(
+            $"{_name}-instance-role",
+            new Pulumi.Aws.Iam.RoleArgs
+            {
+                AssumeRolePolicy =
+                    @"{
                 ""Version"": ""2012-10-17"",
                 ""Statement"": [{
                     ""Effect"": ""Allow"",
@@ -115,24 +133,31 @@ public class AwsAppRunnerCompute : ICompute
                     ""Action"": ""sts:AssumeRole""
                 }]
             }"
-        });
+            }
+        );
         if (allInstancePolicies.Any())
         {
             var instancePolicyDocument = CreatePolicyDocument(allInstancePolicies);
-            new Pulumi.Aws.Iam.RolePolicy($"{_name}-instance-policy", new Pulumi.Aws.Iam.RolePolicyArgs
-            {
-                Role = _instanceRole.Name,
-                Policy = instancePolicyDocument
-            });
+            new Pulumi.Aws.Iam.RolePolicy(
+                $"{_name}-instance-policy",
+                new Pulumi.Aws.Iam.RolePolicyArgs
+                {
+                    Role = _instanceRole.Name,
+                    Policy = instancePolicyDocument
+                }
+            );
         }
         // Aggregate all policy statements for the access role (ECR)
         var ecrPolicies = ContainerRegistry.GetPolicy(
             ContainerRegistryPermissions.Pull,
             ContainerRegistryPermissions.GetAuthToken
         );
-        _accessRole = new Pulumi.Aws.Iam.Role($"{_name}-access-role", new Pulumi.Aws.Iam.RoleArgs
-        {
-            AssumeRolePolicy = @"{
+        _accessRole = new Pulumi.Aws.Iam.Role(
+            $"{_name}-access-role",
+            new Pulumi.Aws.Iam.RoleArgs
+            {
+                AssumeRolePolicy =
+                    @"{
                 ""Version"": ""2012-10-17"",
                 ""Statement"": [{
                     ""Effect"": ""Allow"",
@@ -142,21 +167,28 @@ public class AwsAppRunnerCompute : ICompute
                     ""Action"": ""sts:AssumeRole""
                 }]
             }"
-        });
+            }
+        );
         if (ecrPolicies.Any())
         {
             var ecrPolicyDocument = CreatePolicyDocument(ecrPolicies);
-            new Pulumi.Aws.Iam.RolePolicy($"{_name}-access-policy", new Pulumi.Aws.Iam.RolePolicyArgs
-            {
-                Role = _accessRole.Name,
-                Policy = ecrPolicyDocument
-            });
+            new Pulumi.Aws.Iam.RolePolicy(
+                $"{_name}-access-policy",
+                new Pulumi.Aws.Iam.RolePolicyArgs
+                {
+                    Role = _accessRole.Name,
+                    Policy = ecrPolicyDocument
+                }
+            );
         }
         // Create or update AutoScalingConfiguration with MinCount/MaxCount
-        _autoScalingConfig = new Pulumi.Aws.AppRunner.AutoScalingConfigurationVersion($"{_name}-autoscaling", new Pulumi.Aws.AppRunner.AutoScalingConfigurationVersionArgs()
-        {
-            MaxConcurrency = MaxCount,
-        });
+        _autoScalingConfig = new Pulumi.Aws.AppRunner.AutoScalingConfigurationVersion(
+            $"{_name}-autoscaling",
+            new Pulumi.Aws.AppRunner.AutoScalingConfigurationVersionArgs()
+            {
+                MaxConcurrency = MaxCount,
+            }
+        );
         // NOW create the App Runner service with the roles and autoscaling config attached
         CreateAppRunnerService();
     }
@@ -183,41 +215,50 @@ public class AwsAppRunnerCompute : ICompute
                 dependsOn.Add(secret.Resource);
             }
         }
-        _service = new Pulumi.Aws.AppRunner.Service(_name, new Pulumi.Aws.AppRunner.ServiceArgs
-        {
-            ServiceName = _name,
-            SourceConfiguration = new Pulumi.Aws.AppRunner.Inputs.ServiceSourceConfigurationArgs
+        _service = new Pulumi.Aws.AppRunner.Service(
+            _name,
+            new Pulumi.Aws.AppRunner.ServiceArgs
             {
-                ImageRepository = new Pulumi.Aws.AppRunner.Inputs.ServiceSourceConfigurationImageRepositoryArgs
+                ServiceName = _name,
+                SourceConfiguration = new Pulumi.Aws.AppRunner.Inputs.ServiceSourceConfigurationArgs
                 {
-                    ImageConfiguration = new Pulumi.Aws.AppRunner.Inputs.ServiceSourceConfigurationImageRepositoryImageConfigurationArgs
-                    {
-                        Port = "8080",
-                        RuntimeEnvironmentVariables = _environmentVariables,
-                        RuntimeEnvironmentSecrets = secretsMap
-                    },
-                    ImageIdentifier = imageIdentifier,
-                    ImageRepositoryType = "ECR"
+                    ImageRepository =
+                        new Pulumi.Aws.AppRunner.Inputs.ServiceSourceConfigurationImageRepositoryArgs
+                        {
+                            ImageConfiguration =
+                                new Pulumi.Aws.AppRunner.Inputs.ServiceSourceConfigurationImageRepositoryImageConfigurationArgs
+                                {
+                                    Port = "8080",
+                                    RuntimeEnvironmentVariables = _environmentVariables,
+                                    RuntimeEnvironmentSecrets = secretsMap
+                                },
+                            ImageIdentifier = imageIdentifier,
+                            ImageRepositoryType = "ECR"
+                        },
+                    AutoDeploymentsEnabled = true
                 },
-                AutoDeploymentsEnabled = true
+                InstanceConfiguration =
+                    new Pulumi.Aws.AppRunner.Inputs.ServiceInstanceConfigurationArgs
+                    {
+                        InstanceRoleArn = _instanceRole?.Arn,
+                        Cpu = "256",
+                        Memory = "512"
+                    },
+                AutoScalingConfigurationArn = _autoScalingConfig?.Arn,
+                HealthCheckConfiguration = HealthCheckConfiguration is not null
+                    ? new Pulumi.Aws.AppRunner.Inputs.ServiceHealthCheckConfigurationArgs
+                    {
+                        Path = HealthCheckConfiguration.Path,
+                        Interval = HealthCheckConfiguration.IntervalSeconds,
+                        Timeout = HealthCheckConfiguration.TimeoutSeconds,
+                        HealthyThreshold = HealthCheckConfiguration.HealthyThreshold,
+                        UnhealthyThreshold = HealthCheckConfiguration.UnhealthyThreshold
+                    }
+                    : null,
+                ObservabilityConfiguration = null // placeholder
             },
-            InstanceConfiguration = new Pulumi.Aws.AppRunner.Inputs.ServiceInstanceConfigurationArgs
-            {
-                InstanceRoleArn = _instanceRole?.Arn,
-                Cpu = "256",
-                Memory = "512"
-            },
-            AutoScalingConfigurationArn = _autoScalingConfig?.Arn,
-            HealthCheckConfiguration = HealthCheckConfiguration is not null ? new Pulumi.Aws.AppRunner.Inputs.ServiceHealthCheckConfigurationArgs
-            {
-                Path = HealthCheckConfiguration.Path,
-                Interval = HealthCheckConfiguration.IntervalSeconds,
-                Timeout = HealthCheckConfiguration.TimeoutSeconds,
-                HealthyThreshold = HealthCheckConfiguration.HealthyThreshold,
-                UnhealthyThreshold = HealthCheckConfiguration.UnhealthyThreshold
-            } : null,
-            ObservabilityConfiguration = null // placeholder
-        }, new CustomResourceOptions { DependsOn = dependsOn });
+            new CustomResourceOptions { DependsOn = dependsOn }
+        );
     }
 
     private Output<string> CreatePolicyDocument(IEnumerable<IPolicyStatement> statements)
@@ -225,40 +266,50 @@ public class AwsAppRunnerCompute : ICompute
         var statementsList = statements.ToList();
         var allResourceOutputs = statementsList.SelectMany(s => s.Resources).ToArray();
 
-        return Output.All(allResourceOutputs).Apply(allResources =>
-        {
-            var resourceIndex = 0;
-            var policyStatements = new List<object>();
-
-            foreach (var statement in statementsList)
+        return Output
+            .All(allResourceOutputs)
+            .Apply(allResources =>
             {
-                var statementResourceCount = statement.Resources.Count();
-                var statementResources = allResources.Skip(resourceIndex).Take(statementResourceCount).ToArray();
-                resourceIndex += statementResourceCount;
+                var resourceIndex = 0;
+                var policyStatements = new List<object>();
 
-                policyStatements.Add(new
+                foreach (var statement in statementsList)
                 {
-                    Effect = statement.Effect,
-                    Action = statement.Actions.ToArray(),
-                    Resource = statementResources
-                });
-            }
+                    var statementResourceCount = statement.Resources.Count();
+                    var statementResources = allResources
+                        .Skip(resourceIndex)
+                        .Take(statementResourceCount)
+                        .ToArray();
+                    resourceIndex += statementResourceCount;
 
-            var policy = new
-            {
-                Version = "2012-10-17",
-                Statement = policyStatements
-            };
+                    policyStatements.Add(
+                        new
+                        {
+                            Effect = statement.Effect,
+                            Action = statement.Actions.ToArray(),
+                            Resource = statementResources
+                        }
+                    );
+                }
 
-            return System.Text.Json.JsonSerializer.Serialize(policy);
-        });
+                var policy = new { Version = "2012-10-17", Statement = policyStatements };
+
+                return System.Text.Json.JsonSerializer.Serialize(policy);
+            });
     }
 
+    public void Start() { /* App Runner auto-starts */
+    }
 
-    public void Start() { /* App Runner auto-starts */ }
-    public void Deploy() {  }
-    public void Stop() { /* Implementation for pausing service */ }
-    public void Scale(int replicas) { /* App Runner auto-scales, but can set min/max */ }
+    public void Deploy() { }
+
+    public void Stop() { /* Implementation for pausing service */
+    }
+
+    public void Scale(
+        int replicas
+    ) { /* App Runner auto-scales, but can set min/max */
+    }
 
     public void OnReady(params Func<ICompute, Task>[] actions)
     {
@@ -305,7 +356,9 @@ public class AwsAppRunnerCompute : ICompute
             }
             if (!healthy)
             {
-                Pulumi.Log.Error($"App Runner health check failed for {Name} at {healthUrl} after 5 minutes.");
+                Pulumi.Log.Error(
+                    $"App Runner health check failed for {Name} at {healthUrl} after 5 minutes."
+                );
             }
         });
     }
@@ -319,44 +372,57 @@ public class AwsAppRunnerCompute : ICompute
             switch (permission)
             {
                 case ComputePermissions.GetStatus:
-                    statements.Add(new AwsPolicyStatement
-                    {
-                        Effect = "Allow",
-                        Actions = new[] { "apprunner:DescribeService" },
-                        Resources = new Output<string>[] { Arn }
-                    });
+                    statements.Add(
+                        new AwsPolicyStatement
+                        {
+                            Effect = "Allow",
+                            Actions = new[] { "apprunner:DescribeService" },
+                            Resources = new Output<string>[] { Arn }
+                        }
+                    );
                     break;
                 case ComputePermissions.Start:
-                    statements.Add(new AwsPolicyStatement
-                    {
-                        Effect = "Allow",
-                        Actions = new[] { "apprunner:ResumeService" },
-                        Resources = new Output<string>[] { Arn }
-                    });
+                    statements.Add(
+                        new AwsPolicyStatement
+                        {
+                            Effect = "Allow",
+                            Actions = new[] { "apprunner:ResumeService" },
+                            Resources = new Output<string>[] { Arn }
+                        }
+                    );
                     break;
                 case ComputePermissions.Stop:
-                    statements.Add(new AwsPolicyStatement
-                    {
-                        Effect = "Allow",
-                        Actions = new[] { "apprunner:PauseService" },
-                        Resources = new Output<string>[] { Arn }
-                    });
+                    statements.Add(
+                        new AwsPolicyStatement
+                        {
+                            Effect = "Allow",
+                            Actions = new[] { "apprunner:PauseService" },
+                            Resources = new Output<string>[] { Arn }
+                        }
+                    );
                     break;
                 case ComputePermissions.GetLogs:
-                    statements.Add(new AwsPolicyStatement
-                    {
-                        Effect = "Allow",
-                        Actions = new[] { "logs:GetLogEvents", "logs:DescribeLogStreams" },
-                        Resources = new Output<string>[] { Output.Create($"arn:aws:logs:*:*:log-group:/aws/apprunner/{Name}/*") }
-                    });
+                    statements.Add(
+                        new AwsPolicyStatement
+                        {
+                            Effect = "Allow",
+                            Actions = new[] { "logs:GetLogEvents", "logs:DescribeLogStreams" },
+                            Resources = new Output<string>[]
+                            {
+                                Output.Create($"arn:aws:logs:*:*:log-group:/aws/apprunner/{Name}/*")
+                            }
+                        }
+                    );
                     break;
                 case ComputePermissions.Scale:
-                    statements.Add(new AwsPolicyStatement
-                    {
-                        Effect = "Allow",
-                        Actions = new[] { "apprunner:UpdateService" },
-                        Resources = new Output<string>[] { Arn }
-                    });
+                    statements.Add(
+                        new AwsPolicyStatement
+                        {
+                            Effect = "Allow",
+                            Actions = new[] { "apprunner:UpdateService" },
+                            Resources = new Output<string>[] { Arn }
+                        }
+                    );
                     break;
             }
         }

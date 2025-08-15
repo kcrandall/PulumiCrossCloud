@@ -57,7 +57,7 @@ public class KeycloakStack : ComponentResource
         // Create container registry for Keycloak (import default hello-world image)
         var registry = factory.CreateContainerRegistry(
             $"{name}-registry",
-            createDefaultImage: true
+            createDefaultImage: false
         );
         var image = factory.CreateContainerImage("keycloak", registry);
 
@@ -75,9 +75,14 @@ public class KeycloakStack : ComponentResource
             name: name ?? "keycloak",
             registry: registry,
             imageTag: "latest",
+            // imageName: "keycloak",
             containerImage: image,
             serviceType: null // Uses default per cloud
         );
+
+        // Configure resource limits for Keycloak (memory-intensive application)
+        compute.MemoryLimit = "2Gi"; // 2GB memory for Keycloak with database
+        compute.CpuLimit = "2"; // 2 vCPUs for better startup performance
 
         // Add required secrets/vars
         compute.AddEnvironmentVariable("KEYCLOAK_ADMIN", "admin");
@@ -90,14 +95,14 @@ public class KeycloakStack : ComponentResource
         // Configure health check using cross-cloud abstraction
         compute.HealthCheckConfiguration = new HealthCheckConfiguration
         {
-            Path = "/",
-            IntervalSeconds = 3,
-            TimeoutSeconds = 1,
+            Path = "/health/ready", // Keycloak's readiness endpoint
+            IntervalSeconds = 10, // More reasonable interval for DB-backed app
+            TimeoutSeconds = 5, // Longer timeout for health checks
             UnhealthyThreshold = 3,
             HealthyThreshold = 2,
-            StartupTimeoutSeconds = 0,
-            StartupIntervalSeconds = 3,
-            StartupUnhealthyThreshold = 3
+            StartupTimeoutSeconds = 10, // Timeout per individual startup probe request
+            StartupIntervalSeconds = 15, // Check every 15 seconds during startup
+            StartupUnhealthyThreshold = 20 // 20 failures × 15 seconds = 300 seconds (5 minutes total)
         };
 
         // Configure port forwarding for Keycloak
@@ -138,9 +143,16 @@ public class KeycloakStack : ComponentResource
         using var stream = assembly.GetManifestResourceStream(resourceName);
         using var reader = new StreamReader(stream!);
         var dockerfileContent = reader.ReadToEnd();
-        var tempPath = Path.Combine(Path.GetTempPath(), $"Dockerfile-{Guid.NewGuid():N}");
-        File.WriteAllText(tempPath, dockerfileContent);
-        Console.WriteLine($"[KeycloakStack] Dockerfile written to temp path: {tempPath}");
-        return tempPath;
+        // Create an isolated temp directory to avoid hashing issues with system temp sockets
+        var tempDir = Path.Combine(
+            Path.GetTempPath(),
+            ".pulumi-docker",
+            $"keycloak-build-{Guid.NewGuid():N}"
+        );
+        Directory.CreateDirectory(tempDir);
+        var dockerfilePath = Path.Combine(tempDir, "Dockerfile");
+        File.WriteAllText(dockerfilePath, dockerfileContent);
+        Console.WriteLine($"[KeycloakStack] Dockerfile written to temp path: {dockerfilePath}");
+        return dockerfilePath;
     }
 }

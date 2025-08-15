@@ -12,8 +12,10 @@ ENV KC_DB=postgres
 ENV KC_HTTP_ENABLED=true
 ENV KC_HOSTNAME_STRICT=false
 ENV KC_PROXY=edge
+ENV KC_CACHE=local
+ENV KC_LOG_LEVEL=INFO
 
-# Expose default Keycloak port
+# Expose default Keycloak port as
 EXPOSE 8080
 ENV KC_HTTP_PORT=8080
 

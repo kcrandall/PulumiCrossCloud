@@ -49,6 +49,9 @@ public class GcpCloudRunCompute : ICompute
     public int MinCount { get; set; } = 1;
     public int MaxCount { get; set; } = 1;
 
+    public string? MemoryLimit { get; set; }
+    public string? CpuLimit { get; set; }
+
     public IHealthCheckConfiguration? HealthCheckConfiguration { get; set; }
     public IDictionary<string, string> EnvironmentVariables => _environmentVariables;
 
@@ -166,7 +169,15 @@ public class GcpCloudRunCompute : ICompute
                     ContainerPort = portConfig.ContainerPort,
                 }
             ],
-            Envs = envs.ToArray()
+            Envs = envs.ToArray(),
+            Resources = new Pulumi.Gcp.CloudRun.Inputs.ServiceTemplateSpecContainerResourcesArgs
+            {
+                Limits = new InputMap<string>
+                {
+                    { "memory", MemoryLimit ?? "1Gi" }, // Default 1GB, configurable
+                    { "cpu", CpuLimit ?? "1" } // Default 1 vCPU, configurable
+                }
+            }
         };
         if (HealthCheckConfiguration is not null)
         {
@@ -311,6 +322,20 @@ public class GcpCloudRunCompute : ICompute
             );
             dependsOn.Add(invokerBinding);
         }
+
+        // Grant public access to Cloud Run service (equivalent to allUsers)
+        var publicAccessBinding = new Pulumi.Gcp.CloudRun.IamMember(
+            $"cloudrun-public-access-{Name}",
+            new Pulumi.Gcp.CloudRun.IamMemberArgs
+            {
+                Service = Name,
+                Location = region,
+                Role = "roles/run.invoker",
+                Member = "allUsers"
+            }
+        );
+        dependsOn.Add(publicAccessBinding);
+
         _service = new Pulumi.Gcp.CloudRun.Service(
             Name,
             serviceArgs,
@@ -370,13 +395,6 @@ public class GcpCloudRunCompute : ICompute
             serviceName
         );
         updateRequest.Execute();
-    }
-
-    public void Scale(int replicas)
-    {
-        // Update desired count, but respect MinCount/MaxCount
-        var count = Math.Max(MinCount, Math.Min(MaxCount, replicas));
-        // GCP Cloud Run scaling logic would go here
     }
 
     public IEnumerable<IPolicyStatement> GetPolicy(params ComputePermissions[] permissions)
@@ -486,53 +504,53 @@ public class GcpCloudRunCompute : ICompute
     public void OnHealthy(params Func<ICompute, Task>[] actions)
     {
         _onHealthyActions.AddRange(actions);
-        ServiceUrl.Apply(async url =>
-        {
-            var healthPath = HealthCheckConfiguration?.Path ?? string.Empty;
-            var healthUrl = $"{url}{(healthPath.StartsWith("/") ? healthPath : "/" + healthPath)}";
-            using var http = new HttpClient();
-            var healthy = false;
-            for (int i = 0; i < 60; i++)
-            {
-                try
-                {
-                    var response = await http.GetAsync(healthUrl);
-                    if (response.IsSuccessStatusCode)
-                    {
-                        healthy = true;
-                        foreach (var action in _onHealthyActions)
-                        {
-                            await action(this);
-                        }
-                        break;
-                    }
-                }
-                catch
-                {
-                    // ignore connection failures, retry
-                }
-                await Task.Delay(5000);
-            }
-            if (!healthy)
-            {
-                Log.Error(
-                    $"Cloud Run health check failed for {Name} at {healthUrl} after 5 minutes."
-                );
-            }
-        });
+        // ServiceUrl.Apply(async url =>
+        // {
+        //     var healthPath = HealthCheckConfiguration?.Path ?? string.Empty;
+        //     var healthUrl = $"{url}{(healthPath.StartsWith("/") ? healthPath : "/" + healthPath)}";
+        //     using var http = new HttpClient();
+        //     var healthy = false;
+        //     for (int i = 0; i < 60; i++)
+        //     {
+        //         try
+        //         {
+        //             var response = await http.GetAsync(healthUrl);
+        //             if (response.IsSuccessStatusCode)
+        //             {
+        //                 healthy = true;
+        //                 foreach (var action in _onHealthyActions)
+        //                 {
+        //                     await action(this);
+        //                 }
+        //                 break;
+        //             }
+        //         }
+        //         catch
+        //         {
+        //             // ignore connection failures, retry
+        //         }
+        //         await Task.Delay(5000);
+        //     }
+        //     if (!healthy)
+        //     {
+        //         Log.Error(
+        //             $"Cloud Run health check failed for {Name} at {healthUrl} after 5 minutes."
+        //         );
+        //     }
+        // });
     }
 
     public void OnReady(params Func<ICompute, Task>[] actions)
     {
         _onReadyActions.AddRange(actions);
         // Register ready logic to run after deployment
-        ServiceUrl.Apply(async url =>
-        {
-            // Fire all registered actions after service is deployed and URL is available
-            foreach (var action in _onReadyActions)
-            {
-                await action(this);
-            }
-        });
+        // ServiceUrl.Apply(async url =>
+        // {
+        //     // Fire all registered actions after service is deployed and URL is available
+        //     foreach (var action in _onReadyActions)
+        //     {
+        //         await action(this);
+        //     }
+        // });
     }
 }
