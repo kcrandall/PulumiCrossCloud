@@ -7,8 +7,12 @@ using PulumiCrossCloud.Keycloak;
 
 namespace PulumiCrossCloud.Samples.OpenSourceStack;
 
-public class OpenSourceStack
+public class OpenSourceStack : Stack
 {
+    
+    [Output] public Output<int> ClientLogHook { get; private set; } = null!;
+    [Output] public Output<int> ClientResultCount { get; private set; } = null!;
+
     public OpenSourceStack()
     {
         // Example: Deploy a simple web app to all three clouds
@@ -109,36 +113,33 @@ public class OpenSourceStack
             realmConfig
         );
 
-        // Example: Access the created client configuration results after deployment
-        keycloakStack.ClientResults.Apply(clientResults =>
-        {
-            foreach (var (clientKey, clientResult) in clientResults)
-            {
-                clientResult.Apply(cr =>
-                {
-                    Console.WriteLine(
-                        $"Client '{cr.ClientId}' configured in realm '{cr.RealmName}'"
-                    );
-                    Console.WriteLine($"  Keycloak URL: {cr.KeycloakUrl}");
-                    Console.WriteLine($"  Authorization Endpoint: {cr.AuthorizationEndpoint}");
-                    Console.WriteLine($"  Token Endpoint: {cr.TokenEndpoint}");
-                    Console.WriteLine($"  JWKS Endpoint: {cr.JwksEndpoint}");
-                    Console.WriteLine($"  Issuer: {cr.Issuer}");
-                    Console.WriteLine($"  Access Type: {cr.AccessType}");
-                    Console.WriteLine(
-                        $"  Requires Client Authentication: {cr.RequiresClientAuthentication}"
-                    );
-                    Console.WriteLine(
-                        $"  Redirect URIs: {string.Join(", ", cr.ValidRedirectUris)}"
-                    );
-                    Console.WriteLine($"  Web Origins: {string.Join(", ", cr.WebOrigins)}");
+        ClientResultCount = keycloakStack.ClientResults.Apply(d => d.Count);
 
-                    // You can now use these configuration details to set up OpenID Connect on your servers
-                    // For example, inject them into other compute resources or use them in environment variables
+        // Example: Access the created client configuration results after deployment
+        ClientLogHook = keycloakStack.ClientResults.Apply(dict =>
+        {
+            var hooks = new List<Output<int>>();
+
+            foreach (var (_, clientResult) in dict)
+            {
+                hooks.Add(clientResult.Apply(cr =>
+                {
+                    Log.Info(
+                        $"Client '{cr.ClientId}' in realm '{cr.RealmName}'\n" +
+                        $"  Keycloak URL: {cr.KeycloakUrl}\n" +
+                        $"  Auth: {cr.AuthorizationEndpoint}\n" +
+                        $"  Token: {cr.TokenEndpoint}\n" +
+                        $"  JWKS: {cr.JwksEndpoint}\n" +
+                        $"  Issuer: {cr.Issuer}\n" +
+                        $"  AccessType: {cr.AccessType}  RequiresAuth: {cr.RequiresClientAuthentication}\n" +
+                        $"  Redirect URIs: {string.Join(", ", cr.ValidRedirectUris)}\n" +
+                        $"  Web Origins: {string.Join(", ", cr.WebOrigins)}"
+                    );
                     return 0;
-                });
+                }));
             }
-            return 0;
+
+            return Output.All(hooks.ToArray()).Apply(_ => 0);
         });
     }
 }

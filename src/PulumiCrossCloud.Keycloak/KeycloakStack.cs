@@ -131,63 +131,54 @@ public class KeycloakStack : ComponentResource
         if (realmConfig is not null)
         {
             // Use Output.All to combine ServiceUrl and admin password, then configure Keycloak
-            Output
-                .All(
-                    compute.ServiceUrl,
-                    keycloakAdminPasswordSecret.Value.Apply(s => s ?? string.Empty)
-                )
-                .Apply(values =>
-                {
-                    if (string.IsNullOrEmpty(values[1] as string))
+            ClientResults =
+                Output.Tuple(
+                        compute.ServiceUrl,
+                        keycloakAdminPasswordSecret.Value.Apply(s => s ?? string.Empty)
+                    )
+                    .Apply(t =>
                     {
-                        throw new InvalidOperationException(
-                            "Keycloak admin password secret is not set or empty."
+                        var (serviceUrl, adminPassword) = t;
+
+                        if (string.IsNullOrWhiteSpace(serviceUrl))
+                            throw new InvalidOperationException("Keycloak ServiceUrl is empty.");
+                        if (string.IsNullOrWhiteSpace(adminPassword))
+                            throw new InvalidOperationException("Admin password secret is empty.");
+
+                        // Wait for KC to be ready
+                        var readyScript =
+                            $"bash -lc 'for i in {{1..60}}; do if curl -sf {serviceUrl}/health/ready >/dev/null; then echo ready; exit 0; fi; sleep 5; done; echo timeout; exit 1'";
+                        var readyCheck = new Pulumi.Command.Local.Command(
+                            $"wait-for-keycloak-{name}",
+                            new Pulumi.Command.Local.CommandArgs { Create = readyScript, Update = readyScript }
                         );
-                    }
-                    var serviceUrl = values[0] as string ?? string.Empty;
-                    var adminPassword = values[1] as string ?? string.Empty;
 
-                    // Create a readiness check that waits until Keycloak health endpoint is responsive
-                    var readyScript =
-                        $"bash -lc 'for i in {{1..60}}; do if curl -sf {serviceUrl}/health/ready >/dev/null; then echo ready; exit 0; fi; sleep 5; done; echo timeout; exit 1'";
-                    var readyCheck = new Pulumi.Command.Local.Command(
-                        $"wait-for-keycloak-{name}",
-                        new Pulumi.Command.Local.CommandArgs
+                        var providerArgs = realmConfig!.ProviderOverrides ?? new Pulumi.Keycloak.ProviderArgs
                         {
-                            Create = readyScript,
-                            Update = readyScript
-                        }
-                    );
-
-                    // Compose provider from compute URL and admin credentials
-                    var args =
-                        realmConfig.ProviderOverrides
-                        ?? new Pulumi.Keycloak.ProviderArgs
-                        {
-                            // The default admin user is "admin" per docker image
-                            Url = serviceUrl,
+                            Url = serviceUrl.TrimEnd('/'),
                             ClientId = "admin-cli",
                             Username = "admin",
                             Password = adminPassword,
-                            ClientTimeout = 120 // Increase timeout to 120 seconds
+                            ClientTimeout = 120
                         };
 
-                    var provider = new Pulumi.Keycloak.Provider($"{name}-kc-provider", args);
+                        var provider = new Pulumi.Keycloak.Provider(
+                            $"{name}-kc-provider",
+                            providerArgs,
+                            new CustomResourceOptions { DependsOn = new[] { readyCheck } } // ensure readiness
+                        );
 
-                    // Materialize resources with the resolved provider
-                    var result = PulumiRealmDeployer.Deploy(
-                        realmConfig,
-                        provider,
-                        factory,
-                        serviceUrl,
-                        dependsOn: new Resource[] { readyCheck }
-                    );
+                        var result = PulumiRealmDeployer.Deploy(
+                            realmConfig,
+                            provider,
+                            factory,
+                            serviceUrl,
+                            dependsOn: new Resource[] { readyCheck }
+                        );
 
-                    // Set the client results property for external access
-                    ClientResults = Output.Create(result.ClientResults);
-
-                    return 0;
-                });
+                        // Return the value you want the Output<> to carry:
+                        return Output.Create(result.ClientResults);
+                    });
         }
     }
 
