@@ -39,14 +39,9 @@ public class KeycloakStack : ComponentResource
     private ISecret postgresPasswordSecret;
 
     /// <summary>
-    /// Gets the created client configuration results after realm deployment.
-    /// This will be populated once the realm configuration is deployed.
+    /// Gets the realm deployment results including created resources and client configuration results.
     /// </summary>
-    public Output<Dictionary<string, Output<KeycloakClientResult>>> ClientResults
-    {
-        get;
-        private set;
-    } = Output.Create(new Dictionary<string, Output<KeycloakClientResult>>());
+    public Output<RealmDeploymentResult> RealmResults { get; private set; } = null!;
 
     public KeycloakStack(
         CloudResourceFactory factory,
@@ -131,29 +126,35 @@ public class KeycloakStack : ComponentResource
         if (realmConfig is not null)
         {
             // Use Output.All to combine ServiceUrl and admin password, then configure Keycloak
-            ClientResults =
-                Output.Tuple(
-                        compute.ServiceUrl,
-                        keycloakAdminPasswordSecret.Value.Apply(s => s ?? string.Empty)
-                    )
-                    .Apply(t =>
-                    {
-                        var (serviceUrl, adminPassword) = t;
+            RealmResults = Output
+                .Tuple(
+                    compute.ServiceUrl,
+                    keycloakAdminPasswordSecret.Value.Apply(s => s ?? string.Empty)
+                )
+                .Apply(t =>
+                {
+                    var (serviceUrl, adminPassword) = t;
 
-                        if (string.IsNullOrWhiteSpace(serviceUrl))
-                            throw new InvalidOperationException("Keycloak ServiceUrl is empty.");
-                        if (string.IsNullOrWhiteSpace(adminPassword))
-                            throw new InvalidOperationException("Admin password secret is empty.");
+                    if (string.IsNullOrWhiteSpace(serviceUrl))
+                        throw new InvalidOperationException("Keycloak ServiceUrl is empty.");
+                    if (string.IsNullOrWhiteSpace(adminPassword))
+                        throw new InvalidOperationException("Admin password secret is empty.");
 
-                        // Wait for KC to be ready
-                        var readyScript =
-                            $"bash -lc 'for i in {{1..60}}; do if curl -sf {serviceUrl}/health/ready >/dev/null; then echo ready; exit 0; fi; sleep 5; done; echo timeout; exit 1'";
-                        var readyCheck = new Pulumi.Command.Local.Command(
-                            $"wait-for-keycloak-{name}",
-                            new Pulumi.Command.Local.CommandArgs { Create = readyScript, Update = readyScript }
-                        );
+                    // Wait for KC to be ready
+                    var readyScript =
+                        $"bash -lc 'for i in {{1..60}}; do if curl -sf {serviceUrl}/health/ready >/dev/null; then echo ready; exit 0; fi; sleep 5; done; echo timeout; exit 1'";
+                    var readyCheck = new Pulumi.Command.Local.Command(
+                        $"wait-for-keycloak-{name}",
+                        new Pulumi.Command.Local.CommandArgs
+                        {
+                            Create = readyScript,
+                            Update = readyScript
+                        }
+                    );
 
-                        var providerArgs = realmConfig!.ProviderOverrides ?? new Pulumi.Keycloak.ProviderArgs
+                    var providerArgs =
+                        realmConfig!.ProviderOverrides
+                        ?? new Pulumi.Keycloak.ProviderArgs
                         {
                             Url = serviceUrl.TrimEnd('/'),
                             ClientId = "admin-cli",
@@ -162,23 +163,23 @@ public class KeycloakStack : ComponentResource
                             ClientTimeout = 120
                         };
 
-                        var provider = new Pulumi.Keycloak.Provider(
-                            $"{name}-kc-provider",
-                            providerArgs,
-                            new CustomResourceOptions { DependsOn = new[] { readyCheck } } // ensure readiness
-                        );
+                    var provider = new Pulumi.Keycloak.Provider(
+                        $"{name}-kc-provider",
+                        providerArgs,
+                        new CustomResourceOptions { DependsOn = new[] { readyCheck } } // ensure readiness
+                    );
 
-                        var result = PulumiRealmDeployer.Deploy(
-                            realmConfig,
-                            provider,
-                            factory,
-                            serviceUrl,
-                            dependsOn: new Resource[] { readyCheck }
-                        );
+                    var result = PulumiRealmDeployer.Deploy(
+                        realmConfig,
+                        provider,
+                        factory,
+                        serviceUrl,
+                        dependsOn: new Resource[] { readyCheck }
+                    );
 
-                        // Return the value you want the Output<> to carry:
-                        return Output.Create(result.ClientResults);
-                    });
+                    // Return the realm deployment result
+                    return Output.Create(result);
+                });
         }
     }
 

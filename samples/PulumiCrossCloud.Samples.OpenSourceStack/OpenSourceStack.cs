@@ -9,9 +9,11 @@ namespace PulumiCrossCloud.Samples.OpenSourceStack;
 
 public class OpenSourceStack : Stack
 {
-    
-    [Output] public Output<int> ClientLogHook { get; private set; } = null!;
-    [Output] public Output<int> ClientResultCount { get; private set; } = null!;
+    [Output]
+    public Output<int> ClientLogHook { get; private set; } = null!;
+
+    [Output]
+    public Output<int> ClientResultCount { get; private set; } = null!;
 
     public OpenSourceStack()
     {
@@ -113,30 +115,33 @@ public class OpenSourceStack : Stack
             realmConfig
         );
 
-        ClientResultCount = keycloakStack.ClientResults.Apply(d => d.Count);
+        ClientResultCount = keycloakStack.RealmResults.Apply(r => r.ClientResults.Count);
 
         // Example: Access the created client configuration results after deployment
-        ClientLogHook = keycloakStack.ClientResults.Apply(dict =>
+        ClientLogHook = keycloakStack.RealmResults.Apply(rr =>
         {
+            var dict = rr.ClientResults;
             var hooks = new List<Output<int>>();
 
             foreach (var (_, clientResult) in dict)
             {
-                hooks.Add(clientResult.Apply(cr =>
-                {
-                    Log.Info(
-                        $"Client '{cr.ClientId}' in realm '{cr.RealmName}'\n" +
-                        $"  Keycloak URL: {cr.KeycloakUrl}\n" +
-                        $"  Auth: {cr.AuthorizationEndpoint}\n" +
-                        $"  Token: {cr.TokenEndpoint}\n" +
-                        $"  JWKS: {cr.JwksEndpoint}\n" +
-                        $"  Issuer: {cr.Issuer}\n" +
-                        $"  AccessType: {cr.AccessType}  RequiresAuth: {cr.RequiresClientAuthentication}\n" +
-                        $"  Redirect URIs: {string.Join(", ", cr.ValidRedirectUris)}\n" +
-                        $"  Web Origins: {string.Join(", ", cr.WebOrigins)}"
-                    );
-                    return 0;
-                }));
+                hooks.Add(
+                    clientResult.Apply(cr =>
+                    {
+                        Log.Info(
+                            $"Client '{cr.ClientId}' in realm '{cr.RealmName}'\n"
+                                + $"  Keycloak URL: {cr.KeycloakUrl}\n"
+                                + $"  Auth: {cr.AuthorizationEndpoint}\n"
+                                + $"  Token: {cr.TokenEndpoint}\n"
+                                + $"  JWKS: {cr.JwksEndpoint}\n"
+                                + $"  Issuer: {cr.Issuer}\n"
+                                + $"  AccessType: {cr.AccessType}  RequiresAuth: {cr.RequiresClientAuthentication}\n"
+                                + $"  Redirect URIs: {string.Join(", ", cr.ValidRedirectUris)}\n"
+                                + $"  Web Origins: {string.Join(", ", cr.WebOrigins)}"
+                        );
+                        return 0;
+                    })
+                );
             }
 
             return Output.All(hooks.ToArray()).Apply(_ => 0);
