@@ -28,16 +28,10 @@ public class GcpContainerImage : IContainerImage
     Output<ImageDeploymentResult> PushImage(
         string dockerfilePath,
         string contextPath,
-        IEnumerable<string> additionalFilesToHash,
         ImageArgs? imageArgs = null
     )
     {
-        var result = ((IContainerImage)this).PushImage(
-            dockerfilePath,
-            contextPath,
-            additionalFilesToHash,
-            imageArgs
-        );
+        var result = ((IContainerImage)this).PushImage(dockerfilePath, contextPath, imageArgs);
         DeploymentResult = result;
         return result;
     }

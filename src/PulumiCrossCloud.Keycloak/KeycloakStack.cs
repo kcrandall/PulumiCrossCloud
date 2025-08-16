@@ -124,7 +124,7 @@ public class KeycloakStack : ComponentResource
         compute.MinCount = 0;
         compute.MaxCount = 1;
 
-        image.PushImage(dockerfilePath, contextPath, []);
+        image.PushImage(dockerfilePath, contextPath);
         compute.Build();
 
         // After compute is ready, configure Keycloak realm/clients/idps using the native Pulumi.Keycloak provider

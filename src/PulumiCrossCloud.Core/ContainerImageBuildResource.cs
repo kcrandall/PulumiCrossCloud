@@ -17,7 +17,6 @@ public class ContainerImageBuildResource : ComponentResource
         string imageName,
         string dockerfilePath,
         string contextPath,
-        IEnumerable<string> additionalFilesToHash,
         ImageArgs? imageArgs = null
     )
         : base("crosscloud:core:ContainerImageBuildResource", name)

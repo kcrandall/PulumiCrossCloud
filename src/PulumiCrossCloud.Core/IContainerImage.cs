@@ -40,7 +40,6 @@ public interface IContainerImage : ICloudResource
     Output<ImageDeploymentResult> PushImage(
         string dockerfilePath,
         string contextPath,
-        IEnumerable<string> additionalFilesToHash,
         ImageArgs? imageArgs = null
     )
     {
@@ -50,7 +49,6 @@ public interface IContainerImage : ICloudResource
             Name,
             dockerfilePath,
             contextPath,
-            additionalFilesToHash,
             imageArgs
         );
         Resource = buildResource;
