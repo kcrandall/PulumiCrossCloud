@@ -24,7 +24,7 @@ public class OpenSourceStack
         var gcpDbPasswordSecret = gcpFactory.CreateSecret("keycloak-db-password", "rcEj7YHeBQO0");
 
         // Standard Keycloak realm configuration
-        var realmConfig = new PulumiCrossCloud.Keycloak.PulumiRealConfig
+        var realmConfig = new PulumiCrossCloud.Keycloak.PulumiRealmConfig
         {
             RealmName = "oss-realm",
             RealmArgs = new RealmArgs
@@ -115,5 +115,37 @@ public class OpenSourceStack
             gcpDbPasswordSecret,
             realmConfig
         );
+
+        // Example: Access the created client configuration results after deployment
+        keycloakStack.ClientResults.Apply(clientResults =>
+        {
+            foreach (var (clientKey, clientResult) in clientResults)
+            {
+                clientResult.Apply(cr =>
+                {
+                    Console.WriteLine(
+                        $"Client '{cr.ClientId}' configured in realm '{cr.RealmName}'"
+                    );
+                    Console.WriteLine($"  Keycloak URL: {cr.KeycloakUrl}");
+                    Console.WriteLine($"  Authorization Endpoint: {cr.AuthorizationEndpoint}");
+                    Console.WriteLine($"  Token Endpoint: {cr.TokenEndpoint}");
+                    Console.WriteLine($"  JWKS Endpoint: {cr.JwksEndpoint}");
+                    Console.WriteLine($"  Issuer: {cr.Issuer}");
+                    Console.WriteLine($"  Access Type: {cr.AccessType}");
+                    Console.WriteLine(
+                        $"  Requires Client Authentication: {cr.RequiresClientAuthentication}"
+                    );
+                    Console.WriteLine(
+                        $"  Redirect URIs: {string.Join(", ", cr.ValidRedirectUris)}"
+                    );
+                    Console.WriteLine($"  Web Origins: {string.Join(", ", cr.WebOrigins)}");
+
+                    // You can now use these configuration details to set up OpenID Connect on your servers
+                    // For example, inject them into other compute resources or use them in environment variables
+                    return 0;
+                });
+            }
+            return 0;
+        });
     }
 }

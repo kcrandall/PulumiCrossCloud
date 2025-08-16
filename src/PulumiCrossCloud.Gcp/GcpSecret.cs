@@ -7,6 +7,7 @@ namespace PulumiCrossCloud.Gcp;
 public class GcpSecret : ISecret
 {
     private readonly Pulumi.Gcp.SecretManager.Secret _secret;
+    private readonly Pulumi.Gcp.SecretManager.SecretVersion _secretVersion;
 
     public GcpSecret(string name, string value, bool ignoreChangesAfterCreate = false)
     {
@@ -34,13 +35,17 @@ public class GcpSecret : ISecret
         var options = ignoreChangesAfterCreate
             ? new CustomResourceOptions { IgnoreChanges = ["secretData"] }
             : null;
-        new Pulumi.Gcp.SecretManager.SecretVersion($"{name}-version", secretVersionArgs, options);
+        _secretVersion = new Pulumi.Gcp.SecretManager.SecretVersion(
+            $"{name}-version",
+            secretVersionArgs,
+            options
+        );
     }
 
     public string Name { get; }
     public Output<string> Arn => _secret.Name; // GCP uses resource names instead of ARNs
     public CloudProvider Provider => CloudProvider.GCP;
-    public Output<string> Value => _secret.Name; // Would need to get version value
+    public Output<string?> Value => _secretVersion.SecretData; // Would need to get version value
     public bool IgnoreChangesAfterCreate { get; }
     public Pulumi.Resource Resource => _secret;
 

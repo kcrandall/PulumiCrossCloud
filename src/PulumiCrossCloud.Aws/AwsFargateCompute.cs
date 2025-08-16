@@ -13,7 +13,7 @@
 //     private readonly Dictionary<string, string> _environmentVariables;
 //     private Pulumi.Aws.Iam.Role? _executionRole;
 //     private readonly List<IPolicyStatement> _customPolicyStatements = new();
-//     
+//
 //     public AwsFargateCompute(string name, IContainerRegistry containerRegistry, string imageTag = "latest")
 //     {
 //         Name = name;
@@ -38,7 +38,7 @@
 //         _cluster = new Pulumi.Aws.Ecs.Cluster($"{name}-cluster");
 //         // Service will be created after Build (not here)
 //     }
-//     
+//
 //     public string Name { get; }
 //     public ComputeServiceType ServiceType { get; }
 //     public IContainerRegistry ContainerRegistry { get; }
@@ -51,12 +51,12 @@
 //     public Output<string> ServiceUrl => Output.Create(""); // ECS does not provide a direct service URL
 //
 //     public IHealthCheckConfiguration? HealthCheckConfiguration { get; set; }
-//     
+//
 //     public void AddRequiredSecret(ISecret secret)
 //     {
 //         _requiredSecrets.Add(secret);
 //     }
-//     
+//
 //     public void AddPolicyStatement(IPolicyStatement statement)
 //     {
 //         _customPolicyStatements.Add(statement);
@@ -89,7 +89,7 @@
 //             });
 //         }
 //         // Create or update ECS Task Definition and Service with latest env vars and secrets
-//         var imageUri = ContainerRegistry is AwsContainerRegistry awsRegistry 
+//         var imageUri = ContainerRegistry is AwsContainerRegistry awsRegistry
 //             ? awsRegistry.RegistryUrlOutput.Apply(url => $"{url}:latest")
 //             : Output.Create($"PLACEHOLDER_REGISTRY_URL:latest");
 //         var containerDef = imageUri.Apply(uri => JsonSerializer.Serialize(new[]
@@ -157,23 +157,23 @@
 //             _environmentVariables[kvp.Key] = kvp.Value;
 //         }
 //     }
-//     
+//
 //     private Output<string> CreatePolicyDocument(IEnumerable<IPolicyStatement> statements)
 //     {
 //         var statementsList = statements.ToList();
 //         var allResourceOutputs = statementsList.SelectMany(s => s.Resources).ToArray();
-//         
+//
 //         return Output.All(allResourceOutputs).Apply(allResources =>
 //         {
 //             var resourceIndex = 0;
 //             var policyStatements = new List<object>();
-//             
+//
 //             foreach (var statement in statementsList)
 //             {
 //                 var statementResourceCount = statement.Resources.Count();
 //                 var statementResources = allResources.Skip(resourceIndex).Take(statementResourceCount).ToArray();
 //                 resourceIndex += statementResourceCount;
-//                 
+//
 //                 policyStatements.Add(new
 //                 {
 //                     Effect = statement.Effect,
@@ -181,17 +181,17 @@
 //                     Resource = statementResources
 //                 });
 //             }
-//             
+//
 //             var policy = new
 //             {
 //                 Version = "2012-10-17",
 //                 Statement = policyStatements
 //             };
-//             
+//
 //             return JsonSerializer.Serialize(policy);
 //         });
 //     }
-//     
+//
 //     public void Start() { /* ECS Service is started by default, implement if needed */ }
 //     public void Stop() { /* ECS Service stop logic if needed */ }
 //     public void Scale(int replicas)
@@ -200,7 +200,7 @@
 //         var count = Math.Max(MinCount, Math.Min(MaxCount, replicas));
 //         // ECS Service update logic would go here
 //     }
-//     
+//
 //     public IEnumerable<IPolicyStatement> GetPolicy(params ComputePermissions[] permissions)
 //     {
 //         var statements = new List<IPolicyStatement>();

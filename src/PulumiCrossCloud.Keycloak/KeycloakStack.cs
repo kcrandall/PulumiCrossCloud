@@ -2,7 +2,6 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using Pulumi;
 using PulumiCrossCloud.Core;
-using PulumiCrossCloud.Core;
 
 namespace PulumiCrossCloud.Keycloak;
 
@@ -39,13 +38,23 @@ public class KeycloakStack : ComponentResource
     private ISecret postgresUserSecret;
     private ISecret postgresPasswordSecret;
 
+    /// <summary>
+    /// Gets the created client configuration results after realm deployment.
+    /// This will be populated once the realm configuration is deployed.
+    /// </summary>
+    public Output<Dictionary<string, Output<KeycloakClientResult>>> ClientResults
+    {
+        get;
+        private set;
+    } = Output.Create(new Dictionary<string, Output<KeycloakClientResult>>());
+
     public KeycloakStack(
         CloudResourceFactory factory,
         string name,
         ISecret postgresUrlSecret,
         ISecret postgresUserSecret,
         ISecret postgresPasswordSecret,
-        PulumiRealConfig? realmConfig = null
+        PulumiRealmConfig? realmConfig = null
     )
         : base("keycloak:Stack", name, null, null)
     {
@@ -121,36 +130,50 @@ public class KeycloakStack : ComponentResource
         // After compute is ready, configure Keycloak realm/clients/idps using the native Pulumi.Keycloak provider
         if (realmConfig is not null)
         {
-            compute.OnReady(async _ =>
-            {
-                // Compose provider from compute URL and admin credentials
-                var provider = Output
-                    .All(compute.ServiceUrl, keycloakAdminPasswordSecret.Value)
-                    .Apply(values =>
-                    {
-                        var url = values[0] as string ?? string.Empty;
-                        var adminPassword = values[1] as string ?? string.Empty;
-                        var args =
-                            realmConfig.ProviderOverrides
-                            ?? new Pulumi.Keycloak.ProviderArgs
-                            {
-                                // The default admin user is "admin" per docker image
-                                Url = url,
-                                ClientId = "admin-cli",
-                                Username = "admin",
-                                Password = adminPassword
-                            };
-
-                        return new Pulumi.Keycloak.Provider($"{name}-kc-provider", args);
-                    });
-
-                // Materialize resources with the resolved provider
-                provider.Apply(p =>
+            // Use Output.All to combine ServiceUrl and admin password, then configure Keycloak
+            Output
+                .All(
+                    compute.ServiceUrl,
+                    keycloakAdminPasswordSecret.Value.Apply(s => s ?? string.Empty)
+                )
+                .Apply(values =>
                 {
-                    PulumiRealmDeployer.Deploy(realmConfig, p);
+                    if (string.IsNullOrEmpty(values[1] as string))
+                    {
+                        throw new InvalidOperationException(
+                            "Keycloak admin password secret is not set or empty."
+                        );
+                    }
+                    var serviceUrl = values[0] as string ?? string.Empty;
+                    var adminPassword = values[1] as string ?? string.Empty;
+
+                    // Compose provider from compute URL and admin credentials
+                    var args =
+                        realmConfig.ProviderOverrides
+                        ?? new Pulumi.Keycloak.ProviderArgs
+                        {
+                            // The default admin user is "admin" per docker image
+                            Url = serviceUrl,
+                            ClientId = "admin-cli",
+                            Username = "admin",
+                            Password = adminPassword
+                        };
+
+                    var provider = new Pulumi.Keycloak.Provider($"{name}-kc-provider", args);
+
+                    // Materialize resources with the resolved provider
+                    var result = PulumiRealmDeployer.Deploy(
+                        realmConfig,
+                        provider,
+                        factory,
+                        serviceUrl
+                    );
+
+                    // Set the client results property for external access
+                    ClientResults = Output.Create(result.ClientResults);
+
                     return 0;
                 });
-            });
         }
     }
 
