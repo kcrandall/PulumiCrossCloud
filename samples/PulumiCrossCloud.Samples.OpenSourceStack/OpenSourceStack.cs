@@ -18,7 +18,7 @@ public class OpenSourceStack
 
         var gcpDbUrlSecret = gcpFactory.CreateSecret(
             "keycloak-db-url",
-            "jdbc:postgresql://ep-lingering-rice-a5p2as68-pooler.us-east-2.aws.neon.tech:5432/keycloak?sslmode=require&channel_binding=require"
+            "jdbc:postgresql://ep-lingering-rice-a5p2as68-pooler.us-east-2.aws.neon.tech:5432/keycloak2?sslmode=require&channel_binding=require"
         );
         var gcpDbUserSecret = gcpFactory.CreateSecret("keycloak-db-user", "main_owner");
         var gcpDbPasswordSecret = gcpFactory.CreateSecret("keycloak-db-password", "rcEj7YHeBQO0");
@@ -26,7 +26,7 @@ public class OpenSourceStack
         // Standard Keycloak realm configuration
         var realmConfig = new PulumiCrossCloud.Keycloak.PulumiRealmConfig
         {
-            RealmName = "oss-realm",
+            RealmName = "test2",
             RealmArgs = new RealmArgs
             {
                 Enabled = true,
@@ -47,17 +47,10 @@ public class OpenSourceStack
                     Name = "OSS API Client",
                     Enabled = true,
                     ClientAuthenticatorType = "client-secret",
-                    ClientSecret = "oss-api-secret-change-in-production",
                     AccessType = "CONFIDENTIAL",
                     StandardFlowEnabled = false,
                     DirectAccessGrantsEnabled = true,
                     ServiceAccountsEnabled = true,
-                    ValidRedirectUris = new[]
-                    {
-                        "http://localhost:3000/*",
-                        "https://api.oss-stack.com/*"
-                    },
-                    WebOrigins = new[] { "http://localhost:3000", "https://api.oss-stack.com" },
                     ConsentRequired = false,
                     FullScopeAllowed = true
                 },

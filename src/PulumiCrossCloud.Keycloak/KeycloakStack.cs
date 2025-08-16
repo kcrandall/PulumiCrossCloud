@@ -147,6 +147,18 @@ public class KeycloakStack : ComponentResource
                     var serviceUrl = values[0] as string ?? string.Empty;
                     var adminPassword = values[1] as string ?? string.Empty;
 
+                    // Create a readiness check that waits until Keycloak health endpoint is responsive
+                    var readyScript =
+                        $"bash -lc 'for i in {{1..60}}; do if curl -sf {serviceUrl}/health/ready >/dev/null; then echo ready; exit 0; fi; sleep 5; done; echo timeout; exit 1'";
+                    var readyCheck = new Pulumi.Command.Local.Command(
+                        $"wait-for-keycloak-{name}",
+                        new Pulumi.Command.Local.CommandArgs
+                        {
+                            Create = readyScript,
+                            Update = readyScript
+                        }
+                    );
+
                     // Compose provider from compute URL and admin credentials
                     var args =
                         realmConfig.ProviderOverrides
@@ -156,7 +168,8 @@ public class KeycloakStack : ComponentResource
                             Url = serviceUrl,
                             ClientId = "admin-cli",
                             Username = "admin",
-                            Password = adminPassword
+                            Password = adminPassword,
+                            ClientTimeout = 120 // Increase timeout to 120 seconds
                         };
 
                     var provider = new Pulumi.Keycloak.Provider($"{name}-kc-provider", args);
@@ -166,7 +179,8 @@ public class KeycloakStack : ComponentResource
                         realmConfig,
                         provider,
                         factory,
-                        serviceUrl
+                        serviceUrl,
+                        dependsOn: new Resource[] { readyCheck }
                     );
 
                     // Set the client results property for external access

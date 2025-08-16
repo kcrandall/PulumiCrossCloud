@@ -53,8 +53,9 @@ public sealed class KeycloakClientResult
 
     /// <summary>
     /// The client secret for this OpenID Connect client.
+    /// Will be null for public clients
     /// </summary>
-    public required ISecret ClientSecret { get; init; }
+    public required ISecret? ClientSecret { get; init; }
 
     /// <summary>
     /// The realm name where this client is configured.
@@ -147,7 +148,8 @@ internal static class PulumiRealmDeployer
         PulumiRealmConfig config,
         Pulumi.Keycloak.Provider provider,
         CloudResourceFactory? factory = null,
-        string? keycloakUrl = null
+        string? keycloakUrl = null,
+        IEnumerable<Resource>? dependsOn = null
     )
     {
         // Ensure realm name is set in the args
@@ -157,7 +159,7 @@ internal static class PulumiRealmDeployer
         var realm = new Pulumi.Keycloak.Realm(
             $"{config.RealmName}-realm",
             config.RealmArgs,
-            new CustomResourceOptions { Provider = provider }
+            new CustomResourceOptions { Provider = provider, DependsOn = dependsOn?.ToArray() }
         );
 
         var created = new List<Resource> { realm };
@@ -174,38 +176,67 @@ internal static class PulumiRealmDeployer
                 var client = new Pulumi.Keycloak.OpenId.Client(
                     $"{config.RealmName}-client-{++index}",
                     clientArgs,
-                    new CustomResourceOptions { Provider = provider, DependsOn = [realm] }
+                    new CustomResourceOptions
+                    {
+                        Provider = provider,
+                        DependsOn = dependsOn is null
+                            ? new Resource[] { realm }
+                            : new Resource[] { realm }
+                                .Concat(dependsOn)
+                                .ToArray()
+                    }
                 );
                 created.Add(client);
 
                 // If we have a factory and keycloakUrl, create comprehensive client configuration result
                 if (factory is not null && keycloakUrl is not null)
                 {
-                    var clientResult = Output
-                        .All<object>(
-                            client.ClientId,
-                            client.ClientSecret,
-                            clientArgs.ValidRedirectUris?.Apply(x => x.ToList())
-                                ?? Output.Create(new List<string>()),
-                            clientArgs.WebOrigins?.Apply(x => x.ToList())
-                                ?? Output.Create(new List<string>()),
-                            clientArgs.AccessType?.Apply(x => x ?? "PUBLIC")
-                                ?? Output.Create("PUBLIC")
-                        )
-                        .Apply(values =>
-                        {
-                            var clientId = values[0] as string ?? $"client-{index}";
-                            var clientSecret = values[1] as string ?? string.Empty;
-                            var redirectUris = values[2] as List<string> ?? [];
-                            var webOrigins = values[3] as List<string> ?? [];
-                            var accessType = values[4] as string ?? "PUBLIC";
+                    var clientIndex = index;
+                    var redirectUrisOutput = clientArgs.ValidRedirectUris != null 
+                        ? clientArgs.ValidRedirectUris.ToOutput().Apply(x => x.ToArray()) 
+                        : Output.Create(new string[0]);
+                    var webOriginsOutput = clientArgs.WebOrigins != null 
+                        ? clientArgs.WebOrigins.ToOutput().Apply(x => x.ToArray()) 
+                        : Output.Create(new string[0]);
+                    var accessTypeOutput = clientArgs.AccessType != null 
+                        ? clientArgs.AccessType.ToOutput() 
+                        : Output.Create("PUBLIC");
 
-                            // Create a secret to store the client secret
-                            var secret = factory.CreateSecret(
-                                $"{config.RealmName}-{clientId}-secret",
-                                clientSecret,
-                                ignoreChangesAfterCreate: true
-                            );
+                    var clientResult = Output.Tuple(
+                            client.ClientId,               // Output<string>
+                            client.ClientSecret,           // Output<string>
+                            redirectUrisOutput,            // Output<string[]>
+                            webOriginsOutput,              // Output<string[]>
+                            accessTypeOutput               // Output<string>
+                        )
+                        .Apply(t =>
+                        {
+                            var (cid, csec, redirectUrisArr, webOriginsArr, atRaw) = t;
+
+                            // Default for preview/unknowns
+                            var clientId   = string.IsNullOrWhiteSpace(cid) ? $"client-{clientIndex}" : cid;
+                            var clientSecretValue = csec ?? string.Empty;
+                            var accessType = string.IsNullOrWhiteSpace(atRaw) ? "PUBLIC" : atRaw;
+
+                            ISecret? secret = null;
+                            var requiresSecret = string.Equals(accessType, "CONFIDENTIAL", StringComparison.OrdinalIgnoreCase);
+
+                            // For CONFIDENTIAL clients, we need to create a secret
+                            // For PUBLIC clients, we don't need a secret
+                            if (requiresSecret)
+                            {
+                                // For CONFIDENTIAL clients, always create a secret using the Keycloak-generated secret
+                                // Even if clientSecret appears empty initially, Keycloak will have generated one
+                                secret = factory.CreateSecret(
+                                    $"{config.RealmName}-{clientId}-secret-1",
+                                    clientSecretValue,
+                                    ignoreChangesAfterCreate: true // This is key - let Keycloak manage the actual value
+                                );
+                            }
+                            else
+                            {
+                                // For PUBLIC clients, create an empty secret (some systems still expect the field to exist)
+                            }
 
                             // Build OpenID Connect endpoints
                             var realmName = config.RealmName;
@@ -228,8 +259,8 @@ internal static class PulumiRealmDeployer
                                 JwksEndpoint =
                                     $"{baseUrl}/realms/{realmName}/protocol/openid-connect/certs",
                                 Issuer = $"{baseUrl}/realms/{realmName}",
-                                ValidRedirectUris = redirectUris,
-                                WebOrigins = webOrigins,
+                                ValidRedirectUris = redirectUrisArr?.ToList() ?? new List<string>(),
+                                WebOrigins        = webOriginsArr?.ToList() ?? new List<string>(),
                                 AccessType = accessType,
                                 RequiresClientAuthentication = accessType == "CONFIDENTIAL"
                             };
@@ -252,7 +283,15 @@ internal static class PulumiRealmDeployer
                 var idp = new Pulumi.Keycloak.Oidc.IdentityProvider(
                     $"{config.RealmName}-idp-{++index}",
                     idpArgs,
-                    new CustomResourceOptions { Provider = provider, DependsOn = [realm] }
+                    new CustomResourceOptions
+                    {
+                        Provider = provider,
+                        DependsOn = dependsOn is null
+                            ? new Resource[] { realm }
+                            : new Resource[] { realm }
+                                .Concat(dependsOn)
+                                .ToArray()
+                    }
                 );
                 created.Add(idp);
             }

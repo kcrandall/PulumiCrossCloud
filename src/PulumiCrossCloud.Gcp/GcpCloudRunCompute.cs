@@ -268,7 +268,8 @@ public class GcpCloudRunCompute : ICompute
                     Type = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST",
                     Percent = 100
                 }
-            }
+            },
+            DeletionProtection = false
         };
 
         // Build dependsOn list

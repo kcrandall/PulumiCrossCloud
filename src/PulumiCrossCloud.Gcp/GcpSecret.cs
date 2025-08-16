@@ -7,7 +7,7 @@ namespace PulumiCrossCloud.Gcp;
 public class GcpSecret : ISecret
 {
     private readonly Pulumi.Gcp.SecretManager.Secret _secret;
-    private readonly Pulumi.Gcp.SecretManager.SecretVersion _secretVersion;
+    private readonly Pulumi.Gcp.SecretManager.SecretVersion? _secretVersion;
 
     public GcpSecret(string name, string value, bool ignoreChangesAfterCreate = false)
     {
@@ -27,25 +27,35 @@ public class GcpSecret : ISecret
             },
             new Pulumi.CustomResourceOptions { DependsOn = dependsOn }
         );
-        var secretVersionArgs = new Pulumi.Gcp.SecretManager.SecretVersionArgs
+        if (!string.IsNullOrEmpty(value))
         {
-            Secret = _secret.Id,
-            SecretData = value
-        };
-        var options = ignoreChangesAfterCreate
-            ? new CustomResourceOptions { IgnoreChanges = ["secretData"] }
-            : null;
-        _secretVersion = new Pulumi.Gcp.SecretManager.SecretVersion(
-            $"{name}-version",
-            secretVersionArgs,
-            options
-        );
+            var secretVersionArgs = new Pulumi.Gcp.SecretManager.SecretVersionArgs
+            {
+                Secret = _secret.Id,
+                SecretData = value
+            };
+            var options = ignoreChangesAfterCreate
+                ? new CustomResourceOptions { IgnoreChanges = ["secretData"] }
+                : null;
+            _secretVersion = new Pulumi.Gcp.SecretManager.SecretVersion(
+                $"{name}-version",
+                secretVersionArgs,
+                options
+            );
+        }
+        else
+        {
+            _secretVersion = null;
+        }
     }
 
     public string Name { get; }
     public Output<string> Arn => _secret.Name; // GCP uses resource names instead of ARNs
     public CloudProvider Provider => CloudProvider.GCP;
-    public Output<string?> Value => _secretVersion.SecretData; // Would need to get version value
+    public Output<string?> Value =>
+        _secretVersion is not null
+            ? _secretVersion.SecretData
+            : Output.Create(System.Threading.Tasks.Task.FromResult<string?>(null));
     public bool IgnoreChangesAfterCreate { get; }
     public Pulumi.Resource Resource => _secret;
 

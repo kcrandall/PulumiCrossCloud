@@ -24,7 +24,99 @@ public class ContainerImageBuildResource : ComponentResource
         var registryUrl = registry.RegistryUrlOutput; // Output<string>
         var latestImageRef = registryUrl.Apply(url => $"{url}/{imageName}:latest");
 
-        // 1) Remote digest of :latest
+        // Always do the digest check, but conditionally create resources based on results
+        var digestComparison = CheckDigests(
+            registry,
+            imageName,
+            latestImageRef,
+            dockerfilePath,
+            contextPath,
+            name
+        );
+
+        // Conditionally create the Image resource only if needed
+        var imageResult = digestComparison.Apply(comparison =>
+        {
+            if (comparison.ChangesNeeded)
+            {
+                if (Deployment.Instance.IsDryRun)
+                {
+                    // In preview mode, just report what would happen
+                    Log.Info(
+                        $"[PREVIEW] Would build and push {comparison.ImageRef} (digest mismatch)"
+                    );
+                    return new ImageDeploymentResult
+                    {
+                        ImageUrl = comparison.ImageRef,
+                        ImageTag = "latest",
+                        Image = null // No actual resource created in preview
+                    };
+                }
+                else
+                {
+                    // In apply mode, actually create the image
+                    Log.Info($"Building and pushing {comparison.ImageRef} (digest mismatch)");
+                    var dockerImage = new Image(
+                        $"{registry.Name}-image-latest",
+                        imageArgs
+                            ?? new ImageArgs
+                            {
+                                Tags = [comparison.ImageRef],
+                                Context = new BuildContextArgs { Location = contextPath },
+                                Dockerfile = new DockerfileArgs { Location = dockerfilePath },
+                                CacheTo = [new CacheToArgs { Inline = null }],
+                                CacheFrom =
+                                [
+                                    new CacheFromArgs
+                                    {
+                                        Registry = new CacheFromRegistryArgs
+                                        {
+                                            Ref = comparison.ImageRef
+                                        }
+                                    }
+                                ],
+                                Platforms = [Platform.Linux_amd64],
+                                Push = true,
+                                Registries = registry.GetDockerBuildRegistryConfig()
+                            },
+                        new CustomResourceOptions { DependsOn = [registry.Resource] }
+                    );
+                    return new ImageDeploymentResult
+                    {
+                        ImageUrl = comparison.ImageRef,
+                        ImageTag = "latest",
+                        Image = dockerImage
+                    };
+                }
+            }
+            else
+            {
+                // No changes needed
+                Log.Info($"Image digests match - no changes needed for {comparison.ImageRef}");
+                return new ImageDeploymentResult
+                {
+                    ImageUrl = comparison.ImageRef,
+                    ImageTag = "latest",
+                    Image = null
+                };
+            }
+        });
+
+        ImageUrl = imageResult.Apply(r => r.ImageUrl ?? "");
+        ImageTag = imageResult.Apply(r => r.ImageTag ?? "");
+        ImageResource = imageResult.Apply(r => r.Image);
+    }
+
+    private Output<DigestComparison> CheckDigests(
+        IContainerRegistry registry,
+        string imageName,
+        Output<string> latestImageRef,
+        string dockerfilePath,
+        string contextPath,
+        string name
+    )
+    {
+        // 1) Remote digest check
         var manifestInspect = new Command(
             $"inspect-manifest-{registry.Name}-{imageName}",
             new CommandArgs
@@ -41,7 +133,7 @@ public class ContainerImageBuildResource : ComponentResource
         );
         var remoteDigest = manifestInspect.Stdout.Apply(o => (o ?? string.Empty).Trim());
 
-        // 2) Local digest for current Docker context (no push). Build temp image, get Id via jq, then remove temp image
+        // 2) Local digest calculation
         var localDigestCmd = new Command(
             $"compute-local-digest-{registry.Name}-{imageName}",
             new CommandArgs
@@ -60,12 +152,12 @@ public class ContainerImageBuildResource : ComponentResource
         );
         var localDigest = localDigestCmd.Stdout.Apply(o => (o ?? string.Empty).Trim());
 
-        // 3) Decide whether to build/push based on digest equality
-        var imageResult = Output
+        // 3) Compare digests and determine if changes are needed
+        return Output
             .Tuple(remoteDigest, localDigest, latestImageRef)
             .Apply(tuple =>
             {
-                var (remote, local, latestRef) = tuple;
+                var (remote, local, imageRef) = tuple;
 
                 bool remoteValid =
                     !string.IsNullOrWhiteSpace(remote)
@@ -73,58 +165,35 @@ public class ContainerImageBuildResource : ComponentResource
                     && remote != "null";
                 bool localValid = !string.IsNullOrWhiteSpace(local);
 
-                if (
+                bool changesNeeded = !(
                     remoteValid
                     && localValid
                     && string.Equals(remote, local, StringComparison.OrdinalIgnoreCase)
-                )
-                {
-                    Log.Info(
-                        $"Image digests match ({local[..Math.Min(12, local.Length)]}) - skipping Docker build/push for {latestRef}"
-                    );
-                    return new ImageDeploymentResult
-                    {
-                        ImageUrl = latestRef,
-                        ImageTag = "latest",
-                        Image = null
-                    };
-                }
+                );
 
-                Log.Info(
-                    $"Digest differs or remote missing (remote='{remote}', local='{local}') - building and pushing {latestRef}..."
-                );
-                var dockerImage = new Image(
-                    $"{registry.Name}-image-latest",
-                    imageArgs
-                        ?? new ImageArgs
-                        {
-                            Tags = [latestRef],
-                            Context = new BuildContextArgs { Location = contextPath },
-                            Dockerfile = new DockerfileArgs { Location = dockerfilePath },
-                            CacheTo = [new CacheToArgs { Inline = null }],
-                            CacheFrom =
-                            [
-                                new CacheFromArgs
-                                {
-                                    Registry = new CacheFromRegistryArgs { Ref = latestRef }
-                                }
-                            ],
-                            Platforms = [Platform.Linux_amd64],
-                            Push = true,
-                            Registries = registry.GetDockerBuildRegistryConfig()
-                        },
-                    new CustomResourceOptions { DependsOn = [registry.Resource] }
-                );
-                return new ImageDeploymentResult
+                return new DigestComparison
                 {
-                    ImageUrl = latestRef,
-                    ImageTag = "latest",
-                    Image = dockerImage
+                    RemoteDigest = remote,
+                    LocalDigest = local,
+                    ImageRef = imageRef,
+                    ChangesNeeded = changesNeeded
                 };
             });
-
-        ImageUrl = imageResult.Apply(r => r.ImageUrl ?? "");
-        ImageTag = imageResult.Apply(r => r.ImageTag ?? "");
-        ImageResource = imageResult.Apply(r => r.Image);
     }
 }
+
+// Helper classes
+public class DigestComparison
+{
+    public string RemoteDigest { get; set; } = "";
+    public string LocalDigest { get; set; } = "";
+    public string ImageRef { get; set; } = "";
+    public bool ChangesNeeded { get; set; }
+}
+
+// public class ImageDeploymentResult
+// {
+//     public string? ImageUrl { get; set; }
+//     public string? ImageTag { get; set; }
+//     public Image? Image { get; set; }
+// }
