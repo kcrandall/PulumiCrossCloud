@@ -15,4 +15,8 @@
     <ProjectReference Include="../../src/PulumiCrossCloud.Keycloak/PulumiCrossCloud.Keycloak.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Pulumi.Keycloak" Version="6.7.0" />
+  </ItemGroup>
+
 </Project>

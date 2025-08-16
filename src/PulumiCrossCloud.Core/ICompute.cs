@@ -31,6 +31,12 @@ public interface ICompute : ICloudResource, IPolicyProvider<ComputePermissions>
     IDictionary<string, string> EnvironmentVariables { get; }
 
     /// <summary>
+    /// Public service URL for the running compute (if applicable for the provider).
+    /// Implementations that do not expose a URL should return an empty Output<string>.
+    /// </summary>
+    Output<string> ServiceUrl { get; }
+
+    /// <summary>
     /// Adds a secret that this compute resource requires access to.
     /// Read permissions will be automatically configured when ConfigurePermissions() is called.
     /// Optionally, you can specify an environment variable name to inject the secret value.

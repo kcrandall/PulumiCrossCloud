@@ -44,7 +44,8 @@ public class KeycloakStack : ComponentResource
         string name,
         ISecret postgresUrlSecret,
         ISecret postgresUserSecret,
-        ISecret postgresPasswordSecret
+        ISecret postgresPasswordSecret,
+        PulumiRealConfig? realmConfig = null
     )
         : base("keycloak:Stack", name, null, null)
     {
@@ -116,6 +117,41 @@ public class KeycloakStack : ComponentResource
 
         image.PushImage(dockerfilePath, contextPath, []);
         compute.Build();
+
+        // After compute is ready, configure Keycloak realm/clients/idps using the native Pulumi.Keycloak provider
+        if (realmConfig is not null)
+        {
+            compute.OnReady(async _ =>
+            {
+                // Compose provider from compute URL and admin credentials
+                var provider = Output
+                    .All(compute.ServiceUrl, keycloakAdminPasswordSecret.Value)
+                    .Apply(values =>
+                    {
+                        var url = values[0] as string ?? string.Empty;
+                        var adminPassword = values[1] as string ?? string.Empty;
+                        var args =
+                            realmConfig.ProviderOverrides
+                            ?? new Pulumi.Keycloak.ProviderArgs
+                            {
+                                // The default admin user is "admin" per docker image
+                                Url = url,
+                                ClientId = "admin-cli",
+                                Username = "admin",
+                                Password = adminPassword
+                            };
+
+                        return new Pulumi.Keycloak.Provider($"{name}-kc-provider", args);
+                    });
+
+                // Materialize resources with the resolved provider
+                provider.Apply(p =>
+                {
+                    PulumiRealmDeployer.Deploy(realmConfig, p);
+                    return 0;
+                });
+            });
+        }
     }
 
     /// <summary>

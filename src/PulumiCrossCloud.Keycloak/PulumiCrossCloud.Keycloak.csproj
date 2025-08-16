@@ -5,6 +5,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Pulumi.Keycloak" Version="*" />
     <PackageReference Include="Pulumi.Random" Version="4.18.3" />
     <PackageReference Include="Schick.Keycloak.RestApiClient" Version="26.2.0" />
   </ItemGroup>
