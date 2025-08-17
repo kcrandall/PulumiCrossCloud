@@ -60,24 +60,32 @@ public class GcpBucket : IBucket
         // If versioning is explicitly requested, we log it for transparency
         if (VersioningEnabled)
         {
-            Log.Info(
-                $"Versioning enabled for bucket {Name} (GCP Cloud Storage has versioning enabled by default)"
-            );
+            bucketArgs.Versioning = new BucketVersioningArgs { Enabled = true };
+            Log.Debug($"Enabled object versioning for bucket {Name}");
         }
 
         // Log CORS configuration for manual application
         if (CorsRules.Any())
         {
-            Log.Info($"CORS rules configured for bucket {Name}:");
-            foreach (var rule in CorsRules)
+            // Map your CorsRule -> BucketCorsArgs
+            var mapped = CorsRules.Select(r => new BucketCorArgs()
             {
-                Log.Info($"  - Origins: {string.Join(", ", rule.AllowedOrigins)}");
-                Log.Info($"  - Methods: {string.Join(", ", rule.AllowedMethods)}");
-                Log.Info($"  - Headers: {string.Join(", ", rule.AllowedHeaders)}");
-                Log.Info($"  - Expose: {string.Join(", ", rule.ExposedHeaders)}");
-                Log.Info($"  - Max Age: {rule.MaxAgeSeconds}s");
-            }
-            Log.Info("Apply CORS configuration manually using gsutil or Google Cloud Console");
+                // AllowedOrigins -> Origins
+                Origins = (r.AllowedOrigins).ToList(),
+                // AllowedMethods -> Methods
+                Methods = (r.AllowedMethods).ToList(),
+                // ExposedHeaders -> ResponseHeaders (GCS exposes, not request-allow list)
+                ResponseHeaders = (r.ExposedHeaders).ToList(),
+                // Max age
+                MaxAgeSeconds = r.MaxAgeSeconds
+            }).ToList();
+
+            bucketArgs.Cors = mapped;
+
+            // Optional: log what we’re applying
+            Log.Debug($"Applying {mapped.Count} CORS rule(s) to bucket {Name}");
+            // If you were setting AllowedHeaders previously: GCS CORS does not support an explicit
+            // "allowed request headers" list; it’s ignored here by design.
         }
 
         _bucket = new Pulumi.Gcp.Storage.Bucket(name, bucketArgs);
