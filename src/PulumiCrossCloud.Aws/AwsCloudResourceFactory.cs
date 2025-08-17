@@ -54,4 +54,15 @@ public class AwsCloudResourceFactory : CloudResourceFactory
     {
         return new AwsRole(name, assumeRolePolicy);
     }
+
+    public override IBucket CreateBucket(
+        string name,
+        bool isPublic = false,
+        BucketCdnConfiguration? cdn = null,
+        bool versioningEnabled = false,
+        IEnumerable<CorsRule>? corsRules = null
+    )
+    {
+        return new AwsBucket(name, isPublic, cdn, versioningEnabled, corsRules);
+    }
 }

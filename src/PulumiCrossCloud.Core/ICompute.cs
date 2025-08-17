@@ -1,3 +1,4 @@
+using System;
 using Pulumi;
 
 namespace PulumiCrossCloud.Core;
@@ -114,4 +115,16 @@ public interface ICompute : ICloudResource, IPolicyProvider<ComputePermissions>
     /// </summary>
     /// <param name="actions">List of actions to execute post-deployment.</param>
     void OnReady(params Func<ICompute, Task>[] actions);
+
+    /// <summary>
+    /// Registers custom domains and returns the DNS records needed for domain mapping.
+    /// This method allows compute resources to support custom domain mapping with automatic
+    /// SSL certificate provisioning where supported by the cloud provider.
+    /// </summary>
+    /// <param name="customDomains">List of custom domain names (e.g., app.example.com) to map to this compute resource.</param>
+    /// <returns>The DNS records that need to be configured in your DNS provider.</returns>
+    IEnumerable<DnsRecord> RegisterDnsMappingAndCertificates(IEnumerable<string> customDomains) =>
+        throw new NotImplementedException(
+            "Domain mapping and certificate registration is not implemented for this compute resource type."
+        );
 }

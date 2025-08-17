@@ -3,11 +3,14 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using Pulumi;
 using Pulumi.Gcp.ArtifactRegistry;
+using Pulumi.Gcp.CloudRun;
+using Pulumi.Gcp.CloudRunV2;
 using Pulumi.Gcp.CloudRunV2.Inputs;
 using Pulumi.Gcp.Projects;
 using Pulumi.Gcp.SecretManager;
 using Pulumi.Gcp.ServiceAccount;
 using PulumiCrossCloud.Core;
+using Service = Pulumi.Gcp.CloudRunV2.Service;
 
 namespace PulumiCrossCloud.Gcp;
 
@@ -19,7 +22,10 @@ public class GcpCloudRunCompute : ICompute
     public IEnumerable<ISecret> RequiredSecrets => _requiredSecrets.Select(x => x.secret);
     public Output<string> Arn => _service.Name;
     public CloudProvider Provider => CloudProvider.GCP;
-    private static readonly ConcurrentDictionary<string, Service> _cloudRunApiEnabled = new();
+    private static readonly ConcurrentDictionary<
+        string,
+        Pulumi.Gcp.Projects.Service
+    > _cloudRunApiEnabled = new();
     private Pulumi.Gcp.CloudRunV2.Service _service;
     private readonly List<(ISecret secret, string? envVarName)> _requiredSecrets = [];
     private readonly Dictionary<string, string> _environmentVariables = new();
@@ -32,8 +38,22 @@ public class GcpCloudRunCompute : ICompute
     private readonly List<Func<ICompute, Task>> _onHealthyActions = [];
     private readonly List<Func<ICompute, Task>> _onReadyActions = [];
 
+    // Domain mapping and certificate resources
+    private readonly ISet<string> _customDomains = new HashSet<string>();
+    private readonly List<DomainMapping> _domainMappings = [];
+
     // Add public property to access the service URL
     public Output<string> ServiceUrl { get; private set; } = Output.Create(string.Empty);
+
+    /// <summary>
+    /// Gets the custom domains that were registered for this service.
+    /// </summary>
+    public IEnumerable<string> CustomDomains => _customDomains;
+
+    /// <summary>
+    /// Gets the domain mapping resources created for custom domains.
+    /// </summary>
+    public IEnumerable<DomainMapping> DomainMappings => _domainMappings.AsReadOnly();
 
     /// <summary>
     /// Ingress setting for Cloud Run ("all", "internal", "internal-and-cloud-load-balancing")
@@ -382,6 +402,39 @@ public class GcpCloudRunCompute : ICompute
                 new CustomResourceOptions { DependsOn = new[] { _service } }
             );
         }
+
+        // Create domain mappings for custom domains if specified
+        if (_customDomains.Any())
+        {
+            foreach (var domain in _customDomains)
+            {
+                var domainMapping = new DomainMapping(
+                    $"domain-mapping-{Name}-{domain.Replace('.', '-')}",
+                    new DomainMappingArgs
+                    {
+                        Location = region,
+                        Name = domain,
+                        Metadata = new Pulumi.Gcp.CloudRun.Inputs.DomainMappingMetadataArgs
+                        {
+                            Namespace = projectId
+                        },
+                        Spec = new Pulumi.Gcp.CloudRun.Inputs.DomainMappingSpecArgs
+                        {
+                            RouteName = _service.Name
+                        }
+                    },
+                    new CustomResourceOptions
+                    {
+                        DependsOn = new[] { _service },
+                        DeleteBeforeReplace = true
+                    }
+                );
+
+                _domainMappings.Add(domainMapping);
+
+                Log.Info($"Created domain mapping for {domain} -> Cloud Run service {Name}");
+            }
+        }
     }
 
     public void AddEnvironmentVariable(string name, string value)
@@ -455,6 +508,36 @@ public class GcpCloudRunCompute : ICompute
 
         // For each provided domain name, return a CNAME record pointing to the Cloud Run service URL
         return names.Select(name => new DnsRecord(DnsRecordType.CNAME, name, ServiceUrl)).ToList();
+    }
+
+    /// <summary>
+    /// Registers custom domains and returns the DNS records needed for domain mapping.
+    /// This method internally calls GetRequiredDnsRecords and stores the custom domains
+    /// for later creation. When Build() is called, actual GCP Cloud Run domain mappings
+    /// will be created with automatic SSL certificate provisioning.
+    /// </summary>
+    /// <param name="customDomains">List of custom domain names (e.g., app.example.com) to map to this Cloud Run service.</param>
+    /// <returns>The DNS records that need to be configured in your DNS provider.</returns>
+    public IEnumerable<DnsRecord> RegisterDnsMappingAndCertificates(
+        IEnumerable<string> customDomains
+    )
+    {
+        var domainList = customDomains.ToList();
+
+        // Add custom domains to the set (only adds if they don't exist)
+        foreach (var domain in domainList)
+        {
+            _customDomains.Add(domain);
+        }
+
+        // Get the DNS records that need to be configured
+        var dnsRecords = GetRequiredDnsRecords(domainList);
+
+        Log.Info(
+            $"Registered {domainList.Count} custom domains for Cloud Run service {Name}. Total domains: {_customDomains.Count}"
+        );
+
+        return dnsRecords;
     }
 
     public void OnHealthy(params Func<ICompute, Task>[] actions)

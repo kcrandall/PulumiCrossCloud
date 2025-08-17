@@ -103,6 +103,7 @@ public class GcpBucket : IBucket
                 },
                 new CustomResourceOptions { DependsOn = new[] { _bucket } }
             );
+            Log.Warn($"Bucket {Name} being set to public.");
         }
 
         // Optional CDN in front of the bucket via HTTP(S) LB (BackendBucket)
