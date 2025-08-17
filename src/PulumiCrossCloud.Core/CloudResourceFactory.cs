@@ -76,4 +76,22 @@ public abstract class CloudResourceFactory
     /// <param name="assumeRolePolicy">The assume role policy (if applicable).</param>
     /// <returns>An <see cref="IRole"/> instance.</returns>
     public abstract IRole CreateRole(string name, string assumeRolePolicy);
+
+    /// <summary>
+    /// Creates a bucket resource if supported by the provider.
+    /// Default implementation throws NotSupportedException.
+    /// </summary>
+    /// <param name="name">Bucket name.</param>
+    /// <param name="isPublic">If true, grant public read access to objects.</param>
+    /// <param name="cdn">Optional CDN configuration to front the bucket.</param>
+    /// <param name="versioningEnabled">Whether to enable versioning for the bucket.</param>
+    /// <param name="corsRules">Optional CORS rules to configure for the bucket.</param>
+    /// <returns>An <see cref="IBucket"/> instance.</returns>
+    public virtual IBucket CreateBucket(
+        string name,
+        bool isPublic = false,
+        BucketCdnConfiguration? cdn = null,
+        bool versioningEnabled = false,
+        IEnumerable<CorsRule>? corsRules = null
+    ) => throw new NotSupportedException($"Buckets are not supported for provider {_provider}.");
 }

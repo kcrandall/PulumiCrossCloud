@@ -1,5 +1,15 @@
 namespace PulumiCrossCloud.Core;
 
+public enum BucketPermissions
+{
+    ReadObject,
+    WriteObject,
+    DeleteObject,
+    ListBucket,
+    GetBucketMetadata,
+    ManageBucket
+}
+
 public enum SecretPermissions
 {
     Read,

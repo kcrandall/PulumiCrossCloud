@@ -56,4 +56,15 @@ public class GcpCloudResourceFactory : CloudResourceFactory
         // Create a service account instead, which is the GCP equivalent
         return new GcpServiceAccount(name);
     }
+
+    public override IBucket CreateBucket(
+        string name,
+        bool isPublic = false,
+        BucketCdnConfiguration? cdn = null,
+        bool versioningEnabled = false,
+        IEnumerable<CorsRule>? corsRules = null
+    )
+    {
+        return new GcpBucket(name, isPublic, cdn, versioningEnabled, corsRules);
+    }
 }
