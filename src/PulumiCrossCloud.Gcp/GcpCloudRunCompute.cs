@@ -139,7 +139,7 @@ public class GcpCloudRunCompute : ICompute
         var portConfig = PortForwardings.FirstOrDefault();
 
         // Warn if more than one port forwarding is configured (Cloud Run only supports one port)
-        if (PortForwardings is not null && PortForwardings.Count > 1)
+        if (PortForwardings.Count > 1)
         {
             Log.Warn(
                 $"Warning: Cloud Run only supports one port. Found {PortForwardings.Count} port forwardings. Only the first port ({PortForwardings[0].ContainerPort}) will be used."
