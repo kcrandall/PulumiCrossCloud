@@ -45,7 +45,7 @@ jobs:
 
       - name: Pack all PulumiCrossCloud packages
         run: |
-          bash ./scripts/pack.sh --version "${{ steps.version.outputs.version }}" --prerelease "${INPUT_PRERELEASE:-alpha}"
+          bash ./scripts/pack.sh --version "${{ steps.version.outputs.version }}" --prerelease stable
 
       - name: Publish packages to NuGet
         env:
