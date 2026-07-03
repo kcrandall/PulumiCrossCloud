@@ -23,6 +23,7 @@ public static class ComputeServiceTypeExtensions
             ComputeServiceType.ComputeEngine => "Google Compute Engine",
             ComputeServiceType.KoyebService => "Koyeb Service",
             ComputeServiceType.FlyMachine => "Fly.io Machine",
+            ComputeServiceType.DigitalOceanAppPlatform => "DigitalOcean App Platform",
             _ => serviceType.ToString()
         };
     }
@@ -46,6 +47,7 @@ public static class ComputeServiceTypeExtensions
             ComputeServiceType.ComputeEngine => CloudProvider.GCP,
             ComputeServiceType.KoyebService => CloudProvider.Koyeb,
             ComputeServiceType.FlyMachine => CloudProvider.Fly,
+            ComputeServiceType.DigitalOceanAppPlatform => CloudProvider.DigitalOcean,
             _ => throw new ArgumentException($"Unknown service type: {serviceType}")
         };
     }
@@ -65,6 +67,7 @@ public static class ComputeServiceTypeExtensions
             ComputeServiceType.CloudRunJobs => true,
             ComputeServiceType.KoyebService => true,
             ComputeServiceType.FlyMachine => true,
+            ComputeServiceType.DigitalOceanAppPlatform => true,
             ComputeServiceType.EC2 => false,
             ComputeServiceType.ECS => false,
             ComputeServiceType.AppService => false,
@@ -89,6 +92,7 @@ public static class ComputeServiceTypeExtensions
             ComputeServiceType.CloudRunJobs => true,
             ComputeServiceType.KoyebService => true,
             ComputeServiceType.FlyMachine => true,
+            ComputeServiceType.DigitalOceanAppPlatform => true,
             ComputeServiceType.EC2 => false,
             ComputeServiceType.AppService => false,
             ComputeServiceType.ComputeEngine => false,
@@ -115,6 +119,7 @@ public static class ComputeServiceTypeExtensions
             ComputeServiceType.ComputeEngine => new[] { "VM workloads", "Legacy applications", "Custom OS requirements" },
             ComputeServiceType.KoyebService => new[] { "Web services", "APIs", "Background workers" },
             ComputeServiceType.FlyMachine => new[] { "Global apps", "Low-latency APIs", "Stateful services" },
+            ComputeServiceType.DigitalOceanAppPlatform => new[] { "Web services", "APIs", "Managed container apps" },
             _ => new[] { "General purpose computing" }
         };
     }
@@ -138,6 +143,7 @@ public static class ComputeServiceTypeExtensions
             ComputeServiceType.ComputeEngine => "Pay per VM hour",
             ComputeServiceType.KoyebService => "Pay per instance type and usage",
             ComputeServiceType.FlyMachine => "Pay per machine resources and usage",
+            ComputeServiceType.DigitalOceanAppPlatform => "Pay per App Platform instance size and count",
             _ => "Variable billing model"
         };
     }

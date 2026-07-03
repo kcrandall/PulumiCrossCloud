@@ -17,6 +17,7 @@
     <Project Path="src/PulumiCrossCloud.Aiven/PulumiCrossCloud.Aiven.csproj" />
     <Project Path="src/PulumiCrossCloud.Cloudflare/PulumiCrossCloud.Cloudflare.csproj" />
     <Project Path="src/PulumiCrossCloud.Core/PulumiCrossCloud.Core.csproj" />
+    <Project Path="src/PulumiCrossCloud.DigitalOcean/PulumiCrossCloud.DigitalOcean.csproj" />
     <Project Path="src/PulumiCrossCloud.EntityFramework/PulumiCrossCloud.EntityFramework.csproj" />
     <Project Path="src/PulumiCrossCloud.Extensions/PulumiCrossCloud.Extensions.csproj" />
     <Project Path="src/PulumiCrossCloud.Gcp/PulumiCrossCloud.Gcp.csproj" />

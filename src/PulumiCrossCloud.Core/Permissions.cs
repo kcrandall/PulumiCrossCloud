@@ -63,7 +63,8 @@ public enum ComputeServiceType
 
     // PaaS
     KoyebService,
-    FlyMachine
+    FlyMachine,
+    DigitalOceanAppPlatform
 }
 
 public enum EmailPermissions

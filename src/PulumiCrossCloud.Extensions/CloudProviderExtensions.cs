@@ -16,6 +16,7 @@ public static class CloudProviderExtensions
             CloudProvider.GCP => "Google Cloud Platform",
             CloudProvider.Koyeb => "Koyeb",
             CloudProvider.Fly => "Fly.io",
+            CloudProvider.DigitalOcean => "DigitalOcean",
             _ => provider.ToString()
         };
     }
@@ -32,6 +33,7 @@ public static class CloudProviderExtensions
             CloudProvider.GCP => "GCP",
             CloudProvider.Koyeb => "Koyeb",
             CloudProvider.Fly => "Fly.io",
+            CloudProvider.DigitalOcean => "DigitalOcean",
             _ => provider.ToString()
         };
     }
@@ -48,6 +50,7 @@ public static class CloudProviderExtensions
             CloudProvider.GCP => new[] { ComputeServiceType.CloudRun, ComputeServiceType.CloudRunJobs, ComputeServiceType.ComputeEngine },
             CloudProvider.Koyeb => new[] { ComputeServiceType.KoyebService },
             CloudProvider.Fly => new[] { ComputeServiceType.FlyMachine },
+            CloudProvider.DigitalOcean => new[] { ComputeServiceType.DigitalOceanAppPlatform },
             _ => Enumerable.Empty<ComputeServiceType>()
         };
     }
@@ -72,6 +75,7 @@ public static class CloudProviderExtensions
             CloudProvider.GCP => ComputeServiceType.CloudRun,
             CloudProvider.Koyeb => ComputeServiceType.KoyebService,
             CloudProvider.Fly => ComputeServiceType.FlyMachine,
+            CloudProvider.DigitalOcean => ComputeServiceType.DigitalOceanAppPlatform,
             _ => throw new ArgumentException($"No default compute type for provider: {provider}")
         };
     }
@@ -88,6 +92,7 @@ public static class CloudProviderExtensions
             CloudProvider.GCP => "projects/project/locations/location/resource",
             CloudProvider.Koyeb => "koyeb://resource/id",
             CloudProvider.Fly => "fly://app/resource/id",
+            CloudProvider.DigitalOcean => "do://resource/id",
             _ => "unknown"
         };
     }
