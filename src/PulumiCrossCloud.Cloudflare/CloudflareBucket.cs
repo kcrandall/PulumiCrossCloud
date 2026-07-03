@@ -20,11 +20,11 @@ public class CloudflareBucket : IBucket
 
     private readonly R2Bucket _bucket;
     private readonly string _accountId;
-    private readonly string? _apiToken;
+    private readonly Input<string>? _apiToken;
     private readonly Provider? _providerResource;
     private readonly string? _r2AccessKey;
     private readonly Output<string>? _r2SecretKey;
-    private readonly List<R2CustomDomain> _customDomains = new();
+    private readonly List<R2CustomDomain> _customDomains = [];
 
     public CloudflareBucket(
         string name,
@@ -38,7 +38,7 @@ public class CloudflareBucket : IBucket
         string? zoneId = null,
         string? r2AccessKey = null,
         Output<string>? r2SecretKey = null,
-        string? apiToken = null
+        Input<string>? apiToken = null
     )
     {
         Name = name;
@@ -162,7 +162,7 @@ public class CloudflareBucket : IBucket
             secretKey = _r2SecretKey ?? Output.Create("");
         }
         // 2. Automate creation via Account API (requires "Account API Tokens: Edit")
-        else if (!string.IsNullOrEmpty(_apiToken))
+        else if (_apiToken is not null)
         {
             var creds = new CloudflareR2Credentials($"{Name}-creds", _accountId, _apiToken, _providerResource);
             accessKey = creds.AccessKeyId;

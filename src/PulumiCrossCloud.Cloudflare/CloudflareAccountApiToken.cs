@@ -13,7 +13,7 @@ public class AccountApiToken : ComponentResource
     [Output] public Output<string> TokenId { get; private set; } = null!;
     [Output] public Output<string> TokenValue { get; private set; } = null!;
 
-    public AccountApiToken(string name, string accountId, string primaryToken, string[] permissionGroupIds, ComponentResourceOptions? options = null)
+    public AccountApiToken(string name, string accountId, Input<string> primaryToken, string[] permissionGroupIds, ComponentResourceOptions? options = null)
         : base("crosscloud:cloudflare:AccountApiToken", name, options)
     {
         var payload = new
@@ -38,15 +38,15 @@ public class AccountApiToken : ComponentResource
         // Be explicit about curl behavior:
         // -sS: silent but show errors; --fail-with-body: non-2xx exits non-zero and keeps body for diagnostics
         // Accept header helps ensure JSON payloads
-        var createCommand = string.Format(
+        var createCommand = Output.Tuple<string, string>(primaryToken, escapedPayload).Apply(token => string.Format(
             "curl -sS --fail-with-body -X POST \"https://api.cloudflare.com/client/v4/accounts/{0}/tokens\" " +
             "-H \"Authorization: Bearer {1}\" " +
             "-H \"Content-Type: application/json\" " +
             "-H \"Accept: application/json\" " +
             "--data \"{2}\"",
-            accountId, primaryToken, escapedPayload);
+            accountId, token.Item1, token.Item2));
 
-        var deleteCommand = string.Format(
+        var deleteCommand = Output.Tuple<string, string>(primaryToken, name).Apply(token => string.Format(
             "curl -sS --fail-with-body -X GET \"https://api.cloudflare.com/client/v4/accounts/{0}/tokens\" " +
             "-H \"Authorization: Bearer {1}\" " +
             "-H \"Content-Type: application/json\" | " +
@@ -58,9 +58,9 @@ public class AccountApiToken : ComponentResource
             "    -H \"Content-Type: application/json\"; " +
             "  fi; " +
             "done",
-            accountId, primaryToken, name);
+            accountId, token.Item1, token.Item2));
 
-        var tokenResource = new Command(string.Format("{0}-create", name), new CommandArgs
+        var tokenResource = new Command($"{name}-create", new CommandArgs
         {
             Create = createCommand,
             Delete = deleteCommand

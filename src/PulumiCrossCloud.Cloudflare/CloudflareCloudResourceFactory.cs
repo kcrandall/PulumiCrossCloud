@@ -13,7 +13,8 @@ public class CloudflareCloudResourceFactory : CloudResourceFactory
 {
     private readonly string? _accountId;
     private readonly Provider? _cloudflareProvider;
-    private readonly string? _apiToken;
+    private readonly string? _rawApiToken;
+    private readonly Input<string>? _apiToken;
 
     /// <summary>
     /// Creates a new CloudflareCloudResourceFactory with an account ID and an API token.
@@ -21,6 +22,23 @@ public class CloudflareCloudResourceFactory : CloudResourceFactory
     /// <param name="accountId">CloudFlare account ID required for creating new zones.</param>
     /// <param name="apiToken">Cloudflare API token.</param>
     public CloudflareCloudResourceFactory(string accountId, string apiToken)
+        : base(CloudProvider.CloudFlare)
+    {
+        _accountId = accountId;
+        _rawApiToken = apiToken;
+        _apiToken = apiToken;
+        _cloudflareProvider = new Provider("cloudflare-provider", new ProviderArgs
+        {
+            ApiToken = apiToken
+        });
+    }
+
+    /// <summary>
+    /// Creates a new CloudflareCloudResourceFactory with an account ID and an API token.
+    /// </summary>
+    /// <param name="accountId">CloudFlare account ID required for creating new zones.</param>
+    /// <param name="apiToken">Cloudflare API token.</param>
+    public CloudflareCloudResourceFactory(string accountId, Input<string> apiToken)
         : base(CloudProvider.CloudFlare)
     {
         _accountId = accountId;
@@ -36,6 +54,21 @@ public class CloudflareCloudResourceFactory : CloudResourceFactory
     /// </summary>
     /// <param name="apiToken">Cloudflare API token.</param>
     public CloudflareCloudResourceFactory(string apiToken)
+        : base(CloudProvider.CloudFlare)
+    {
+        _rawApiToken = apiToken;
+        _apiToken = apiToken;
+        _cloudflareProvider = new Provider("cloudflare-provider", new ProviderArgs
+        {
+            ApiToken = apiToken
+        });
+    }
+
+    /// <summary>
+    /// Creates a new CloudflareCloudResourceFactory with an API token.
+    /// </summary>
+    /// <param name="apiToken">Cloudflare API token.</param>
+    public CloudflareCloudResourceFactory(Input<string> apiToken)
         : base(CloudProvider.CloudFlare)
     {
         _apiToken = apiToken;
@@ -93,7 +126,7 @@ public class CloudflareCloudResourceFactory : CloudResourceFactory
     /// <returns>An IDnsZone instance.</returns>
     public override IDnsZone LookupDnsZone(string name, string domainName)
     {
-        return CloudflareDnsZone.LookupByDomainName(name, domainName, _accountId, _apiToken, _cloudflareProvider);
+        return CloudflareDnsZone.LookupByDomainName(name, domainName, _accountId, _rawApiToken, _cloudflareProvider);
     }
 
     /// <summary>

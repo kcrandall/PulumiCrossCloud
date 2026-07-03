@@ -11,13 +11,13 @@ public class CloudflareR2Credentials : ComponentResource
     public Output<string> AccessKeyId => _token.TokenId;
     public Output<string> SecretAccessKey { get; }
 
-    public CloudflareR2Credentials(string name, string accountId, string primaryToken, Provider? provider = null)
+    public CloudflareR2Credentials(string name, string accountId, Input<string> primaryToken, Provider? provider = null)
         : base("crosscloud:cloudflare:CloudflareR2Credentials", name, new ComponentResourceOptions { Provider = provider })
     {
         // R2 Permission Group IDs (using "Workers R2 Storage Write" as it's the only one available to the parent token)
         var writeId = "bf7481a1826f439697cb59a20b22293e";
 
-        _token = new AccountApiToken(name, accountId, primaryToken, new[] { writeId }, new ComponentResourceOptions { Parent = this });
+        _token = new AccountApiToken(name, accountId, primaryToken, [writeId], new ComponentResourceOptions { Parent = this });
 
         // Compute the Secret Access Key (SHA-256 hash of the token value)
         SecretAccessKey = _token.TokenValue.Apply(value => 
