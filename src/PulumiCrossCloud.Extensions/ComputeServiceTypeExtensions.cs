@@ -21,6 +21,8 @@ public static class ComputeServiceTypeExtensions
             ComputeServiceType.CloudRun => "Google Cloud Run",
             ComputeServiceType.CloudRunJobs => "Google Cloud Run Jobs",
             ComputeServiceType.ComputeEngine => "Google Compute Engine",
+            ComputeServiceType.KoyebService => "Koyeb Service",
+            ComputeServiceType.FlyMachine => "Fly.io Machine",
             _ => serviceType.ToString()
         };
     }
@@ -42,6 +44,8 @@ public static class ComputeServiceTypeExtensions
             ComputeServiceType.CloudRun => CloudProvider.GCP,
             ComputeServiceType.CloudRunJobs => CloudProvider.GCP,
             ComputeServiceType.ComputeEngine => CloudProvider.GCP,
+            ComputeServiceType.KoyebService => CloudProvider.Koyeb,
+            ComputeServiceType.FlyMachine => CloudProvider.Fly,
             _ => throw new ArgumentException($"Unknown service type: {serviceType}")
         };
     }
@@ -59,6 +63,8 @@ public static class ComputeServiceTypeExtensions
             ComputeServiceType.ContainerInstances => true,
             ComputeServiceType.CloudRun => true,
             ComputeServiceType.CloudRunJobs => true,
+            ComputeServiceType.KoyebService => true,
+            ComputeServiceType.FlyMachine => true,
             ComputeServiceType.EC2 => false,
             ComputeServiceType.ECS => false,
             ComputeServiceType.AppService => false,
@@ -81,6 +87,8 @@ public static class ComputeServiceTypeExtensions
             ComputeServiceType.ContainerInstances => true,
             ComputeServiceType.CloudRun => true,
             ComputeServiceType.CloudRunJobs => true,
+            ComputeServiceType.KoyebService => true,
+            ComputeServiceType.FlyMachine => true,
             ComputeServiceType.EC2 => false,
             ComputeServiceType.AppService => false,
             ComputeServiceType.ComputeEngine => false,
@@ -105,6 +113,8 @@ public static class ComputeServiceTypeExtensions
             ComputeServiceType.CloudRun => new[] { "HTTP services", "Event processing", "Microservices" },
             ComputeServiceType.CloudRunJobs => new[] { "Batch processing", "Scheduled tasks", "Data processing" },
             ComputeServiceType.ComputeEngine => new[] { "VM workloads", "Legacy applications", "Custom OS requirements" },
+            ComputeServiceType.KoyebService => new[] { "Web services", "APIs", "Background workers" },
+            ComputeServiceType.FlyMachine => new[] { "Global apps", "Low-latency APIs", "Stateful services" },
             _ => new[] { "General purpose computing" }
         };
     }
@@ -126,6 +136,8 @@ public static class ComputeServiceTypeExtensions
             ComputeServiceType.CloudRun => "Pay per request + CPU/memory allocation",
             ComputeServiceType.CloudRunJobs => "Pay per job execution time",
             ComputeServiceType.ComputeEngine => "Pay per VM hour",
+            ComputeServiceType.KoyebService => "Pay per instance type and usage",
+            ComputeServiceType.FlyMachine => "Pay per machine resources and usage",
             _ => "Variable billing model"
         };
     }

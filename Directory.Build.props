@@ -1,19 +1,49 @@
 <Project>
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <PulumiCrossCloudVersion>0.1.0</PulumiCrossCloudVersion>
+    <Version Condition="'$(Version)' == ''">$(PulumiCrossCloudVersion)</Version>
+    <PackageVersion Condition="'$(PackageVersion)' == ''">$(Version)</PackageVersion>
     
     <!-- Package metadata -->
-    <Authors>Your Name</Authors>
+    <Authors>Kyle Crandall</Authors>
     <Company>PulumiCrossCloud</Company>
     <Product>PulumiCrossCloud</Product>
-    <Copyright>Copyright © 2025 PulumiCrossCloud</Copyright>
+    <Copyright>Copyright © 2026 Kyle Crandall</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/yourusername/PulumiCrossCloud</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/yourusername/PulumiCrossCloud</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/kcrandall/PulumiCrossCloud</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/kcrandall/PulumiCrossCloud</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>pulumi;cloud;aws;azure;gcp;infrastructure;iac;crosscloud</PackageTags>
+
+    <PublishRepositoryUrl Condition="Exists('$(MSBuildThisFileDirectory).git')">true</PublishRepositoryUrl>
+    <EmbedUntrackedSources Condition="Exists('$(MSBuildThisFileDirectory).git')">true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <Deterministic>true</Deterministic>
   </PropertyGroup>
+
+  <PropertyGroup Condition="'$(IsPackable)' != 'false' and Exists('$(MSBuildProjectDirectory)/README.md') and '$(PackageReadmeFile)' == ''">
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(IsPackable)' != 'false' and !Exists('$(MSBuildProjectDirectory)/README.md') and Exists('$(MSBuildThisFileDirectory)README.md') and '$(PackageReadmeFile)' == ''">
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup Condition="Exists('$(MSBuildThisFileDirectory).git') and !$([System.String]::Copy('$(MSBuildProjectDirectory)').Contains('Generated'))">
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.300" PrivateAssets="All" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(IsPackable)' != 'false' and Exists('$(MSBuildProjectDirectory)/README.md')">
+    <None Include="$(MSBuildProjectDirectory)/README.md" Pack="true" PackagePath="\" Link="README.md" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(IsPackable)' != 'false' and !Exists('$(MSBuildProjectDirectory)/README.md') and Exists('$(MSBuildThisFileDirectory)README.md')">
+    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" Link="README.md" Visible="false" />
+  </ItemGroup>
 </Project>

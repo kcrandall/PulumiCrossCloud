@@ -23,36 +23,38 @@ public class GcpContainerRegistry : IContainerRegistry
     /// </summary>
     /// <param name="name">The resource name</param>
     /// <param name="useDefaultHelloWorldImage"></param>
-    public GcpContainerRegistry(string name, bool useDefaultHelloWorldImage = false)
+    public GcpContainerRegistry(string name, bool createDefaultImage = false, Pulumi.Gcp.Provider? provider = null)
     {
         Name = name;
-        RepositoryId = name;
-        _projectId = GcpProjectConfig.ProjectId;
-        _region = GcpProjectConfig.Region;
-        _useDefaultHelloWorldImage = useDefaultHelloWorldImage;
-        // Ensure Artifact Registry API is enabled for this project (via central manager)
+        var projectId = GcpProjectConfig.ProjectId;
+        var region = GcpProjectConfig.Region;
+        var customResourceOptions = new CustomResourceOptions { Provider = provider };
+
+        // Ensure Artifact Registry API is enabled
         var artifactRegistryService = GcpProjectServices.EnsureEnabled(
             "artifactregistry.googleapis.com"
         );
-        var dependsOn = new[] { artifactRegistryService };
+
         _repository = new Pulumi.Gcp.ArtifactRegistry.Repository(
             name,
             new Pulumi.Gcp.ArtifactRegistry.RepositoryArgs
             {
+                Project = projectId,
+                Location = region,
+                RepositoryId = name,
                 Format = "DOCKER",
-                RepositoryId = RepositoryId,
-                Project = _projectId,
-                Location = _region
+                Description = $"Docker repository for {name}"
             },
-            new CustomResourceOptions { DependsOn = dependsOn }
+            new CustomResourceOptions { DependsOn = [artifactRegistryService], Provider = provider }
         );
-        _readyResource = _repository;
 
-        if (useDefaultHelloWorldImage)
-        {
-            ImportHelloWorldImage();
-        }
+        _projectId = projectId;
+        _region = region;
+        RepositoryId = name;
+        _useDefaultHelloWorldImage = createDefaultImage;
+        _readyResource = _repository;
     }
+
 
     public string Name { get; }
     public string RepositoryId { get; }
@@ -122,14 +124,8 @@ public class GcpContainerRegistry : IContainerRegistry
             Task.Run(async () =>
             {
                 var credential = await GoogleCredential.GetApplicationDefaultAsync();
-                if (credential.IsCreateScopedRequired)
-                {
-                    credential = credential.CreateScoped(
-                        new[] { "https://www.googleapis.com/auth/cloud-platform" }
-                    );
-                }
-                var access = await credential.UnderlyingCredential.GetAccessTokenForRequestAsync();
-                return access ?? string.Empty;
+                var accessToken = await credential.UnderlyingCredential.GetAccessTokenForRequestAsync();
+                return accessToken ?? throw new Exception("Failed to get access token");
             })
         );
 

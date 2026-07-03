@@ -47,7 +47,7 @@ PulumiCrossCloud/
 ├── .copilotignore
 ├── LICENSE
 ├── README.md
-└── PulumiCrossCloud.sln                    # Solution file
+└── PulumiCrossCloud.slnx                   # Solution file
 ```
 
 ### Key Interfaces

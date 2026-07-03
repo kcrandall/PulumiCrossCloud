@@ -9,6 +9,7 @@ public class AwsAppRunnerCompute : ICompute
 {
     private readonly List<(ISecret secret, string? envVarName)> _requiredSecrets = [];
     private readonly Dictionary<string, string> _environmentVariables;
+    private readonly Dictionary<string, Output<string>> _environmentVariablesOutput = new();
     private Pulumi.Aws.Iam.Role? _instanceRole;
     private Pulumi.Aws.Iam.Role? _accessRole;
     private Pulumi.Aws.AppRunner.Service? _service;
@@ -16,7 +17,6 @@ public class AwsAppRunnerCompute : ICompute
     private readonly IContainerRegistry _containerRegistry;
     private readonly string _imageName;
     private readonly string _imageTag;
-    private readonly IContainerImage? _containerImage;
     private readonly List<IPolicyStatement> _customPolicyStatements = new();
     private Pulumi.Aws.AppRunner.AutoScalingConfigurationVersion? _autoScalingConfig;
 
@@ -28,19 +28,30 @@ public class AwsAppRunnerCompute : ICompute
         IContainerRegistry containerRegistry,
         string? imageName = null,
         string imageTag = "latest",
-        IContainerImage? containerImage = null
+        IContainerImage? containerImage = null,
+        Pulumi.Aws.Provider? provider = null
     )
     {
         _name = name;
         _containerRegistry = containerRegistry;
-        _imageName = imageName;
         _imageTag = imageTag;
-        if (imageName is null && containerImage is not null)
+        _provider = provider;
+
+        if (imageName is not null)
+        {
+            _imageName = imageName;
+        }
+        else if (containerImage is not null)
+        {
             _imageName = containerImage.Name;
-        else if (imageName is null && containerImage is null)
+        }
+        else
+        {
             throw new ArgumentException(
-                "Either imageName or containerImage must be provided for GCP Cloud Run compute resource."
+                "Either imageName or containerImage must be provided for AWS App Runner compute resource."
             );
+        }
+
         Name = name;
         ContainerRegistry = containerRegistry;
         ServiceType = ComputeServiceType.AppRunner;
@@ -62,14 +73,15 @@ public class AwsAppRunnerCompute : ICompute
             new PortForwardingConfiguration { ContainerPort = 8080 }
         };
 
-    public Output<string> ServiceUrl => _service.ServiceUrl;
+    public Output<string> ServiceUrl => _service?.ServiceUrl ?? Output.Create("");
+    private readonly Pulumi.Aws.Provider? _provider;
 
     public IEnumerable<DnsRecord> GetRequiredDnsRecords(IEnumerable<string> names)
     {
         // For AWS App Runner, a CNAME record is needed to map a custom domain to the App Runner service URL.
         // Example: CNAME app.example.com -> <service>.awsapprunner.com
         // For each provided domain name, return a CNAME record pointing to the App Runner service URL
-        return names.Select(name => new DnsRecord(DnsRecordType.CNAME, name, ServiceUrl)).ToList();
+        return names.Select(name => new DnsRecord(DnsRecordType.CNAME, name, ServiceUrl, $"{name}-cname")).ToList();
     }
 
     public int MinCount { get; set; } = 1;
@@ -90,6 +102,13 @@ public class AwsAppRunnerCompute : ICompute
         _environmentVariables[name] = value;
     }
 
+    public void AddEnvironmentVariable(string name, Output<string> value)
+    {
+        // AWS App Runner supports Output values in environment variables
+        // Storing them in a separate dictionary to merge later
+        _environmentVariablesOutput[name] = value;
+    }
+
     public void AddEnvironmentVariables(IDictionary<string, string> variables)
     {
         foreach (var kvp in variables)
@@ -103,8 +122,27 @@ public class AwsAppRunnerCompute : ICompute
         _customPolicyStatements.Add(statement);
     }
 
+    /// <summary>
+    /// Gets all environment variables and secrets configured for this compute resource.
+    /// Returns a response object containing dictionaries of environment variables and secret mappings.
+    /// </summary>
+    /// <returns>ComputeConfigurationResponse containing all configuration details.</returns>
+    public ComputeConfigurationResponse GetConfiguration()
+    {
+        var response = new ComputeConfigurationResponse
+        {
+            EnvironmentVariables = new Dictionary<string, string>(_environmentVariables),
+            EnvironmentVariablesOutput = new Dictionary<string, Output<string>>(_environmentVariablesOutput),
+            RequiredSecrets = _requiredSecrets.Select(x => x.secret).ToList(),
+            SecretMappings = _requiredSecrets.ToDictionary(x => x.secret.Name, x => x.envVarName)
+        };
+
+        return response;
+    }
+
     public void Build()
     {
+        var customResourceOptions = new CustomResourceOptions { Provider = _provider };
         // Aggregate all policy statements for the instance role
         var allInstancePolicies = new List<IPolicyStatement>();
         // Secrets access
@@ -133,7 +171,8 @@ public class AwsAppRunnerCompute : ICompute
                     ""Action"": ""sts:AssumeRole""
                 }]
             }"
-            }
+            },
+            customResourceOptions
         );
         if (allInstancePolicies.Any())
         {
@@ -144,7 +183,8 @@ public class AwsAppRunnerCompute : ICompute
                 {
                     Role = _instanceRole.Name,
                     Policy = instancePolicyDocument
-                }
+                },
+                customResourceOptions
             );
         }
         // Aggregate all policy statements for the access role (ECR)
@@ -167,7 +207,8 @@ public class AwsAppRunnerCompute : ICompute
                     ""Action"": ""sts:AssumeRole""
                 }]
             }"
-            }
+            },
+            customResourceOptions
         );
         if (ecrPolicies.Any())
         {
@@ -178,7 +219,8 @@ public class AwsAppRunnerCompute : ICompute
                 {
                     Role = _accessRole.Name,
                     Policy = ecrPolicyDocument
-                }
+                },
+                customResourceOptions
             );
         }
         // Create or update AutoScalingConfiguration with MinCount/MaxCount
@@ -187,7 +229,8 @@ public class AwsAppRunnerCompute : ICompute
             new Pulumi.Aws.AppRunner.AutoScalingConfigurationVersionArgs()
             {
                 MaxConcurrency = MaxCount,
-            }
+            },
+            customResourceOptions
         );
         // NOW create the App Runner service with the roles and autoscaling config attached
         CreateAppRunnerService();
@@ -195,6 +238,7 @@ public class AwsAppRunnerCompute : ICompute
 
     private void CreateAppRunnerService()
     {
+        var customResourceOptions = new CustomResourceOptions { Provider = _provider };
         var imageIdentifier = _containerRegistry is AwsContainerRegistry awsRegistry
             ? awsRegistry.RegistryUrlOutput.Apply(url => $"{url}:{_imageTag}")
             : Output.Create($"PLACEHOLDER_REGISTRY_URL:{_imageTag}");
@@ -206,6 +250,18 @@ public class AwsAppRunnerCompute : ICompute
             var secretKey = envVarName ?? $"SECRET_{secret.Name.ToUpper().Replace("-", "_")}";
             secretsMap.Add(secretKey, secret.Arn);
         }
+
+        // Merge environment variables
+        var envVarsMap = new InputMap<string>();
+        foreach (var kvp in _environmentVariables)
+        {
+            envVarsMap.Add(kvp.Key, kvp.Value);
+        }
+        foreach (var kvp in _environmentVariablesOutput)
+        {
+            envVarsMap.Add(kvp.Key, kvp.Value);
+        }
+
         // Collect all secret resources for dependsOn
         var dependsOn = new List<Resource>();
         foreach (var (secret, _) in _requiredSecrets)
@@ -215,6 +271,9 @@ public class AwsAppRunnerCompute : ICompute
                 dependsOn.Add(secret.Resource);
             }
         }
+        
+        var options = new CustomResourceOptions { DependsOn = dependsOn, Provider = _provider };
+
         _service = new Pulumi.Aws.AppRunner.Service(
             _name,
             new Pulumi.Aws.AppRunner.ServiceArgs
@@ -229,7 +288,7 @@ public class AwsAppRunnerCompute : ICompute
                                 new Pulumi.Aws.AppRunner.Inputs.ServiceSourceConfigurationImageRepositoryImageConfigurationArgs
                                 {
                                     Port = "8080",
-                                    RuntimeEnvironmentVariables = _environmentVariables,
+                                    RuntimeEnvironmentVariables = envVarsMap,
                                     RuntimeEnvironmentSecrets = secretsMap
                                 },
                             ImageIdentifier = imageIdentifier,
@@ -240,11 +299,11 @@ public class AwsAppRunnerCompute : ICompute
                 InstanceConfiguration =
                     new Pulumi.Aws.AppRunner.Inputs.ServiceInstanceConfigurationArgs
                     {
-                        InstanceRoleArn = _instanceRole?.Arn,
+                        InstanceRoleArn = _instanceRole?.Arn!,
                         Cpu = "256",
                         Memory = "512"
                     },
-                AutoScalingConfigurationArn = _autoScalingConfig?.Arn,
+                AutoScalingConfigurationArn = _autoScalingConfig?.Arn!,
                 HealthCheckConfiguration = HealthCheckConfiguration is not null
                     ? new Pulumi.Aws.AppRunner.Inputs.ServiceHealthCheckConfigurationArgs
                     {
@@ -254,10 +313,10 @@ public class AwsAppRunnerCompute : ICompute
                         HealthyThreshold = HealthCheckConfiguration.HealthyThreshold,
                         UnhealthyThreshold = HealthCheckConfiguration.UnhealthyThreshold
                     }
-                    : null,
+                    : null!,
                 ObservabilityConfiguration = null // placeholder
             },
-            new CustomResourceOptions { DependsOn = dependsOn }
+            options
         );
     }
 
@@ -428,5 +487,39 @@ public class AwsAppRunnerCompute : ICompute
         }
 
         return statements;
+    }
+
+    /// <summary>
+    /// Gets dependencies including the App Runner service and associated IAM roles.
+    /// This ensures that external operations wait for the service to be deployed and accessible.
+    /// </summary>
+    public IEnumerable<Resource> GetDependencies()
+    {
+        var dependencies = new List<Resource>();
+
+        // Add the service itself as a dependency
+        if (_service is not null)
+        {
+            dependencies.Add(_service);
+        }
+
+        // Add IAM roles that are needed for the service to function
+        if (_instanceRole is not null)
+        {
+            dependencies.Add(_instanceRole);
+        }
+
+        if (_accessRole is not null)
+        {
+            dependencies.Add(_accessRole);
+        }
+
+        // Add autoscaling configuration
+        if (_autoScalingConfig is not null)
+        {
+            dependencies.Add(_autoScalingConfig);
+        }
+
+        return dependencies;
     }
 }

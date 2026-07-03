@@ -4,8 +4,13 @@ namespace PulumiCrossCloud.Aws;
 
 public class AwsCloudResourceFactory : CloudResourceFactory
 {
-    public AwsCloudResourceFactory()
-        : base(CloudProvider.AWS) { }
+    private readonly Pulumi.Aws.Provider? _awsProvider;
+
+    public AwsCloudResourceFactory(Pulumi.Aws.Provider? provider = null)
+        : base(CloudProvider.AWS)
+    {
+        _awsProvider = provider;
+    }
 
     public override ISecret CreateSecret(
         string name,
@@ -13,7 +18,7 @@ public class AwsCloudResourceFactory : CloudResourceFactory
         bool ignoreChangesAfterCreate = false
     )
     {
-        return new AwsSecret(name, value);
+        return new AwsSecret(name, value, ignoreChangesAfterCreate, _awsProvider);
     }
 
     public override IContainerRegistry CreateContainerRegistry(
@@ -21,7 +26,7 @@ public class AwsCloudResourceFactory : CloudResourceFactory
         bool createDefaultImage = true
     )
     {
-        return new AwsContainerRegistry(name);
+        return new AwsContainerRegistry(name, createDefaultImage, _awsProvider);
     }
 
     public override IContainerImage CreateContainerImage(string name, IContainerRegistry registry)
@@ -45,14 +50,14 @@ public class AwsCloudResourceFactory : CloudResourceFactory
         return serviceType switch
         {
             ComputeServiceType.AppRunner
-                => new AwsAppRunnerCompute(name, registry, imageName, imageTag, containerImage),
+                => new AwsAppRunnerCompute(name, registry, imageName, imageTag, containerImage, _awsProvider),
             _ => throw new ArgumentException($"Unsupported AWS service type: {serviceType}")
         };
     }
 
     public override IRole CreateRole(string name, string assumeRolePolicy)
     {
-        return new AwsRole(name, assumeRolePolicy);
+        return new AwsRole(name, assumeRolePolicy, _awsProvider);
     }
 
     public override IBucket CreateBucket(
@@ -60,9 +65,43 @@ public class AwsCloudResourceFactory : CloudResourceFactory
         bool isPublic = false,
         BucketCdnConfiguration? cdn = null,
         bool versioningEnabled = false,
-        IEnumerable<CorsRule>? corsRules = null
+        IEnumerable<CorsRule>? corsRules = null,
+        string? indexDocument = null
     )
     {
-        return new AwsBucket(name, isPublic, cdn, versioningEnabled, corsRules);
+        return new AwsBucket(name, isPublic, cdn, versioningEnabled, corsRules, indexDocument, _awsProvider);
+    }
+
+    public override IDnsZone CreateDnsZone(string name, string domainName)
+    {
+        return new AwsDnsZone(name, domainName, _awsProvider);
+    }
+
+    public override IDnsZone LookupDnsZone(string name, string zoneName)
+    {
+        return AwsDnsZone.Lookup(name, zoneName, _awsProvider);
+    }
+
+    public override IPostgresDatabase CreatePostgresDatabase(
+        string name,
+        IPostgresOptions? options = null
+    )
+    {
+        return new AwsPostgresDatabase(name, options, _awsProvider);
+    }
+
+    public override IQueueEndpoint CreateQueue(string name, QueueArgs? args = null)
+    {
+        return new AwsSqsQueue(name, args, _awsProvider);
+    }
+
+    public override ITopicEndpoint CreateTopic(string name, TopicArgs? args = null)
+    {
+        return new AwsSnsTopic(name, args, _awsProvider);
+    }
+
+    public override IStreamEndpoint CreateStream(string name, StreamArgs? args = null)
+    {
+        return new AwsKinesisStream(name, args, _awsProvider);
     }
 }

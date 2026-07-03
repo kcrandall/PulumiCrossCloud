@@ -7,6 +7,7 @@ using Pulumi.Gcp.CloudRun;
 using Pulumi.Gcp.CloudRunV2;
 using Pulumi.Gcp.CloudRunV2.Inputs;
 using Pulumi.Gcp.Projects;
+using Pulumi.Gcp.PubSub;
 using Pulumi.Gcp.SecretManager;
 using Pulumi.Gcp.ServiceAccount;
 using PulumiCrossCloud.Core;
@@ -26,14 +27,16 @@ public class GcpCloudRunCompute : ICompute
         string,
         Pulumi.Gcp.Projects.Service
     > _cloudRunApiEnabled = new();
-    private Pulumi.Gcp.CloudRunV2.Service _service;
+    private Pulumi.Gcp.CloudRunV2.Service _service = null!; // Will be initialized in Deploy method
     private readonly List<(ISecret secret, string? envVarName)> _requiredSecrets = [];
     private readonly Dictionary<string, string> _environmentVariables = new();
+    private readonly Dictionary<string, Output<string>> _environmentVariablesOutput = new();
     private readonly List<IPolicyStatement> _customPolicyStatements = new();
-    private GcpServiceAccount _serviceAccount;
+
     private Pulumi.Gcp.ServiceAccount.Account _serviceAccountResource;
     private RepositoryIamMember? _registryIamMember;
     private readonly List<SecretIamMember> _secretIamMembers = new();
+    private Pulumi.Gcp.CloudRunV2.ServiceIamMember? _publicAccessIamMember;
     private readonly List<string> _allowedServiceAccounts = [];
     private readonly List<Func<ICompute, Task>> _onHealthyActions = [];
     private readonly List<Func<ICompute, Task>> _onReadyActions = [];
@@ -44,6 +47,11 @@ public class GcpCloudRunCompute : ICompute
 
     // Add public property to access the service URL
     public Output<string> ServiceUrl { get; private set; } = Output.Create(string.Empty);
+    
+    /// <summary>
+    /// Gets the service account email for this Cloud Run service.
+    /// </summary>
+    public Output<string> ServiceAccountEmail => _serviceAccountResource?.Email ?? Output.Create(string.Empty);
 
     /// <summary>
     /// Gets the custom domains that were registered for this service.
@@ -54,6 +62,12 @@ public class GcpCloudRunCompute : ICompute
     /// Gets the domain mapping resources created for custom domains.
     /// </summary>
     public IEnumerable<DomainMapping> DomainMappings => _domainMappings.AsReadOnly();
+
+    /// <summary>
+    /// Gets the public access IAM member resource that allows unauthenticated access to the service.
+    /// This can be used as a dependency to ensure the service is publicly accessible before other operations.
+    /// </summary>
+    public Pulumi.Gcp.CloudRunV2.ServiceIamMember? PublicAccessIamMember => _publicAccessIamMember;
 
     /// <summary>
     /// Ingress setting for Cloud Run ("all", "internal", "internal-and-cloud-load-balancing")
@@ -80,9 +94,10 @@ public class GcpCloudRunCompute : ICompute
             new PortForwardingConfiguration { ContainerPort = 8080 }
         };
 
-    private readonly string _imageName;
+    private readonly string _imageName = string.Empty; // Will be set in constructor
     private readonly string _imageTag;
     private readonly IContainerImage? _containerImage;
+    private readonly Pulumi.Gcp.Provider? _provider;
 
     public GcpCloudRunCompute(
         string name,
@@ -90,29 +105,42 @@ public class GcpCloudRunCompute : ICompute
         string? imageName = null,
         string imageTag = "latest",
         IContainerImage? containerImage = null,
-        string? serviceAccountEmail = null
+        string? serviceAccountEmail = null,
+        Pulumi.Gcp.Provider? provider = null
     )
     {
         Name = name;
         ContainerRegistry = containerRegistry;
         ServiceType = ComputeServiceType.CloudRun;
-        _imageName = imageName;
         _imageTag = imageTag;
         _containerImage = containerImage;
-        if (imageName is null && containerImage is not null)
+        _provider = provider;
+
+        // Set _imageName based on parameters
+        if (imageName is not null)
+        {
+            _imageName = imageName;
+        }
+        else if (containerImage is not null)
+        {
             _imageName = containerImage.Name;
-        else if (imageName is null && containerImage is null)
+        }
+        else
+        {
             throw new ArgumentException(
                 "Either imageName or containerImage must be provided for GCP Cloud Run compute resource."
             );
+        }
 
         var projectId = GcpProjectConfig.ProjectId;
-        // Ensure Cloud Run API is enabled for this project (via central manager)
+        // Ensure required APIs are enabled for this project
         if (!_cloudRunApiEnabled.ContainsKey(projectId))
         {
-            var enableApi = GcpProjectServices.EnsureEnabled("run.googleapis.com");
-            _cloudRunApiEnabled[projectId] = enableApi;
+            var enableRun = GcpProjectServices.EnsureEnabled("run.googleapis.com");
+            _cloudRunApiEnabled[projectId] = enableRun;
         }
+        // Cloud Run provider sometimes queries Compute regions; ensure Compute API is enabled
+        _ = GcpProjectServices.EnsureEnabled("compute.googleapis.com");
         // Create or use provided service account
         if (string.IsNullOrEmpty(serviceAccountEmail))
         {
@@ -121,17 +149,19 @@ public class GcpCloudRunCompute : ICompute
                 $"cloudrun-sa-{name}",
                 new Pulumi.Gcp.ServiceAccount.AccountArgs
                 {
-                    AccountId = $"cloudrn-sa-{name}",
+                    AccountId = $"cr-sa-{name}",
                     Project = projectId
                 },
-                new CustomResourceOptions { DependsOn = new[] { iamApi } }
+                new CustomResourceOptions { DependsOn = new[] { iamApi }, Provider = provider }
             );
         }
         else
         {
             _serviceAccountResource = Pulumi.Gcp.ServiceAccount.Account.Get(
                 $"cloudrun-sa-imported-{name}",
-                serviceAccountEmail
+                serviceAccountEmail,
+                null,
+                new CustomResourceOptions { Provider = provider }
             );
         }
     }
@@ -171,6 +201,18 @@ public class GcpCloudRunCompute : ICompute
 
         // Add regular environment variables
         foreach (var kvp in EnvironmentVariables)
+        {
+            envs.Add(
+                new Pulumi.Gcp.CloudRunV2.Inputs.ServiceTemplateContainerEnvArgs
+                {
+                    Name = kvp.Key,
+                    Value = kvp.Value
+                }
+            );
+        }
+
+        // Add output environment variables
+        foreach (var kvp in _environmentVariablesOutput)
         {
             envs.Add(
                 new Pulumi.Gcp.CloudRunV2.Inputs.ServiceTemplateContainerEnvArgs
@@ -255,8 +297,8 @@ public class GcpCloudRunCompute : ICompute
             Image = imageUri,
             Envs = envs.ToArray(),
             Ports = new ServiceTemplateContainerPortsArgs { ContainerPort = hcPort },
-            StartupProbe = startup,
-            LivenessProbe = live,
+            StartupProbe = startup!,
+            LivenessProbe = live!,
             Resources = new ServiceTemplateContainerResourcesArgs
             {
                 Limits = new InputMap<string>
@@ -266,14 +308,12 @@ public class GcpCloudRunCompute : ICompute
                 }
             }
         };
-        var serviceAccountEmail = _serviceAccountResource is not null
-            ? _serviceAccountResource.Email
-            : null;
+        var serviceAccountEmail = _serviceAccountResource?.Email;
 
         var template = new ServiceTemplateArgs
         {
             Containers = new[] { container },
-            ServiceAccount = serviceAccountEmail,
+            ServiceAccount = serviceAccountEmail!,
             Scaling = new ServiceTemplateScalingArgs
             {
                 MinInstanceCount = MinCount,
@@ -289,6 +329,11 @@ public class GcpCloudRunCompute : ICompute
             Location = region,
             Ingress = IngressSetting, // v2 top-level field
             Template = template,
+            // Service-level scaling (separate from template scaling) - set explicitly to prevent drift
+            Scaling = new ServiceScalingArgs
+            {
+                MinInstanceCount = MinCount,
+            },
             Traffics =
             {
                 new ServiceTrafficArgs
@@ -301,7 +346,10 @@ public class GcpCloudRunCompute : ICompute
         };
 
         // Build dependsOn list
-        var dependsOn = new List<Resource> { _cloudRunApiEnabled[projectId] };
+        var dependsOn = new List<Resource>
+        {
+            _cloudRunApiEnabled[projectId]
+        };
 
         if (
             ContainerRegistry is GcpContainerRegistry readyRegistry
@@ -309,7 +357,7 @@ public class GcpCloudRunCompute : ICompute
         )
             dependsOn.Add(readyRegistry.Resource);
 
-        if (_containerImage?.Resource is not null && _containerImage is GcpContainerImage)
+        if (_containerImage?.Resource is not null)
             dependsOn.Add(_containerImage.Resource);
 
         // Prefer depending on SecretVersion if you can expose it from GcpSecret;
@@ -332,7 +380,8 @@ public class GcpCloudRunCompute : ICompute
                     Repository = gcpContainerRegistry.RepositoryId,
                     Role = "roles/artifactregistry.reader",
                     Member = Output.Format($"serviceAccount:{serviceAccountEmail}")
-                }
+                },
+                new CustomResourceOptions { Provider = _provider }
             );
             dependsOn.Add(_registryIamMember);
         }
@@ -359,32 +408,46 @@ public class GcpCloudRunCompute : ICompute
                         SecretId = gcpSecret.Name,
                         Role = "roles/secretmanager.secretAccessor",
                         Member = Output.Format($"serviceAccount:{serviceAccountEmail}")
-                    }
+                    },
+                    new CustomResourceOptions { DependsOn = new[] { gcpSecret.Resource }, Provider = _provider }
                 );
                 _secretIamMembers.Add(secretIam);
                 dependsOn.Add(secretIam);
             }
         }
 
+        // Process custom policy statements using the GcpPolicyManager
+        foreach (var statement in _customPolicyStatements.OfType<GcpPolicyStatement>())
+        {
+            GcpPolicyManager.ApplyPolicy(
+                $"iam-{Name}",
+                statement,
+                serviceAccountEmail!,
+                projectId,
+                _provider,
+                dependsOn
+            );
+        }
+
         _service = new Pulumi.Gcp.CloudRunV2.Service(
             Name,
             serviceArgs,
-            new CustomResourceOptions { DependsOn = dependsOn }
+            new CustomResourceOptions { DependsOn = dependsOn, Provider = _provider }
         );
         ServiceUrl = _service.Uri; // <-- v2: direct Uri output
 
-        // (Optional) make it public (unauthenticated) with a v2 IAM member:
-        _ = new Pulumi.Gcp.CloudRunV2.ServiceIamMember(
+        // Create public access IAM member AFTER the service
+        _publicAccessIamMember = new Pulumi.Gcp.CloudRunV2.ServiceIamMember(
             $"cloudrun-public-access-{Name}",
             new Pulumi.Gcp.CloudRunV2.ServiceIamMemberArgs
             {
                 Project = projectId,
                 Location = region,
-                Name = Name,
+                Name = Name, // Use local variable for name
                 Role = "roles/run.invoker",
                 Member = "allUsers",
             },
-            new CustomResourceOptions { DependsOn = new[] { _service } }
+            new CustomResourceOptions { DependsOn = new[] { _service }, Provider = _provider }
         );
 
         foreach (var allowed in _allowedServiceAccounts)
@@ -399,7 +462,7 @@ public class GcpCloudRunCompute : ICompute
                     Role = "roles/run.invoker",
                     Member = $"serviceAccount:{allowed}"
                 },
-                new CustomResourceOptions { DependsOn = new[] { _service } }
+                new CustomResourceOptions { DependsOn = new[] { _service }, Provider = _provider }
             );
         }
 
@@ -412,6 +475,7 @@ public class GcpCloudRunCompute : ICompute
                     $"domain-mapping-{Name}-{domain.Replace('.', '-')}",
                     new DomainMappingArgs
                     {
+                        Project = projectId,
                         Location = region,
                         Name = domain,
                         Metadata = new Pulumi.Gcp.CloudRun.Inputs.DomainMappingMetadataArgs
@@ -425,8 +489,9 @@ public class GcpCloudRunCompute : ICompute
                     },
                     new CustomResourceOptions
                     {
-                        DependsOn = new[] { _service },
-                        DeleteBeforeReplace = true
+                        DependsOn = new List<Resource> { _service, _publicAccessIamMember! },
+                        DeleteBeforeReplace = true,
+                        Provider = _provider
                     }
                 );
 
@@ -440,6 +505,11 @@ public class GcpCloudRunCompute : ICompute
     public void AddEnvironmentVariable(string name, string value)
     {
         _environmentVariables[name] = value;
+    }
+
+    public void AddEnvironmentVariable(string name, Output<string> value)
+    {
+        _environmentVariablesOutput[name] = value;
     }
 
     public void AddEnvironmentVariables(IDictionary<string, string> variables)
@@ -500,14 +570,37 @@ public class GcpCloudRunCompute : ICompute
         }
     }
 
+    /// <summary>
+    /// Gets dependencies including the service itself and public access IAM member.
+    /// This ensures that external operations wait for the service to be deployed and publicly accessible.
+    /// </summary>
+    public IEnumerable<Resource> GetDependencies()
+    {
+        var dependencies = new List<Resource>();
+
+        // Add the service itself as a dependency (if it exists)
+        if (_service is not null)
+        {
+            dependencies.Add(_service);
+        }
+
+        // Add public access IAM member if it exists
+        if (_publicAccessIamMember is not null)
+        {
+            dependencies.Add(_publicAccessIamMember);
+        }
+
+        return dependencies;
+    }
+
     public IEnumerable<DnsRecord> GetRequiredDnsRecords(IEnumerable<string> names)
     {
-        // For GCP Cloud Run, typically a CNAME record is needed to map a custom domain to the service URL.
-        // Example: CNAME app.example.com -> <service>.a.run.app
-        // ServiceUrl is Output<string>, so we use Output<string> in DnsRecord.
-
-        // For each provided domain name, return a CNAME record pointing to the Cloud Run service URL
-        return names.Select(name => new DnsRecord(DnsRecordType.CNAME, name, ServiceUrl)).ToList();
+        // For Cloud Run custom domains, Google requires DNS records:
+        // - Subdomains: CNAME to ghs.googlehosted.com
+        // - Apex domains: A records to Google front-end anycast IPs
+        // Here we assume subdomains (typical for app/api), and emit CNAME -> ghs.googlehosted.com
+        var target = Output.Create("ghs.googlehosted.com");
+        return names.Select(name => new DnsRecord(DnsRecordType.CNAME, name, target, $"{name}-cname")).ToList();
     }
 
     /// <summary>
@@ -522,22 +615,31 @@ public class GcpCloudRunCompute : ICompute
         IEnumerable<string> customDomains
     )
     {
-        var domainList = customDomains.ToList();
-
-        // Add custom domains to the set (only adds if they don't exist)
-        foreach (var domain in domainList)
+        foreach (var domain in customDomains)
         {
             _customDomains.Add(domain);
         }
 
-        // Get the DNS records that need to be configured
-        var dnsRecords = GetRequiredDnsRecords(domainList);
+        // Emit required DNS for Cloud Run domain mapping: CNAME -> ghs.googlehosted.com
+        return GetRequiredDnsRecords(customDomains);
+    }
 
-        Log.Info(
-            $"Registered {domainList.Count} custom domains for Cloud Run service {Name}. Total domains: {_customDomains.Count}"
-        );
+    /// <summary>
+    /// Gets all environment variables and secrets configured for this compute resource.
+    /// Returns a response object containing dictionaries of environment variables and secret mappings.
+    /// </summary>
+    /// <returns>ComputeConfigurationResponse containing all configuration details.</returns>
+    public ComputeConfigurationResponse GetConfiguration()
+    {
+        var response = new ComputeConfigurationResponse
+        {
+            EnvironmentVariables = new Dictionary<string, string>(_environmentVariables),
+            EnvironmentVariablesOutput = new Dictionary<string, Output<string>>(_environmentVariablesOutput),
+            RequiredSecrets = _requiredSecrets.Select(x => x.secret).ToList(),
+            SecretMappings = _requiredSecrets.ToDictionary(x => x.secret.Name, x => x.envVarName)
+        };
 
-        return dnsRecords;
+        return response;
     }
 
     public void OnHealthy(params Func<ICompute, Task>[] actions)

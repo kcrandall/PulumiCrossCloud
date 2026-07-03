@@ -8,17 +8,20 @@ public class AwsSecret : ISecret
     private readonly Pulumi.Aws.SecretsManager.Secret _secret;
     private readonly Pulumi.Aws.SecretsManager.SecretVersion _secretVersion;
 
-    public AwsSecret(string name, string value, bool ignoreChangesAfterCreate = false)
+    public AwsSecret(string name, string value, bool ignoreChangesAfterCreate = false, Pulumi.Aws.Provider? provider = null)
     {
         Name = name;
         IgnoreChangesAfterCreate = ignoreChangesAfterCreate;
+        var customResourceOptions = new CustomResourceOptions { Provider = provider };
+        
         _secret = new Pulumi.Aws.SecretsManager.Secret(
             name,
             new Pulumi.Aws.SecretsManager.SecretArgs
             {
                 Name = name,
                 Description = $"Secret for {name}"
-            }
+            },
+            customResourceOptions
         );
         var secretVersionArgs = new Pulumi.Aws.SecretsManager.SecretVersionArgs
         {
@@ -26,8 +29,8 @@ public class AwsSecret : ISecret
             SecretString = value
         };
         var options = ignoreChangesAfterCreate
-            ? new CustomResourceOptions { IgnoreChanges = ["secretString"] }
-            : null;
+            ? new CustomResourceOptions { IgnoreChanges = ["secretString"], Provider = provider }
+            : customResourceOptions;
         _secretVersion = new Pulumi.Aws.SecretsManager.SecretVersion(
             $"{name}-version",
             secretVersionArgs,
@@ -38,7 +41,7 @@ public class AwsSecret : ISecret
     public string Name { get; }
     public Output<string> Arn => _secret.Arn;
     public CloudProvider Provider => CloudProvider.AWS;
-    public Output<string> Value => _secretVersion.SecretString;
+    public Output<string?> Value => _secretVersion.SecretString;
     public bool IgnoreChangesAfterCreate { get; }
     public Pulumi.Resource Resource => _secret;
 

@@ -24,6 +24,46 @@ public struct PortForwardingConfiguration
     public string? Protocol { get; set; }
 }
 
+/// <summary>
+/// Response object containing all environment variables and secrets configured for a compute resource.
+/// </summary>
+public class ComputeConfigurationResponse
+{
+    /// <summary>
+    /// Dictionary of environment variable names to their values.
+    /// </summary>
+    public IDictionary<string, string> EnvironmentVariables { get; set; } =
+        new Dictionary<string, string>();
+
+    /// <summary>
+    /// Dictionary of environment variable names to their Output values.
+    /// </summary>
+    public IDictionary<string, Output<string>> EnvironmentVariablesOutput { get; set; } =
+        new Dictionary<string, Output<string>>();
+
+    /// <summary>
+    /// Dictionary of secret names to their environment variable mappings.
+    /// Key: Secret name, Value: Environment variable name (or null if not mapped to env var).
+    /// </summary>
+    public IDictionary<string, string?> SecretMappings { get; set; } =
+        new Dictionary<string, string?>();
+
+    /// <summary>
+    /// List of all required secrets for this compute resource.
+    /// </summary>
+    public IEnumerable<ISecret> RequiredSecrets { get; set; } = [];
+
+    /// <summary>
+    /// Total count of environment variables configured.
+    /// </summary>
+    public int EnvironmentVariableCount => EnvironmentVariables.Count;
+
+    /// <summary>
+    /// Total count of secrets configured.
+    /// </summary>
+    public int SecretCount => RequiredSecrets.Count();
+}
+
 public interface ICompute : ICloudResource, IPolicyProvider<ComputePermissions>
 {
     ComputeServiceType ServiceType { get; }
@@ -50,6 +90,11 @@ public interface ICompute : ICloudResource, IPolicyProvider<ComputePermissions>
     void AddEnvironmentVariable(string name, string value);
 
     /// <summary>
+    /// Adds an environment variable with an Output value to the compute resource.
+    /// </summary>
+    void AddEnvironmentVariable(string name, Output<string> value);
+
+    /// <summary>
     /// Adds multiple environment variables to the compute resource.
     /// </summary>
     void AddEnvironmentVariables(IDictionary<string, string> variables);
@@ -63,6 +108,15 @@ public interface ICompute : ICloudResource, IPolicyProvider<ComputePermissions>
     /// Finalizes and builds the compute resource, applying all configuration and dependencies.
     /// </summary>
     void Build();
+
+    /// <summary>
+    /// Gets additional resources that external operations should depend on.
+    /// For example, public access IAM members, load balancer configurations, or other resources
+    /// that need to be ready before the service can be accessed externally.
+    /// This method should only be called after Build() has been executed.
+    /// </summary>
+    /// <returns>List of Pulumi resources that external operations should depend on.</returns>
+    IEnumerable<Resource> GetDependencies() => [];
 
     /// <summary>
     /// Returns the DNS records required to add to your domain for this compute resource (e.g. CNAME, TXT for verification).
@@ -126,5 +180,15 @@ public interface ICompute : ICloudResource, IPolicyProvider<ComputePermissions>
     IEnumerable<DnsRecord> RegisterDnsMappingAndCertificates(IEnumerable<string> customDomains) =>
         throw new NotImplementedException(
             "Domain mapping and certificate registration is not implemented for this compute resource type."
+        );
+
+    /// <summary>
+    /// Gets all environment variables and secrets configured for this compute resource.
+    /// Returns a response object containing dictionaries of environment variables and secret mappings.
+    /// </summary>
+    /// <returns>ComputeConfigurationResponse containing all configuration details.</returns>
+    ComputeConfigurationResponse GetConfiguration() =>
+        throw new NotImplementedException(
+            "GetConfiguration is not implemented for this compute resource type."
         );
 }

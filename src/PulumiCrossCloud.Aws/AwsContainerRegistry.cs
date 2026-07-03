@@ -9,14 +9,16 @@ public class AwsContainerRegistry : IContainerRegistry
     private readonly Pulumi.Aws.Ecr.Repository _repository;
     public Resource Resource => _repository;
 
-    public AwsContainerRegistry(string name)
+    public AwsContainerRegistry(string name, bool createDefaultImage = true, Pulumi.Aws.Provider? provider = null)
     {
         Name = name;
-        RepositoryId = name;
+        var customResourceOptions = new CustomResourceOptions { Provider = provider };
         _repository = new Pulumi.Aws.Ecr.Repository(
             name,
-            new Pulumi.Aws.Ecr.RepositoryArgs { Name = RepositoryId }
+            new Pulumi.Aws.Ecr.RepositoryArgs { ForceDelete = true, Name = name },
+            customResourceOptions
         );
+        RepositoryId = name;
     }
 
     public string Name { get; }

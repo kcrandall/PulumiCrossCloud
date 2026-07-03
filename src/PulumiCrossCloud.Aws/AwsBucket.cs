@@ -16,13 +16,14 @@ public class AwsBucket : IBucket
     public bool IsPublic { get; }
     public BucketCdnConfiguration? Cdn { get; }
     public bool VersioningEnabled { get; }
+    public string? IndexDocument { get; }
     public IEnumerable<CorsRule> CorsRules { get; }
     public Resource Resource => _bucket;
 
-    private readonly Pulumi.Aws.S3.BucketV2 _bucket;
+    private readonly Pulumi.Aws.S3.Bucket _bucket;
     private Pulumi.Aws.S3.BucketPublicAccessBlock? _publicAccessBlock;
-    private Pulumi.Aws.S3.BucketVersioningV2? _versioning;
-    private Pulumi.Aws.S3.BucketCorsConfigurationV2? _cors;
+    private Pulumi.Aws.S3.BucketVersioning? _versioning;
+    private Pulumi.Aws.S3.BucketCorsConfiguration? _cors;
 
     // CloudFront CDN resources
     private Pulumi.Aws.CloudFront.Distribution? _distribution;
@@ -33,19 +34,35 @@ public class AwsBucket : IBucket
         bool isPublic = false,
         BucketCdnConfiguration? cdn = null,
         bool versioningEnabled = false,
-        IEnumerable<CorsRule>? corsRules = null
+        IEnumerable<CorsRule>? corsRules = null,
+        string? indexDocument = null,
+        Pulumi.Aws.Provider? provider = null
     )
     {
         Name = name;
         IsPublic = isPublic;
         Cdn = cdn;
         VersioningEnabled = versioningEnabled;
+        IndexDocument = indexDocument;
         CorsRules = corsRules ?? [];
+        var customResourceOptions = new CustomResourceOptions { Provider = provider };
 
-        // Create S3 bucket using V2 resource
-        _bucket = new Pulumi.Aws.S3.BucketV2(
+        // Create S3 bucket
+        var bucketArgs = new Pulumi.Aws.S3.BucketArgs
+        {
+            BucketName = name,
+            ForceDestroy = false,
+        };
+
+        if (IndexDocument is not null)
+        {
+            bucketArgs.Website = new Pulumi.Aws.S3.Inputs.BucketWebsiteArgs { IndexDocument = IndexDocument };
+        }
+
+        _bucket = new Pulumi.Aws.S3.Bucket(
             name,
-            new Pulumi.Aws.S3.BucketV2Args { Bucket = name, ForceDestroy = false }
+            bucketArgs,
+            customResourceOptions
         );
 
         // Configure public access block (required for public buckets)
@@ -61,10 +78,10 @@ public class AwsBucket : IBucket
                     IgnorePublicAcls = false,
                     RestrictPublicBuckets = false
                 },
-                new CustomResourceOptions { DependsOn = new[] { _bucket } }
+                new CustomResourceOptions { DependsOn = new[] { _bucket }, Provider = provider }
             );
 
-            // Add public read policy using V2 resource
+            // Add public read policy
             var publicReadPolicy = new Pulumi.Aws.S3.BucketPolicy(
                 $"{name}-public-read-policy",
                 new Pulumi.Aws.S3.BucketPolicyArgs
@@ -90,32 +107,32 @@ public class AwsBucket : IBucket
                         )
                     )
                 },
-                new CustomResourceOptions { DependsOn = new[] { _publicAccessBlock } }
+                new CustomResourceOptions { DependsOn = new[] { _publicAccessBlock }, Provider = provider }
             );
         }
 
-        // Configure versioning if enabled using V2 resource
+        // Configure versioning if enabled
         if (VersioningEnabled)
         {
-            _versioning = new Pulumi.Aws.S3.BucketVersioningV2(
+            _versioning = new Pulumi.Aws.S3.BucketVersioning(
                 $"{name}-versioning",
-                new Pulumi.Aws.S3.BucketVersioningV2Args
+                new Pulumi.Aws.S3.BucketVersioningArgs
                 {
                     Bucket = _bucket.Id,
-                    VersioningConfiguration = new BucketVersioningV2VersioningConfigurationArgs
+                    VersioningConfiguration = new Pulumi.Aws.S3.Inputs.BucketVersioningVersioningConfigurationArgs
                     {
                         Status = "Enabled"
                     }
                 },
-                new CustomResourceOptions { DependsOn = new[] { _bucket } }
+                new CustomResourceOptions { DependsOn = new[] { _bucket }, Provider = provider }
             );
         }
 
-        // Configure CORS if rules are provided using V2 resource
+        // Configure CORS if rules are provided
         if (CorsRules.Any())
         {
             var awsCorsRules = CorsRules
-                .Select(rule => new BucketCorsConfigurationV2CorsRuleArgs
+                .Select(rule => new Pulumi.Aws.S3.Inputs.BucketCorsConfigurationCorsRuleArgs
                 {
                     AllowedHeaders = rule.AllowedHeaders.ToArray(),
                     AllowedMethods = rule.AllowedMethods.ToArray(),
@@ -125,14 +142,14 @@ public class AwsBucket : IBucket
                 })
                 .ToArray();
 
-            _cors = new Pulumi.Aws.S3.BucketCorsConfigurationV2(
+            _cors = new Pulumi.Aws.S3.BucketCorsConfiguration(
                 $"{name}-cors",
-                new Pulumi.Aws.S3.BucketCorsConfigurationV2Args
+                new Pulumi.Aws.S3.BucketCorsConfigurationArgs
                 {
                     Bucket = _bucket.Id,
                     CorsRules = awsCorsRules
                 },
-                new CustomResourceOptions { DependsOn = new[] { _bucket } }
+                new CustomResourceOptions { DependsOn = new[] { _bucket }, Provider = provider }
             );
         }
 
@@ -145,7 +162,8 @@ public class AwsBucket : IBucket
                 new Pulumi.Aws.CloudFront.OriginAccessIdentityArgs
                 {
                     Comment = $"OAI for {name} bucket"
-                }
+                },
+                customResourceOptions
             );
 
             // Create bucket policy to allow CloudFront access
@@ -181,7 +199,8 @@ public class AwsBucket : IBucket
                 },
                 new CustomResourceOptions
                 {
-                    DependsOn = new Resource[] { _bucket, _originAccessIdentity }
+                    DependsOn = new Resource[] { _bucket, _originAccessIdentity },
+                    Provider = provider
                 }
             );
 
@@ -246,6 +265,11 @@ public class AwsBucket : IBucket
                 }
             };
 
+            if (IndexDocument is not null)
+            {
+                distributionArgs.DefaultRootObject = IndexDocument;
+            }
+
             // Add custom domains if specified
             if (Cdn.Domains?.Any() == true)
             {
@@ -263,7 +287,8 @@ public class AwsBucket : IBucket
                 distributionArgs,
                 new CustomResourceOptions
                 {
-                    DependsOn = new Resource[] { _bucket, _originAccessIdentity, cdnBucketPolicy }
+                    DependsOn = new Resource[] { _bucket, _originAccessIdentity, cdnBucketPolicy },
+                    Provider = provider
                 }
             );
         }
@@ -281,7 +306,7 @@ public class AwsBucket : IBucket
             // When CDN is enabled, point domains to CloudFront distribution
             foreach (var host in hostList)
             {
-                cdnRecords.Add(new DnsRecord(DnsRecordType.CNAME, host, _distribution.DomainName));
+                cdnRecords.Add(new DnsRecord(DnsRecordType.CNAME, host, _distribution.DomainName, $"{host}-cdn-cname"));
             }
         }
         else
@@ -290,7 +315,7 @@ public class AwsBucket : IBucket
             foreach (var host in hostList)
             {
                 bucketRecords.Add(
-                    new DnsRecord(DnsRecordType.CNAME, host, _bucket.BucketRegionalDomainName)
+                    new DnsRecord(DnsRecordType.CNAME, host, _bucket.BucketRegionalDomainName, $"{host}-bucket-cname")
                 );
             }
         }
@@ -368,5 +393,11 @@ public class AwsBucket : IBucket
             }
         }
         return statements;
+    }
+
+    public Output<string> SyncDirectory(string localPath, string? keyPrefix = null, BucketSyncOptions? options = null)
+    {
+        var deployment = new AwsBucketDeployment($"{Name}-deploy", Name, localPath, keyPrefix, options, new ComponentResourceOptions { Parent = _bucket });
+        return deployment.WebsiteUrl;
     }
 }

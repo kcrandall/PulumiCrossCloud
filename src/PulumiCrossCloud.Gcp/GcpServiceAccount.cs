@@ -10,7 +10,7 @@ public class GcpServiceAccount : IRole
 {
     private readonly Pulumi.Gcp.ServiceAccount.Account _serviceAccount;
 
-    public GcpServiceAccount(string name, string displayName = "")
+    public GcpServiceAccount(string name, string displayName = "", Pulumi.Gcp.Provider? provider = null)
     {
         Name = name;
         var projectId = GcpProjectConfig.ProjectId;
@@ -25,7 +25,7 @@ public class GcpServiceAccount : IRole
                 DisplayName = !string.IsNullOrEmpty(displayName) ? displayName : name,
                 Project = projectId
             },
-            new CustomResourceOptions { DependsOn = new[] { iamApi } }
+            new CustomResourceOptions { DependsOn = new[] { iamApi }, Provider = provider }
         );
     }
 

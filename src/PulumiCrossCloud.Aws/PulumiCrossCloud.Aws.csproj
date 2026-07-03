@@ -5,12 +5,15 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="AWSSDK.ECR" Version="4.0.3.2" />
-    <PackageReference Include="Pulumi.Aws" Version="6.50.1" />
+    <PackageReference Include="AWSSDK.ECR" Version="4.0.100.1" />
+    <PackageReference Include="OpenTelemetry.Api" Version="1.16.0" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.16.0" />
+    <PackageReference Include="Pulumi.Aws" Version="7.35.0" />
+    <PackageReference Include="Pulumi.Random" Version="4.21.0" />
   </ItemGroup>
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>

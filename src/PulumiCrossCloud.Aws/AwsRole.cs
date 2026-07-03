@@ -8,12 +8,14 @@ public class AwsRole : IRole
 {
     private readonly Pulumi.Aws.Iam.Role _role;
 
-    public AwsRole(string name, string assumeRolePolicy)
+    public AwsRole(string name, string assumeRolePolicy, Pulumi.Aws.Provider? provider = null)
     {
         Name = name;
+        var customResourceOptions = new CustomResourceOptions { Provider = provider };
         _role = new Pulumi.Aws.Iam.Role(
             name,
-            new Pulumi.Aws.Iam.RoleArgs { AssumeRolePolicy = assumeRolePolicy }
+            new Pulumi.Aws.Iam.RoleArgs { AssumeRolePolicy = assumeRolePolicy },
+            customResourceOptions
         );
     }
 

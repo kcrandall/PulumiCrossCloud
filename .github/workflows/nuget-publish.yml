@@ -1,0 +1,59 @@
+name: NuGet Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Optional version override (SemVer)."
+        required: false
+        type: string
+      prerelease:
+        description: "Prerelease channel suffix."
+        required: true
+        default: alpha
+        type: choice
+        options:
+          - alpha
+          - beta
+          - stable
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      DOTNET_NOLOGO: true
+      INPUT_VERSION: ${{ github.event.inputs.version }}
+      INPUT_PRERELEASE: ${{ github.event.inputs.prerelease || 'alpha' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Resolve lockstep version
+        id: version
+        run: |
+          VERSION="$(bash ./scripts/resolve-version.sh --version "${INPUT_VERSION:-}" --prerelease "${INPUT_PRERELEASE:-alpha}")"
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "Resolved version: ${VERSION}"
+
+      - name: Pack all PulumiCrossCloud packages
+        run: |
+          bash ./scripts/pack.sh --version "${{ steps.version.outputs.version }}" --prerelease "${INPUT_PRERELEASE:-alpha}"
+
+      - name: Publish packages to NuGet
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          if [[ -z "${NUGET_API_KEY}" ]]; then
+            echo "NUGET_API_KEY is not configured; skipping publish."
+            exit 0
+          fi
+
+          bash ./scripts/publish-nuget.sh

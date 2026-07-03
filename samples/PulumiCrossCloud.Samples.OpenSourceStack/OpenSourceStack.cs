@@ -39,11 +39,13 @@ public class OpenSourceStack : Stack
                 DisplayName = "Open Source Stack Realm",
                 DisplayNameHtml =
                     "<div class=\"kc-logo-text\"><span>Open Source Stack</span></div>",
-                LoginWithEmailAllowed = false,
+                LoginWithEmailAllowed = true,
+                RegistrationAllowed = true,
                 DuplicateEmailsAllowed = false,
                 ResetPasswordAllowed = true,
                 RememberMe = true
             },
+            ThemeConfig = new RealmThemeConfig { LoginTheme = "tcg-app-theme", },
             Clients = new List<Pulumi.Keycloak.OpenId.ClientArgs>
             {
                 // JWT API Client (confidential client for backend services)
@@ -74,8 +76,8 @@ public class OpenSourceStack : Stack
                     ValidRedirectUris = new[]
                     {
                         "http://localhost:3000/*",
+                        "http://localhost:5174/*",
                         "https://app.oss-stack.com/*",
-                        "http://localhost:3000/callback",
                         "https://app.oss-stack.com/callback"
                     },
                     WebOrigins = new[] { "http://localhost:3000", "https://app.oss-stack.com" },
@@ -106,13 +108,28 @@ public class OpenSourceStack : Stack
             }
         };
 
+        // Configure theme providers (JAR files from Keycloakify build)
+        var themeProviders = new KeycloakThemeProviders
+        {
+            ThemeJarFiles =
+            [
+                // Path to the Keycloakify-generated JAR file
+                // This would typically be built from frontend/keycloaktheme/dist_keycloak/
+                "../../frontend/keycloaktheme/dist_keycloak/keycloak-theme-for-kc-22-to-25.jar"
+                // You can add multiple theme JAR files here:
+                // "path/to/another-theme.jar"
+            ]
+            // CustomThemesDirectory = "path/to/custom/themes" // Alternative to JAR files
+        };
+
         var keycloakStack = new KeycloakStack(
             gcpFactory,
             "oss-keycloak",
             gcpDbUrlSecret,
             gcpDbUserSecret,
             gcpDbPasswordSecret,
-            realmConfig
+            realmConfig,
+            themeProviders
         );
 
         ClientResultCount = keycloakStack.RealmResults.Apply(r => r.ClientResults.Count);

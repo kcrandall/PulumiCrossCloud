@@ -39,6 +39,42 @@ public sealed class PulumiRealmConfig
     /// and admin username/password.
     /// </summary>
     public Pulumi.Keycloak.ProviderArgs? ProviderOverrides { get; init; }
+
+    /// <summary>
+    /// Optional theme configuration for the realm.
+    /// </summary>
+    public RealmThemeConfig? ThemeConfig { get; init; }
+
+    /// <summary>
+    /// Optional user profile configuration for the realm.
+    /// </summary>
+    public Pulumi.Keycloak.RealmUserProfileArgs? UserProfile { get; init; }
+}
+
+/// <summary>
+/// Configuration for Keycloak themes.
+/// </summary>
+public sealed class RealmThemeConfig
+{
+    /// <summary>
+    /// The name of the login theme to use for this realm.
+    /// </summary>
+    public string? LoginTheme { get; init; }
+
+    /// <summary>
+    /// The name of the account theme to use for this realm.
+    /// </summary>
+    public string? AccountTheme { get; init; }
+
+    /// <summary>
+    /// The name of the admin theme to use for this realm.
+    /// </summary>
+    public string? AdminTheme { get; init; }
+
+    /// <summary>
+    /// The name of the email theme to use for this realm.
+    /// </summary>
+    public string? EmailTheme { get; init; }
 }
 
 /// <summary>
@@ -155,15 +191,49 @@ internal static class PulumiRealmDeployer
         // Ensure realm name is set in the args
         config.RealmArgs.RealmName = config.RealmName;
 
+        // Apply theme configuration if provided
+        if (config.ThemeConfig is not null)
+        {
+            if (!string.IsNullOrWhiteSpace(config.ThemeConfig.LoginTheme))
+                config.RealmArgs.LoginTheme = config.ThemeConfig.LoginTheme;
+            if (!string.IsNullOrWhiteSpace(config.ThemeConfig.AccountTheme))
+                config.RealmArgs.AccountTheme = config.ThemeConfig.AccountTheme;
+            if (!string.IsNullOrWhiteSpace(config.ThemeConfig.AdminTheme))
+                config.RealmArgs.AdminTheme = config.ThemeConfig.AdminTheme;
+            if (!string.IsNullOrWhiteSpace(config.ThemeConfig.EmailTheme))
+                config.RealmArgs.EmailTheme = config.ThemeConfig.EmailTheme;
+        }
+
         // Create realm
         var realm = new Pulumi.Keycloak.Realm(
             $"{config.RealmName}-realm",
             config.RealmArgs,
-            new CustomResourceOptions { Provider = provider, DependsOn = dependsOn?.ToArray() }
+            new CustomResourceOptions
+            {
+                Provider = provider,
+                DependsOn = dependsOn?.ToArray() ?? []
+            }
         );
 
         var created = new List<Resource> { realm };
         var clientResults = new Dictionary<string, Output<KeycloakClientResult>>();
+
+        // Create user profile configuration
+        if (config.UserProfile is not null)
+        {
+            // Ensure realm linkage
+            config.UserProfile.RealmId = realm.Id;
+            var userProfile = new Pulumi.Keycloak.RealmUserProfile(
+                $"{config.RealmName}-user-profile",
+                config.UserProfile,
+                new CustomResourceOptions
+                {
+                    Provider = provider,
+                    DependsOn = new Resource[] { realm }
+                }
+            );
+            created.Add(userProfile);
+        }
 
         // Create clients
         if (config.Clients is not null && config.Clients.Count > 0)
@@ -192,34 +262,44 @@ internal static class PulumiRealmDeployer
                 if (factory is not null && keycloakUrl is not null)
                 {
                     var clientIndex = index;
-                    var redirectUrisOutput = clientArgs.ValidRedirectUris != null 
-                        ? clientArgs.ValidRedirectUris.ToOutput().Apply(x => x.ToArray()) 
-                        : Output.Create(new string[0]);
-                    var webOriginsOutput = clientArgs.WebOrigins != null 
-                        ? clientArgs.WebOrigins.ToOutput().Apply(x => x.ToArray()) 
-                        : Output.Create(new string[0]);
-                    var accessTypeOutput = clientArgs.AccessType != null 
-                        ? clientArgs.AccessType.ToOutput() 
-                        : Output.Create("PUBLIC");
+                    var redirectUrisOutput =
+                        clientArgs.ValidRedirectUris != null
+                            ? clientArgs.ValidRedirectUris.ToOutput().Apply(x => x.ToArray())
+                            : Output.Create(new string[0]);
+                    var webOriginsOutput =
+                        clientArgs.WebOrigins != null
+                            ? clientArgs.WebOrigins.ToOutput().Apply(x => x.ToArray())
+                            : Output.Create(new string[0]);
+                    var accessTypeOutput =
+                        clientArgs.AccessType != null
+                            ? clientArgs.AccessType.ToOutput()
+                            : Output.Create("PUBLIC");
 
-                    var clientResult = Output.Tuple(
-                            client.ClientId,               // Output<string>
-                            client.ClientSecret,           // Output<string>
-                            redirectUrisOutput,            // Output<string[]>
-                            webOriginsOutput,              // Output<string[]>
-                            accessTypeOutput               // Output<string>
+                    var clientResult = Output
+                        .Tuple(
+                            client.ClientId, // Output<string>
+                            client.ClientSecret, // Output<string>
+                            redirectUrisOutput, // Output<string[]>
+                            webOriginsOutput, // Output<string[]>
+                            accessTypeOutput // Output<string>
                         )
                         .Apply(t =>
                         {
                             var (cid, csec, redirectUrisArr, webOriginsArr, atRaw) = t;
 
                             // Default for preview/unknowns
-                            var clientId   = string.IsNullOrWhiteSpace(cid) ? $"client-{clientIndex}" : cid;
+                            var clientId = string.IsNullOrWhiteSpace(cid)
+                                ? $"client-{clientIndex}"
+                                : cid;
                             var clientSecretValue = csec ?? string.Empty;
                             var accessType = string.IsNullOrWhiteSpace(atRaw) ? "PUBLIC" : atRaw;
 
                             ISecret? secret = null;
-                            var requiresSecret = string.Equals(accessType, "CONFIDENTIAL", StringComparison.OrdinalIgnoreCase);
+                            var requiresSecret = string.Equals(
+                                accessType,
+                                "CONFIDENTIAL",
+                                StringComparison.OrdinalIgnoreCase
+                            );
 
                             // For CONFIDENTIAL clients, we need to create a secret
                             // For PUBLIC clients, we don't need a secret
@@ -260,7 +340,7 @@ internal static class PulumiRealmDeployer
                                     $"{baseUrl}/realms/{realmName}/protocol/openid-connect/certs",
                                 Issuer = $"{baseUrl}/realms/{realmName}",
                                 ValidRedirectUris = redirectUrisArr?.ToList() ?? new List<string>(),
-                                WebOrigins        = webOriginsArr?.ToList() ?? new List<string>(),
+                                WebOrigins = webOriginsArr?.ToList() ?? new List<string>(),
                                 AccessType = accessType,
                                 RequiresClientAuthentication = accessType == "CONFIDENTIAL"
                             };

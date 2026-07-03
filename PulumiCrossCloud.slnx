@@ -1,0 +1,38 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Folder Name="/samples/">
+    <Project Path="samples/PulumiCrossCloud.Samples.Aws/PulumiCrossCloud.Samples.Aws.csproj" />
+    <Project Path="samples/PulumiCrossCloud.Samples.Azure/PulumiCrossCloud.Samples.Azure.csproj" />
+    <Project Path="samples/PulumiCrossCloud.Samples.Gcp/PulumiCrossCloud.Samples.Gcp.csproj" />
+    <Project Path="samples/PulumiCrossCloud.Samples.OpenSourceStack/PulumiCrossCloud.Samples.OpenSourceStack.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/PulumiCrossCloud.Aws/PulumiCrossCloud.Aws.csproj" />
+    <Project Path="src/PulumiCrossCloud.Azure/PulumiCrossCloud.Azure.csproj" />
+    <Project Path="src/PulumiCrossCloud.Aiven/PulumiCrossCloud.Aiven.csproj" />
+    <Project Path="src/PulumiCrossCloud.Cloudflare/PulumiCrossCloud.Cloudflare.csproj" />
+    <Project Path="src/PulumiCrossCloud.Core/PulumiCrossCloud.Core.csproj" />
+    <Project Path="src/PulumiCrossCloud.EntityFramework/PulumiCrossCloud.EntityFramework.csproj" />
+    <Project Path="src/PulumiCrossCloud.Extensions/PulumiCrossCloud.Extensions.csproj" />
+    <Project Path="src/PulumiCrossCloud.Gcp/PulumiCrossCloud.Gcp.csproj" />
+    <Project Path="src/PulumiCrossCloud.Keycloak/PulumiCrossCloud.Keycloak.csproj" />
+    <Project Path="src/PulumiCrossCloud.Koyeb/PulumiCrossCloud.Koyeb.csproj" />
+    <Project Path="src/PulumiCrossCloud.Koyeb/Generated/koyeb/Pulumi.Koyeb.csproj" />
+    <Project Path="src/PulumiCrossCloud.Fly/PulumiCrossCloud.Fly.csproj" />
+    <Project Path="src/PulumiCrossCloud.Fly/Generated/fly/Pulumi.Fly.csproj" />
+    <Project Path="src/PulumiCrossCloud.Mailgun/PulumiCrossCloud.Mailgun.csproj" />
+    <Project Path="src/PulumiCrossCloud.Neon/PulumiCrossCloud.Neon.csproj" />
+    <Project Path="src/PulumiCrossCloud.Neon/Generated/neon/Pulumi.Neon.csproj" />
+    <Project Path="src/PulumiCrossCloud.Upstash/PulumiCrossCloud.Upstash.csproj" />
+    <Project Path="src/PulumiCrossCloud.Upstash/Generated/upstash/Pulumi.Upstash.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PulumiCrossCloud.Aws.Tests/PulumiCrossCloud.Aws.Tests.csproj" />
+    <Project Path="tests/PulumiCrossCloud.Core.Tests/PulumiCrossCloud.Core.Tests.csproj" />
+    <Project Path="tests/PulumiCrossCloud.Integration.Tests/PulumiCrossCloud.Integration.Tests.csproj" />
+  </Folder>
+</Solution>

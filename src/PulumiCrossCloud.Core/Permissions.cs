@@ -59,5 +59,15 @@ public enum ComputeServiceType
     // GCP
     CloudRun,
     CloudRunJobs,
-    ComputeEngine
+    ComputeEngine,
+
+    // PaaS
+    KoyebService,
+    FlyMachine
+}
+
+public enum EmailPermissions
+{
+    Send,
+    Manage
 }

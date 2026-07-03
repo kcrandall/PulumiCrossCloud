@@ -1,5 +1,7 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.RegularExpressions;
 using Pulumi;
-using Pulumi.Command.Local;
 using Pulumi.DockerBuild;
 using Pulumi.DockerBuild.Inputs;
 
@@ -7,9 +9,13 @@ namespace PulumiCrossCloud.Core;
 
 public class ContainerImageBuildResource : ComponentResource
 {
+    public Image Resource { get; }
+    public Output<Image> ResourceOutput { get; }
     public Output<string> ImageUrl { get; }
     public Output<string> ImageTag { get; }
-    public Output<Image?> ImageResource { get; }
+    
+    // Shared provider instance to ensure stable provider reference across runs
+    private static Pulumi.DockerBuild.Provider? _defaultProvider;
 
     public ContainerImageBuildResource(
         string name,
@@ -21,179 +27,166 @@ public class ContainerImageBuildResource : ComponentResource
     )
         : base("crosscloud:core:ContainerImageBuildResource", name)
     {
+        var contentHash = GenerateContentHash(contextPath, dockerfilePath);
+        var imageTag = $"sha-{contentHash}";
+
         var registryUrl = registry.RegistryUrlOutput; // Output<string>
-        var latestImageRef = registryUrl.Apply(url => $"{url}/{imageName}:latest");
+        var shaRef = registryUrl.Apply(url => $"{url}/{imageName}:{imageTag}");
+        var latestRef = registryUrl.Apply(url => $"{url}/{imageName}:latest");
 
-        // Always do the digest check, but conditionally create resources based on results
-        var digestComparison = CheckDigests(
-            registry,
-            imageName,
-            latestImageRef,
-            dockerfilePath,
-            contextPath,
-            name
+        var args =
+            imageArgs
+            ?? new ImageArgs
+            {
+                Tags = [shaRef, latestRef],
+
+                Context = new BuildContextArgs { Location = contextPath },
+                Dockerfile = new DockerfileArgs { Location = dockerfilePath },
+
+                // Make caching stable/predictable
+                CacheTo = [new CacheToArgs { Inline = new CacheToInlineArgs { } }],
+                CacheFrom =
+                [
+                    // pull cache from latest (warm start) and the sha tag itself
+                    new CacheFromArgs { Registry = new CacheFromRegistryArgs { Ref = latestRef } },
+                    // new CacheFromArgs { Registry = new CacheFromRegistryArgs { Ref = shaRef } },
+                ],
+
+                Platforms = [Platform.Linux_amd64],
+                Push = true,
+                Registries = registry.GetDockerBuildRegistryConfig()
+            };
+
+        // Create stable provider once to prevent drift from implicit provider recreation
+        _defaultProvider ??= new Pulumi.DockerBuild.Provider(
+            "default-docker-build",
+            new Pulumi.DockerBuild.ProviderArgs { }
         );
 
-        // Conditionally create the Image resource only if needed
-        var imageResult = digestComparison.Apply(comparison =>
-        {
-            if (comparison.ChangesNeeded)
+        var dockerImage = new Image(
+            $"{registry.Name}-image", // stable logical name (not "-latest")
+            args,
+            new CustomResourceOptions
             {
-                if (Deployment.Instance.IsDryRun)
-                {
-                    // In preview mode, just report what would happen
-                    Log.Info(
-                        $"[PREVIEW] Would build and push {comparison.ImageRef} (digest mismatch)"
-                    );
-                    return new ImageDeploymentResult
-                    {
-                        ImageUrl = comparison.ImageRef,
-                        ImageTag = "latest",
-                        Image = null // No actual resource created in preview
-                    };
-                }
-                else
-                {
-                    // In apply mode, actually create the image
-                    Log.Info($"Building and pushing {comparison.ImageRef} (digest mismatch)");
-                    var dockerImage = new Image(
-                        $"{registry.Name}-image-latest",
-                        imageArgs
-                            ?? new ImageArgs
-                            {
-                                Tags = [comparison.ImageRef],
-                                Context = new BuildContextArgs { Location = contextPath },
-                                Dockerfile = new DockerfileArgs { Location = dockerfilePath },
-                                CacheTo = [new CacheToArgs { Inline = null }],
-                                CacheFrom =
-                                [
-                                    new CacheFromArgs
-                                    {
-                                        Registry = new CacheFromRegistryArgs
-                                        {
-                                            Ref = comparison.ImageRef
-                                        }
-                                    }
-                                ],
-                                Platforms = [Platform.Linux_amd64],
-                                Push = true,
-                                Registries = registry.GetDockerBuildRegistryConfig()
-                            },
-                        new CustomResourceOptions { DependsOn = [registry.Resource] }
-                    );
-                    return new ImageDeploymentResult
-                    {
-                        ImageUrl = comparison.ImageRef,
-                        ImageTag = "latest",
-                        Image = dockerImage
-                    };
-                }
+                DependsOn = [registry.Resource],
+                Provider = _defaultProvider
             }
-            else
-            {
-                // No changes needed
-                Log.Info($"Image digests match - no changes needed for {comparison.ImageRef}");
-                return new ImageDeploymentResult
-                {
-                    ImageUrl = comparison.ImageRef,
-                    ImageTag = "latest",
-                    Image = null
-                };
-            }
-        });
+        );
 
-        ImageUrl = imageResult.Apply(r => r.ImageUrl ?? "");
-        ImageTag = imageResult.Apply(r => r.ImageTag ?? "");
-        ImageResource = imageResult.Apply(r => r.Image);
+        Resource = dockerImage;
+        ImageUrl = shaRef;
+        ImageTag = Output.Create(imageTag);
+        ResourceOutput = Output.Create(dockerImage);
     }
 
-    private Output<DigestComparison> CheckDigests(
-        IContainerRegistry registry,
-        string imageName,
-        Output<string> latestImageRef,
-        string dockerfilePath,
-        string contextPath,
-        string name
-    )
+    private string GenerateContentHash(string contextPath, string dockerfilePath)
     {
-        // 1) Remote digest check
-        var manifestInspect = new Command(
-            $"inspect-manifest-{registry.Name}-{imageName}",
-            new CommandArgs
+        var dockerIgnorePatterns = LoadDockerIgnorePatterns(contextPath);
+
+        var files = Directory
+            .GetFiles(contextPath, "*", SearchOption.AllDirectories)
+            .Where(f => !IsIgnoredByDockerIgnore(f, contextPath, dockerIgnorePatterns))
+            .OrderBy(f => f, StringComparer.Ordinal) // deterministic ordering
+            .ToList();
+
+        using var sha256 = SHA256.Create();
+
+        // Hash the Dockerfile content first (if present)
+        if (File.Exists(dockerfilePath))
+        {
+            var dockerfileBytes = File.ReadAllBytes(dockerfilePath);
+            sha256.TransformBlock(dockerfileBytes, 0, dockerfileBytes.Length, null, 0);
+        }
+
+        // Hash each file's relative path + bytes
+        foreach (var file in files)
+        {
+            var rel = Path.GetRelativePath(contextPath, file).Replace('\\', '/');
+            var relBytes = Encoding.UTF8.GetBytes(rel);
+            sha256.TransformBlock(relBytes, 0, relBytes.Length, null, 0);
+
+            var bytes = File.ReadAllBytes(file);
+            sha256.TransformBlock(bytes, 0, bytes.Length, null, 0);
+        }
+
+        // finalize
+        sha256.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+        return Convert.ToHexString(sha256.Hash!)[..8].ToLower();
+    }
+
+    private List<string> LoadDockerIgnorePatterns(string contextPath)
+    {
+        var dockerIgnorePath = Path.Combine(contextPath, ".dockerignore");
+        var patterns = new List<string>();
+        if (File.Exists(dockerIgnorePath))
+        {
+            foreach (var line in File.ReadAllLines(dockerIgnorePath))
             {
-                Create = latestImageRef.Apply(img =>
-                    $"docker manifest inspect {img} 2>/dev/null | jq -r '.config.digest // empty' || echo 'no-manifest'"
-                ),
-                Update = latestImageRef.Apply(img =>
-                    $"docker manifest inspect {img} 2>/dev/null | jq -r '.config.digest // empty' || echo 'no-manifest'"
-                ),
-                Delete = "echo 'no-manifest'",
-                Triggers = new[] { imageName }
+                var trimmed = line.Trim();
+                if (!string.IsNullOrEmpty(trimmed) && !trimmed.StartsWith("#"))
+                    patterns.Add(trimmed);
             }
-        );
-        var remoteDigest = manifestInspect.Stdout.Apply(o => (o ?? string.Empty).Trim());
+        }
+        return patterns;
+    }
 
-        // 2) Local digest calculation
-        var localDigestCmd = new Command(
-            $"compute-local-digest-{registry.Name}-{imageName}",
-            new CommandArgs
+    private bool IsIgnoredByDockerIgnore(string filePath, string contextPath, List<string> patterns)
+    {
+        var relativePath = Path.GetRelativePath(contextPath, filePath).Replace('\\', '/');
+        foreach (var pattern in patterns)
+        {
+            if (MatchesPattern(relativePath, pattern))
+                return true;
+        }
+        return false;
+    }
+
+    private bool MatchesPattern(string path, string pattern)
+    {
+        pattern = pattern.Replace('\\', '/');
+        if (pattern.StartsWith("./"))
+            pattern = pattern[2..];
+
+        if (pattern.Contains("**/"))
+        {
+            var parts = pattern.Split("**/");
+            if (parts.Length == 2)
             {
-                Create =
-                    $"TMP_TAG=cc-temp-{name}-$(date +%s); "
-                    + $"docker buildx build --provenance=false --load -f '{dockerfilePath}' '{contextPath}' -t $TMP_TAG >/dev/null && "
-                    + "docker inspect $TMP_TAG | jq -r '.[0].Id' && docker rmi $TMP_TAG >/dev/null 2>&1 || true",
-                Update =
-                    $"TMP_TAG=cc-temp-{name}-$(date +%s); "
-                    + $"docker buildx build --provenance=false --load -f '{dockerfilePath}' '{contextPath}' -t $TMP_TAG >/dev/null && "
-                    + "docker inspect $TMP_TAG | jq -r '.[0].Id' && docker rmi $TMP_TAG >/dev/null 2>&1 || true",
-                Delete = "echo ''",
-                Triggers = new[] { dockerfilePath, contextPath }
+                var prefix = parts[0];
+                var suffix = parts[1];
+                if (string.IsNullOrEmpty(prefix))
+                    return path.Contains(suffix) || path.EndsWith(suffix);
+                return path.StartsWith(prefix) && path.Contains(suffix);
             }
-        );
-        var localDigest = localDigestCmd.Stdout.Apply(o => (o ?? string.Empty).Trim());
+        }
 
-        // 3) Compare digests and determine if changes are needed
-        return Output
-            .Tuple(remoteDigest, localDigest, latestImageRef)
-            .Apply(tuple =>
-            {
-                var (remote, local, imageRef) = tuple;
+        if (pattern.Contains("*"))
+        {
+            var regex = "^" + Regex.Escape(pattern).Replace("\\*", ".*") + "$";
+            return Regex.IsMatch(path, regex);
+        }
 
-                bool remoteValid =
-                    !string.IsNullOrWhiteSpace(remote)
-                    && remote != "no-manifest"
-                    && remote != "null";
-                bool localValid = !string.IsNullOrWhiteSpace(local);
+        if (pattern.EndsWith("/"))
+        {
+            var dir = pattern.TrimEnd('/');
+            return path.StartsWith(dir + "/") || path == dir;
+        }
 
-                bool changesNeeded = !(
-                    remoteValid
-                    && localValid
-                    && string.Equals(remote, local, StringComparison.OrdinalIgnoreCase)
-                );
+        return path == pattern || path.StartsWith(pattern + "/");
+    }
 
-                return new DigestComparison
-                {
-                    RemoteDigest = remote,
-                    LocalDigest = local,
-                    ImageRef = imageRef,
-                    ChangesNeeded = changesNeeded
-                };
-            });
+    private bool IsSourceFile(string filePath)
+    {
+        var ext = Path.GetExtension(filePath).ToLower();
+        return ext
+            is ".cs"
+                or ".csproj"
+                or ".sln"
+                or ".json"
+                or ".yml"
+                or ".yaml"
+                or ".xml"
+                or ".props"
+                or ".targets";
     }
 }
-
-// Helper classes
-public class DigestComparison
-{
-    public string RemoteDigest { get; set; } = "";
-    public string LocalDigest { get; set; } = "";
-    public string ImageRef { get; set; } = "";
-    public bool ChangesNeeded { get; set; }
-}
-
-// public class ImageDeploymentResult
-// {
-//     public string? ImageUrl { get; set; }
-//     public string? ImageTag { get; set; }
-//     public Image? Image { get; set; }
-// }

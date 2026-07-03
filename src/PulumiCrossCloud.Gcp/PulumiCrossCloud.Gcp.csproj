@@ -5,15 +5,17 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Google.Apis.CloudRun.v1" Version="1.70.0.3837" />
-    <PackageReference Include="Google.Apis.Auth" Version="1.70.0" />
-    <PackageReference Include="Google.Cloud.SecretManager.V1" Version="2.6.0" />
-    <PackageReference Include="Pulumi.Gcp" Version="8.40.0" />
-    <PackageReference Include="Pulumi.Random" Version="4.18.3" />
+    <PackageReference Include="Google.Apis.CloudRun.v1" Version="1.75.0.4187" />
+    <PackageReference Include="Google.Apis.Auth" Version="1.75.0" />
+    <PackageReference Include="Google.Cloud.SecretManager.V1" Version="2.7.0" />
+    <PackageReference Include="OpenTelemetry.Api" Version="1.16.0" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.16.0" />
+    <PackageReference Include="Pulumi.Gcp" Version="9.29.0" />
+    <PackageReference Include="Pulumi.Random" Version="4.21.0" />
   </ItemGroup>
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>

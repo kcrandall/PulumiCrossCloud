@@ -13,6 +13,7 @@ public class GcpBucket : IBucket
     public bool IsPublic { get; }
     public BucketCdnConfiguration? Cdn { get; }
     public bool VersioningEnabled { get; }
+    public string? IndexDocument { get; }
     public IEnumerable<CorsRule> CorsRules { get; }
     public Resource Resource => _bucket;
 
@@ -35,17 +36,26 @@ public class GcpBucket : IBucket
         bool isPublic = false,
         BucketCdnConfiguration? cdn = null,
         bool versioningEnabled = false,
-        IEnumerable<CorsRule>? corsRules = null
+        IEnumerable<CorsRule>? corsRules = null,
+        string? indexDocument = null,
+        Pulumi.Gcp.Provider? provider = null
     )
     {
         Name = name;
         IsPublic = isPublic;
         Cdn = cdn;
         VersioningEnabled = versioningEnabled;
+        IndexDocument = indexDocument;
         CorsRules = corsRules ?? [];
 
         var projectId = GcpProjectConfig.ProjectId;
         var location = GcpProjectConfig.Region;
+        var customResourceOptions = new CustomResourceOptions { Provider = provider };
+
+        // Website configuration
+        BucketWebsiteArgs? websiteArgs = IndexDocument is not null 
+            ? new BucketWebsiteArgs { MainPageSuffix = IndexDocument } 
+            : null;
 
         // Create GCS bucket with versioning enabled if requested
         var bucketArgs = new Pulumi.Gcp.Storage.BucketArgs
@@ -53,8 +63,13 @@ public class GcpBucket : IBucket
             Project = projectId,
             Name = name,
             Location = location,
-            UniformBucketLevelAccess = true,
+            UniformBucketLevelAccess = true
         };
+
+        if (websiteArgs is not null)
+        {
+            bucketArgs.Website = websiteArgs;
+        }
 
         // Note: GCP Cloud Storage has versioning enabled by default for new buckets
         // If versioning is explicitly requested, we log it for transparency
@@ -68,17 +83,19 @@ public class GcpBucket : IBucket
         if (CorsRules.Any())
         {
             // Map your CorsRule -> BucketCorsArgs
-            var mapped = CorsRules.Select(r => new BucketCorArgs()
-            {
-                // AllowedOrigins -> Origins
-                Origins = (r.AllowedOrigins).ToList(),
-                // AllowedMethods -> Methods
-                Methods = (r.AllowedMethods).ToList(),
-                // ExposedHeaders -> ResponseHeaders (GCS exposes, not request-allow list)
-                ResponseHeaders = (r.ExposedHeaders).ToList(),
-                // Max age
-                MaxAgeSeconds = r.MaxAgeSeconds
-            }).ToList();
+            var mapped = CorsRules
+                .Select(r => new BucketCorArgs()
+                {
+                    // AllowedOrigins -> Origins
+                    Origins = (r.AllowedOrigins).ToList(),
+                    // AllowedMethods -> Methods
+                    Methods = (r.AllowedMethods).ToList(),
+                    // ExposedHeaders -> ResponseHeaders (GCS exposes, not request-allow list)
+                    ResponseHeaders = (r.ExposedHeaders).ToList(),
+                    // Max age
+                    MaxAgeSeconds = r.MaxAgeSeconds
+                })
+                .ToList();
 
             bucketArgs.Cors = mapped;
 
@@ -88,7 +105,7 @@ public class GcpBucket : IBucket
             // "allowed request headers" list; it’s ignored here by design.
         }
 
-        _bucket = new Pulumi.Gcp.Storage.Bucket(name, bucketArgs);
+        _bucket = new Pulumi.Gcp.Storage.Bucket(name, bucketArgs, customResourceOptions);
 
         // Optional public read access
         if (IsPublic)
@@ -101,7 +118,7 @@ public class GcpBucket : IBucket
                     Role = "roles/storage.objectViewer",
                     Member = "allUsers"
                 },
-                new CustomResourceOptions { DependsOn = new[] { _bucket } }
+                new CustomResourceOptions { DependsOn = new[] { _bucket }, Provider = provider }
             );
             Log.Warn($"Bucket {Name} being set to public.");
         }
@@ -116,12 +133,14 @@ public class GcpBucket : IBucket
                     Project = projectId,
                     BucketName = _bucket.Name,
                     EnableCdn = true
-                }
+                },
+                customResourceOptions
             );
 
             _urlMap = new Pulumi.Gcp.Compute.URLMap(
                 $"{name}-url-map",
-                new Pulumi.Gcp.Compute.URLMapArgs { DefaultService = _backendBucket.SelfLink }
+                new Pulumi.Gcp.Compute.URLMapArgs { DefaultService = _backendBucket.SelfLink },
+                customResourceOptions
             );
 
             // If domains are provided, create HTTPS proxy with managed certificate.
@@ -136,7 +155,8 @@ public class GcpBucket : IBucket
                         {
                             Domains = cdn.Domains.ToArray()
                         }
-                    }
+                    },
+                    customResourceOptions
                 );
 
                 _httpsProxy = new Pulumi.Gcp.Compute.TargetHttpsProxy(
@@ -146,7 +166,8 @@ public class GcpBucket : IBucket
                         Project = projectId,
                         SslCertificates = new[] { _managedCert.Name },
                         UrlMap = _urlMap.Name
-                    }
+                    },
+                    customResourceOptions
                 );
 
                 _globalAddress = new Pulumi.Gcp.Compute.GlobalAddress(
@@ -156,7 +177,8 @@ public class GcpBucket : IBucket
                         Project = projectId,
                         AddressType = "EXTERNAL",
                         IpVersion = "IPV4"
-                    }
+                    },
+                    customResourceOptions
                 );
 
                 _httpsForwardingRule = new Pulumi.Gcp.Compute.GlobalForwardingRule(
@@ -168,7 +190,8 @@ public class GcpBucket : IBucket
                         IpAddress = _globalAddress.Address,
                         PortRange = "443",
                         LoadBalancingScheme = "EXTERNAL"
-                    }
+                    },
+                    customResourceOptions
                 );
             }
             else
@@ -180,7 +203,8 @@ public class GcpBucket : IBucket
                     {
                         Project = projectId,
                         UrlMap = _urlMap.Name
-                    }
+                    },
+                    customResourceOptions
                 );
 
                 _httpGlobalAddress = new Pulumi.Gcp.Compute.GlobalAddress(
@@ -190,7 +214,8 @@ public class GcpBucket : IBucket
                         Project = projectId,
                         AddressType = "EXTERNAL",
                         IpVersion = "IPV4"
-                    }
+                    },
+                    customResourceOptions
                 );
 
                 _httpForwardingRule = new Pulumi.Gcp.Compute.GlobalForwardingRule(
@@ -202,7 +227,8 @@ public class GcpBucket : IBucket
                         IpAddress = _httpGlobalAddress.Address,
                         PortRange = "80",
                         LoadBalancingScheme = "EXTERNAL"
-                    }
+                    },
+                    customResourceOptions
                 );
             }
         }
@@ -220,7 +246,7 @@ public class GcpBucket : IBucket
                 : _httpGlobalAddress?.Address;
             if (ipOutput is not null)
                 foreach (var host in hostList)
-                    cdnRecords.Add(new DnsRecord(DnsRecordType.A, host, ipOutput));
+                    cdnRecords.Add(new DnsRecord(DnsRecordType.A, host, ipOutput, $"{host}-a"));
         }
 
         List<DnsRecord> bucketRecords = [];
@@ -228,7 +254,7 @@ public class GcpBucket : IBucket
         foreach (var host in hostList)
         {
             bucketRecords.Add(
-                new DnsRecord(DnsRecordType.CNAME, host, Output.Create("storage.googleapis.com"))
+                new DnsRecord(DnsRecordType.CNAME, host, Output.Create("storage.googleapis.com"), $"{host}-cname")
             );
         }
 
@@ -296,5 +322,11 @@ public class GcpBucket : IBucket
             }
         }
         return statements;
+    }
+
+    public Output<string> SyncDirectory(string localPath, string? keyPrefix = null, BucketSyncOptions? options = null)
+    {
+        var deployment = new GcpBucketDeployment($"{Name}-deploy", Name, localPath, keyPrefix, options, new ComponentResourceOptions { Parent = _bucket });
+        return deployment.WebsiteUrl;
     }
 }

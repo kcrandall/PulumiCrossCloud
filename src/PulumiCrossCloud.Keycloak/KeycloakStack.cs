@@ -6,6 +6,24 @@ using PulumiCrossCloud.Core;
 namespace PulumiCrossCloud.Keycloak;
 
 /// <summary>
+/// Configuration for Keycloak theme providers (JAR files).
+/// </summary>
+public sealed class KeycloakThemeProviders
+{
+    /// <summary>
+    /// List of theme JAR file paths to copy to the Keycloak providers directory.
+    /// These files should be Keycloakify-generated JAR files or other Keycloak theme providers.
+    /// </summary>
+    public List<string> ThemeJarFiles { get; init; } = [];
+
+    /// <summary>
+    /// Optional custom themes directory to copy to /opt/keycloak/themes.
+    /// This is an alternative to JAR-based themes.
+    /// </summary>
+    public string? CustomThemesDirectory { get; init; }
+}
+
+/// <summary>
 /// KeycloakStack provisions a Keycloak instance using the cross-cloud abstractions.
 ///
 /// Environment Variables Injected:
@@ -43,13 +61,20 @@ public class KeycloakStack : ComponentResource
     /// </summary>
     public Output<RealmDeploymentResult> RealmResults { get; private set; } = null!;
 
+    /// <summary>
+    /// Gets the Keycloak service URL directly from the compute resource.
+    /// This is available immediately after the compute resource is deployed.
+    /// </summary>
+    public Output<string> KeycloakUrl => compute.ServiceUrl;
+
     public KeycloakStack(
         CloudResourceFactory factory,
         string name,
         ISecret postgresUrlSecret,
         ISecret postgresUserSecret,
         ISecret postgresPasswordSecret,
-        PulumiRealmConfig? realmConfig = null
+        PulumiRealmConfig? realmConfig = null,
+        KeycloakThemeProviders? themeProviders = null
     )
         : base("keycloak:Stack", name, null, null)
     {
@@ -58,7 +83,7 @@ public class KeycloakStack : ComponentResource
         this.postgresPasswordSecret = postgresPasswordSecret;
 
         // Write embedded Dockerfile to a temp file
-        var dockerfilePath = WriteEmbeddedDockerfileToTemp();
+        var dockerfilePath = WriteEmbeddedDockerfileToTemp(themeProviders);
         var contextPath = Path.GetDirectoryName(dockerfilePath)!;
 
         // Create container registry for Keycloak (import default hello-world image)
@@ -91,18 +116,31 @@ public class KeycloakStack : ComponentResource
         compute.MemoryLimit = "2Gi"; // 2GB memory for Keycloak with database
         compute.CpuLimit = "2"; // 2 vCPUs for better startup performance
 
-        // Add required secrets/vars
+        // Add required secrets/vars (database connection is still needed at runtime)
         compute.AddEnvironmentVariable("KEYCLOAK_ADMIN", "admin");
         compute.AddRequiredSecret(keycloakAdminPasswordSecret, "KEYCLOAK_ADMIN_PASSWORD");
-        compute.AddEnvironmentVariable("KC_DB", "postgres");
+        // KC_DB is baked into the image, but connection details are still runtime secrets
         compute.AddRequiredSecret(postgresUrlSecret, "KC_DB_URL");
         compute.AddRequiredSecret(postgresUserSecret, "KC_DB_USERNAME");
         compute.AddRequiredSecret(postgresPasswordSecret, "KC_DB_PASSWORD");
 
+        // Runtime logging configuration (can be different from build-time defaults)
+        compute.AddEnvironmentVariable("KC_LOG_LEVEL", "INFO");
+        compute.AddEnvironmentVariable("KC_LOG_CONSOLE_OUTPUT", "default"); // default,json
+        compute.AddEnvironmentVariable("KC_LOG_CONSOLE_COLOR", "false");
+        
+        // Set all Keycloak configuration variables at runtime to ensure they're available
+        // These mirror the build-time configuration but may be needed at runtime too
+        var keycloakConfig = GetKeycloakConfiguration();
+        foreach (var (key, value) in keycloakConfig)
+        {
+            compute.AddEnvironmentVariable(key, value);
+        }
+
         // Configure health check using cross-cloud abstraction
         compute.HealthCheckConfiguration = new HealthCheckConfiguration
         {
-            Path = "/health/ready", // Keycloak's readiness endpoint
+            Path = "/health/ready",
             IntervalSeconds = 10, // More reasonable interval for DB-backed app
             TimeoutSeconds = 5, // Longer timeout for health checks
             UnhealthyThreshold = 3,
@@ -122,6 +160,9 @@ public class KeycloakStack : ComponentResource
         image.PushImage(dockerfilePath, contextPath);
         compute.Build();
 
+        // Get dependencies after build is complete
+        var computeDependencies = compute.GetDependencies().ToArray();
+
         // After compute is ready, configure Keycloak realm/clients/idps using the native Pulumi.Keycloak provider
         if (realmConfig is not null)
         {
@@ -135,21 +176,73 @@ public class KeycloakStack : ComponentResource
                 {
                     var (serviceUrl, adminPassword) = t;
 
+                    // During preview/dry run, URLs might be empty - handle gracefully
                     if (string.IsNullOrWhiteSpace(serviceUrl))
-                        throw new InvalidOperationException("Keycloak ServiceUrl is empty.");
+                    {
+                        if (Pulumi.Deployment.Instance.IsDryRun)
+                        {
+                            Log.Info(
+                                "[PREVIEW] Keycloak ServiceUrl not available during preview - will be configured during actual deployment"
+                            );
+                            // Skip realm configuration during preview
+                            return Output.Create(
+                                new RealmDeploymentResult
+                                {
+                                    Realm = null!, // Will be created during actual deployment
+                                    CreatedResources = new List<Resource>(),
+                                    ClientResults =
+                                        new Dictionary<string, Output<KeycloakClientResult>>()
+                                }
+                            );
+                        }
+                        else
+                        {
+                            throw new InvalidOperationException(
+                                "Keycloak ServiceUrl is empty during actual deployment."
+                            );
+                        }
+                    }
+
                     if (string.IsNullOrWhiteSpace(adminPassword))
-                        throw new InvalidOperationException("Admin password secret is empty.");
+                    {
+                        if (Pulumi.Deployment.Instance.IsDryRun)
+                        {
+                            Log.Info(
+                                "[PREVIEW] Keycloak admin password not available during preview - will be configured during actual deployment"
+                            );
+                            // Skip realm configuration during preview
+                            return Output.Create(
+                                new RealmDeploymentResult
+                                {
+                                    Realm = null!, // Will be created during actual deployment
+                                    CreatedResources = new List<Resource>(),
+                                    ClientResults =
+                                        new Dictionary<string, Output<KeycloakClientResult>>()
+                                }
+                            );
+                        }
+                        else
+                        {
+                            throw new InvalidOperationException(
+                                "Admin password secret is empty during actual deployment."
+                            );
+                        }
+                    }
 
                     // Wait for KC to be ready
                     var readyScript =
                         $"bash -lc 'for i in {{1..60}}; do if curl -sf {serviceUrl}/health/ready >/dev/null; then echo ready; exit 0; fi; sleep 5; done; echo timeout; exit 1'";
+
                     var readyCheck = new Pulumi.Command.Local.Command(
                         $"wait-for-keycloak-{name}",
                         new Pulumi.Command.Local.CommandArgs
                         {
                             Create = readyScript,
                             Update = readyScript
-                        }
+                        },
+                        computeDependencies.Length > 0
+                            ? new CustomResourceOptions { DependsOn = computeDependencies }
+                            : null
                     );
 
                     var providerArgs =
@@ -184,6 +277,28 @@ public class KeycloakStack : ComponentResource
     }
 
     /// <summary>
+    /// Gets the shared Keycloak configuration values used for both build-time and runtime.
+    /// These values are consistent across the Docker build process and container runtime.
+    /// </summary>
+    private static Dictionary<string, string> GetKeycloakConfiguration()
+    {
+        return new Dictionary<string, string>
+        {
+            ["KC_DB"] = "postgres",
+            ["KC_HEALTH_ENABLED"] = "true",
+            ["KC_METRICS_ENABLED"] = "true",
+            ["KC_FEATURES"] = "token-exchange",
+            ["KC_HTTP_ENABLED"] = "true",
+            ["KC_HOSTNAME_STRICT"] = "false",
+            ["KC_PROXY"] = "edge",
+            ["KC_CACHE"] = "local",
+            ["KC_PROXY_HEADERS"] = "xforwarded",
+            ["KC_HTTP_PORT"] = "8080",
+            ["KC_LEGACY_OBSERVABILITY_INTERFACE"] = "true"
+        };
+    }
+
+    /// <summary>
     /// Generates a secure random password of the specified length using .NET cryptography.
     /// </summary>
     private static string GenerateSecurePassword(int length)
@@ -202,8 +317,12 @@ public class KeycloakStack : ComponentResource
 
     /// <summary>
     /// Writes the embedded Dockerfile to a temporary file and returns its path.
+    /// Optionally copies theme provider files to the build context.
     /// </summary>
-    private static string WriteEmbeddedDockerfileToTemp([CallerFilePath] string sourceFilePath = "")
+    private static string WriteEmbeddedDockerfileToTemp(
+        KeycloakThemeProviders? themeProviders = null,
+        [CallerFilePath] string sourceFilePath = ""
+    )
     {
         var assembly = Assembly.GetExecutingAssembly();
         var resourceNames = assembly.GetManifestResourceNames();
@@ -213,16 +332,117 @@ public class KeycloakStack : ComponentResource
         using var stream = assembly.GetManifestResourceStream(resourceName);
         using var reader = new StreamReader(stream!);
         var dockerfileContent = reader.ReadToEnd();
+
         // Create an isolated temp directory to avoid hashing issues with system temp sockets
         var tempDir = Path.Combine(
-            Path.GetTempPath(),
+            Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!,
             ".pulumi-docker",
-            $"keycloak-build-{Guid.NewGuid():N}"
+            $"keycloak"
         );
         Directory.CreateDirectory(tempDir);
+
+        // Always modify the Dockerfile to hardcode build-time configuration
+        var dockerfileBuilder = new System.Text.StringBuilder(dockerfileContent);
+
+        // Use shared Keycloak configuration for consistency between build and runtime
+        var keycloakConfig = GetKeycloakConfiguration();
+
+        // Replace placeholder variables in the Dockerfile with actual values
+        foreach (var (key, value) in keycloakConfig)
+        {
+            dockerfileBuilder.Replace($"${{{key}}}", value);
+        }
+
+        // Handle theme providers if provided - use placeholder replacement
+        var themeCopyCommands = new System.Text.StringBuilder();
+
+        if (themeProviders is not null)
+        {
+            // Add theme JAR files to providers directory
+            if (themeProviders.ThemeJarFiles.Count > 0)
+            {
+                // Create providers directory in build context
+                var providersDir = Path.Combine(tempDir, "providers");
+                Directory.CreateDirectory(providersDir);
+
+                themeCopyCommands.AppendLine("# Copy theme provider JAR files");
+
+                foreach (var jarFile in themeProviders.ThemeJarFiles)
+                {
+                    if (File.Exists(jarFile))
+                    {
+                        var jarFileName = Path.GetFileName(jarFile);
+                        var destPath = Path.Combine(providersDir, jarFileName);
+                        File.Copy(jarFile, destPath, overwrite: true);
+                        themeCopyCommands.AppendLine(
+                            $"COPY providers/{jarFileName} /opt/keycloak/providers/"
+                        );
+                        Console.WriteLine(
+                            $"[KeycloakStack] Copied theme JAR: {jarFile} -> providers/{jarFileName}"
+                        );
+                    }
+                    else
+                    {
+                        Console.WriteLine(
+                            $"[KeycloakStack] Warning: Theme JAR file not found: {jarFile}"
+                        );
+                    }
+                }
+            }
+
+            // Add custom themes directory if provided
+            if (
+                !string.IsNullOrWhiteSpace(themeProviders.CustomThemesDirectory)
+                && Directory.Exists(themeProviders.CustomThemesDirectory)
+            )
+            {
+                var themesDir = Path.Combine(tempDir, "themes");
+                CopyDirectory(themeProviders.CustomThemesDirectory, themesDir);
+                if (themeCopyCommands.Length > 0)
+                    themeCopyCommands.AppendLine();
+                themeCopyCommands.AppendLine("# Copy custom themes");
+                themeCopyCommands.AppendLine("COPY themes/ /opt/keycloak/themes/");
+                Console.WriteLine(
+                    $"[KeycloakStack] Copied custom themes: {themeProviders.CustomThemesDirectory} -> themes/"
+                );
+            }
+        }
+
+        // Replace theme placeholder with actual COPY commands
+        var themeContent =
+            themeCopyCommands.Length > 0
+                ? themeCopyCommands.ToString().TrimEnd()
+                : "# No custom themes configured";
+        dockerfileBuilder.Replace("# {THEMES}", themeContent);
+
+        // Use the modified dockerfile with hardcoded values and theme providers (if any)
+        dockerfileContent = dockerfileBuilder.ToString();
+
         var dockerfilePath = Path.Combine(tempDir, "Dockerfile");
         File.WriteAllText(dockerfilePath, dockerfileContent);
         Console.WriteLine($"[KeycloakStack] Dockerfile written to temp path: {dockerfilePath}");
         return dockerfilePath;
+    }
+
+    /// <summary>
+    /// Recursively copies a directory and all its contents.
+    /// </summary>
+    private static void CopyDirectory(string sourceDir, string destDir)
+    {
+        Directory.CreateDirectory(destDir);
+
+        // Copy files
+        foreach (var file in Directory.GetFiles(sourceDir))
+        {
+            var destFile = Path.Combine(destDir, Path.GetFileName(file));
+            File.Copy(file, destFile, overwrite: true);
+        }
+
+        // Copy subdirectories
+        foreach (var subDir in Directory.GetDirectories(sourceDir))
+        {
+            var destSubDir = Path.Combine(destDir, Path.GetFileName(subDir));
+            CopyDirectory(subDir, destSubDir);
+        }
     }
 }

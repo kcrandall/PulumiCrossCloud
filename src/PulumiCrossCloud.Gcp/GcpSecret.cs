@@ -9,7 +9,7 @@ public class GcpSecret : ISecret
     private readonly Pulumi.Gcp.SecretManager.Secret _secret;
     private readonly Pulumi.Gcp.SecretManager.SecretVersion? _secretVersion;
 
-    public GcpSecret(string name, string value, bool ignoreChangesAfterCreate = false)
+    public GcpSecret(string name, string value, bool ignoreChangesAfterCreate = false, Pulumi.Gcp.Provider? provider = null)
     {
         Name = name;
         IgnoreChangesAfterCreate = ignoreChangesAfterCreate;
@@ -25,7 +25,7 @@ public class GcpSecret : ISecret
                 Project = projectId,
                 Replication = new SecretReplicationArgs { Auto = new SecretReplicationAutoArgs { } }
             },
-            new Pulumi.CustomResourceOptions { DependsOn = dependsOn }
+            new Pulumi.CustomResourceOptions { DependsOn = dependsOn, Provider = provider }
         );
         if (!string.IsNullOrEmpty(value))
         {
@@ -35,8 +35,8 @@ public class GcpSecret : ISecret
                 SecretData = value
             };
             var options = ignoreChangesAfterCreate
-                ? new CustomResourceOptions { IgnoreChanges = ["secretData"] }
-                : null;
+                ? new CustomResourceOptions { IgnoreChanges = ["secretData"], Provider = provider }
+                : new CustomResourceOptions { Provider = provider };
             _secretVersion = new Pulumi.Gcp.SecretManager.SecretVersion(
                 $"{name}-version",
                 secretVersionArgs,
@@ -47,6 +47,41 @@ public class GcpSecret : ISecret
         {
             _secretVersion = null;
         }
+    }
+
+    public GcpSecret(string name, Output<string> value, bool ignoreChangesAfterCreate = false, Pulumi.Gcp.Provider? provider = null)
+    {
+        Name = name;
+        IgnoreChangesAfterCreate = ignoreChangesAfterCreate;
+        var projectId = GcpProjectConfig.ProjectId;
+        // Ensure Secret Manager API is enabled for this project (via central manager)
+        var secretManagerService = GcpProjectServices.EnsureEnabled("secretmanager.googleapis.com");
+        var dependsOn = new[] { secretManagerService };
+        _secret = new Pulumi.Gcp.SecretManager.Secret(
+            name,
+            new Pulumi.Gcp.SecretManager.SecretArgs
+            {
+                SecretId = name,
+                Project = projectId,
+                Replication = new SecretReplicationArgs { Auto = new SecretReplicationAutoArgs { } }
+            },
+            new Pulumi.CustomResourceOptions { DependsOn = dependsOn, Provider = provider }
+        );
+
+        // Create secret version with Output<string> value
+        var secretVersionArgs = new Pulumi.Gcp.SecretManager.SecretVersionArgs
+        {
+            Secret = _secret.Id,
+            SecretData = value
+        };
+        var options = ignoreChangesAfterCreate
+            ? new CustomResourceOptions { IgnoreChanges = ["secretData"], Provider = provider }
+            : new CustomResourceOptions { Provider = provider };
+        _secretVersion = new Pulumi.Gcp.SecretManager.SecretVersion(
+            $"{name}-version",
+            secretVersionArgs,
+            options
+        );
     }
 
     public string Name { get; }

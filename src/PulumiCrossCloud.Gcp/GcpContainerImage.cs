@@ -8,6 +8,8 @@ namespace PulumiCrossCloud.Gcp;
 public class GcpContainerImage : IContainerImage
 {
     public Resource Resource { get; set; }
+    public Resource ContainerImageBuildResource { get; set; }
+
     public string Name { get; }
     public Output<ImageDeploymentResult> DeploymentResult { get; protected set; }
     public Output<string> Arn => DeploymentResult.Apply(result => result.ImageUrl ?? string.Empty);
@@ -23,6 +25,11 @@ public class GcpContainerImage : IContainerImage
         {
             throw new ArgumentException("Registry must be a GCP registry", nameof(registry));
         }
+
+        // Initialize properties to satisfy compiler warnings
+        Resource = null!; // Will be set by PushImage method
+        ContainerImageBuildResource = null!; // Will be set by PushImage method
+        DeploymentResult = null!; // Will be set by PushImage method
     }
 
     Output<ImageDeploymentResult> PushImage(
@@ -37,11 +44,17 @@ public class GcpContainerImage : IContainerImage
     }
 
     /// <summary>
-    /// GCP-specific registry configuration - uses default gcloud authentication
+    /// GCP-specific registry configuration - delegates to the registry for authentication
     /// </summary>
     public InputList<RegistryArgs> GetDockerBuildRegistryConfig()
     {
-        // GCP uses default gcloud authentication, return empty list
+        // Delegate to the registry for proper authentication
+        if (Registry is GcpContainerRegistry gcpRegistry)
+        {
+            return gcpRegistry.GetDockerBuildRegistryConfig();
+        }
+
+        // Fallback to empty list if not a GCP registry
         return new InputList<RegistryArgs>();
     }
 }

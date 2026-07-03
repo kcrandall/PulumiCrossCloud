@@ -14,6 +14,8 @@ public static class CloudProviderExtensions
             CloudProvider.AWS => "Amazon Web Services",
             CloudProvider.Azure => "Microsoft Azure",
             CloudProvider.GCP => "Google Cloud Platform",
+            CloudProvider.Koyeb => "Koyeb",
+            CloudProvider.Fly => "Fly.io",
             _ => provider.ToString()
         };
     }
@@ -28,6 +30,8 @@ public static class CloudProviderExtensions
             CloudProvider.AWS => "AWS",
             CloudProvider.Azure => "Azure",
             CloudProvider.GCP => "GCP",
+            CloudProvider.Koyeb => "Koyeb",
+            CloudProvider.Fly => "Fly.io",
             _ => provider.ToString()
         };
     }
@@ -42,6 +46,8 @@ public static class CloudProviderExtensions
             CloudProvider.AWS => new[] { ComputeServiceType.AppRunner, ComputeServiceType.Fargate, ComputeServiceType.EC2, ComputeServiceType.ECS },
             CloudProvider.Azure => new[] { ComputeServiceType.ContainerApps, ComputeServiceType.ContainerInstances, ComputeServiceType.AppService },
             CloudProvider.GCP => new[] { ComputeServiceType.CloudRun, ComputeServiceType.CloudRunJobs, ComputeServiceType.ComputeEngine },
+            CloudProvider.Koyeb => new[] { ComputeServiceType.KoyebService },
+            CloudProvider.Fly => new[] { ComputeServiceType.FlyMachine },
             _ => Enumerable.Empty<ComputeServiceType>()
         };
     }
@@ -64,6 +70,8 @@ public static class CloudProviderExtensions
             CloudProvider.AWS => ComputeServiceType.AppRunner,
             CloudProvider.Azure => ComputeServiceType.ContainerApps,
             CloudProvider.GCP => ComputeServiceType.CloudRun,
+            CloudProvider.Koyeb => ComputeServiceType.KoyebService,
+            CloudProvider.Fly => ComputeServiceType.FlyMachine,
             _ => throw new ArgumentException($"No default compute type for provider: {provider}")
         };
     }
@@ -78,6 +86,8 @@ public static class CloudProviderExtensions
             CloudProvider.AWS => "arn:aws:service:region:account:resource",
             CloudProvider.Azure => "/subscriptions/sub/resourceGroups/rg/providers/provider/resource",
             CloudProvider.GCP => "projects/project/locations/location/resource",
+            CloudProvider.Koyeb => "koyeb://resource/id",
+            CloudProvider.Fly => "fly://app/resource/id",
             _ => "unknown"
         };
     }

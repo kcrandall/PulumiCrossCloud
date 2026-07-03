@@ -7,6 +7,7 @@
 // {
 //     private readonly List<ISecret> _requiredSecrets;
 //     private readonly Dictionary<string, string> _environmentVariables = new();
+//     private readonly Dictionary<string, Output<string>> _environmentVariablesOutput = new();
 //     private readonly List<IPolicyStatement> _customPolicyStatements = new();
 //     
 //     public AzureContainerAppsCompute(string name, IContainerRegistry containerRegistry, string imageTag = "latest")
@@ -61,7 +62,7 @@
 //         // This would involve setting the identity property on the Container App
 //     }
 //     
-//     public void AddRequiredSecret(ISecret secret)
+//     public void AddRequiredSecret(ISecret secret, string? environmentVariableName = null)
 //     {
 //         _requiredSecrets.Add(secret);
 //     }
@@ -153,6 +154,11 @@
 //         _environmentVariables[name] = value;
 //     }
 //
+//     public void AddEnvironmentVariable(string name, Output<string> value)
+//     {
+//         _environmentVariablesOutput[name] = value;
+//     }
+//
 //     public void AddEnvironmentVariables(IDictionary<string, string> variables)
 //     {
 //         foreach (var kvp in variables)
@@ -211,4 +217,10 @@
 //         }
 //         return statements;
 //     }
+//     public void OnHealthy(params Func<ICompute, Task>[] actions) {}
+//     public void OnReady(params Func<ICompute, Task>[] actions) {}
+//     public IEnumerable<DnsRecord> GetRequiredDnsRecords(IEnumerable<string> names) => [];
+//     public IList<PortForwardingConfiguration> PortForwardings { get; set; } = [];
+//     public string? MemoryLimit { get; set; }
+//     public string? CpuLimit { get; set; }
 // }

@@ -4,5 +4,13 @@ public enum CloudProvider
 {
     AWS,
     Azure,
-    GCP
+    GCP,
+    Neon,
+    CloudFlare,
+    Mailgun,
+    Upstash,
+    Aiven,
+    Koyeb,
+    Fly,
+    Other
 }

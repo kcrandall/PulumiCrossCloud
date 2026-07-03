@@ -15,9 +15,10 @@ public class ImageDeploymentResult
 public interface IContainerImage : ICloudResource
 {
     /// <summary>
-    /// THe underlying resource representing the container registry.
+    /// THe underlying resource representing the container image (docker image).
     /// </summary>
     Resource Resource { get; protected set; }
+    Resource ContainerImageBuildResource { get; protected set; }
 
     /// <summary>
     /// Gets the image tag based on content hash
@@ -51,9 +52,11 @@ public interface IContainerImage : ICloudResource
             contextPath,
             imageArgs
         );
-        Resource = buildResource;
+        Resource = buildResource.Resource;
+        ContainerImageBuildResource = buildResource;
+
         var deploymentResult = Output
-            .Tuple(buildResource.ImageUrl, buildResource.ImageTag, buildResource.ImageResource)
+            .Tuple(buildResource.ImageUrl, buildResource.ImageTag, buildResource.ResourceOutput)
             .Apply(tuple => new ImageDeploymentResult
             {
                 ImageUrl = tuple.Item1,
