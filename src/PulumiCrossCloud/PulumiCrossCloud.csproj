@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <PackageId>PulumiCrossCloud</PackageId>
+    <Description>Meta-package that installs the full PulumiCrossCloud package set.</Description>
+    <PackageTags>pulumi;cloud;aws;azure;gcp;infrastructure;iac;crosscloud;metapackage</PackageTags>
+    <SuppressDependenciesWhenPacking>false</SuppressDependenciesWhenPacking>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PulumiCrossCloud.Aiven\PulumiCrossCloud.Aiven.csproj" />
+    <ProjectReference Include="..\PulumiCrossCloud.Aws\PulumiCrossCloud.Aws.csproj" />
+    <ProjectReference Include="..\PulumiCrossCloud.Azure\PulumiCrossCloud.Azure.csproj" />
+    <ProjectReference Include="..\PulumiCrossCloud.Cloudflare\PulumiCrossCloud.Cloudflare.csproj" />
+    <ProjectReference Include="..\PulumiCrossCloud.Core\PulumiCrossCloud.Core.csproj" />
+    <ProjectReference Include="..\PulumiCrossCloud.EntityFramework\PulumiCrossCloud.EntityFramework.csproj" />
+    <ProjectReference Include="..\PulumiCrossCloud.Extensions\PulumiCrossCloud.Extensions.csproj" />
+    <ProjectReference Include="..\PulumiCrossCloud.Fly\PulumiCrossCloud.Fly.csproj" />
+    <ProjectReference Include="..\PulumiCrossCloud.Gcp\PulumiCrossCloud.Gcp.csproj" />
+    <ProjectReference Include="..\PulumiCrossCloud.Keycloak\PulumiCrossCloud.Keycloak.csproj" />
+    <ProjectReference Include="..\PulumiCrossCloud.Koyeb\PulumiCrossCloud.Koyeb.csproj" />
+    <ProjectReference Include="..\PulumiCrossCloud.Mailgun\PulumiCrossCloud.Mailgun.csproj" />
+    <ProjectReference Include="..\PulumiCrossCloud.Neon\PulumiCrossCloud.Neon.csproj" />
+    <ProjectReference Include="..\PulumiCrossCloud.Upstash\PulumiCrossCloud.Upstash.csproj" />
+  </ItemGroup>
+
+</Project>

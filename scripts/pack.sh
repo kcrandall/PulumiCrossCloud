@@ -89,7 +89,7 @@ fi
 PACKABLE_PROJECTS=()
 while IFS= read -r project; do
   PACKABLE_PROJECTS+=("${project}")
-done < <(find "${REPO_DIR}/src" -mindepth 2 -maxdepth 2 -type f -name 'PulumiCrossCloud.*.csproj' | sort)
+done < <(find "${REPO_DIR}/src" -mindepth 2 -maxdepth 2 -type f \( -name 'PulumiCrossCloud.csproj' -o -name 'PulumiCrossCloud.*.csproj' \) | sort)
 
 if ((${#PACKABLE_PROJECTS[@]} == 0)); then
   echo "No packable projects were found under ${REPO_DIR}/src"

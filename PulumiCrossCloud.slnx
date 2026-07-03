@@ -11,6 +11,7 @@
     <Project Path="samples/PulumiCrossCloud.Samples.OpenSourceStack/PulumiCrossCloud.Samples.OpenSourceStack.csproj" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="src/PulumiCrossCloud/PulumiCrossCloud.csproj" />
     <Project Path="src/PulumiCrossCloud.Aws/PulumiCrossCloud.Aws.csproj" />
     <Project Path="src/PulumiCrossCloud.Azure/PulumiCrossCloud.Azure.csproj" />
     <Project Path="src/PulumiCrossCloud.Aiven/PulumiCrossCloud.Aiven.csproj" />
