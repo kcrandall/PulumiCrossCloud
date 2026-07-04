@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\PulumiCrossCloud.Core\PulumiCrossCloud.Core.csproj" />
+    <ProjectReference Include="Generated\sentry\Pulumi.Sentry.csproj" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="OpenTelemetry.Api" Version="1.16.0" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.16.0" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <DefaultItemExcludes>$(DefaultItemExcludes);Generated\**</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <Target Name="IncludeGeneratedSentryProviderInPackage" BeforeTargets="_GetBuildOutputFilesWithTfm">
+    <ItemGroup>
+      <BuildOutputInPackage Include="$(MSBuildProjectDirectory)\Generated\sentry\bin\$(Configuration)\$(TargetFramework)\Pulumi.Sentry.dll">
+        <TargetPath>Pulumi.Sentry.dll</TargetPath>
+      </BuildOutputInPackage>
+    </ItemGroup>
+  </Target>
+
+</Project>

@@ -22,6 +22,7 @@
     <ProjectReference Include="..\PulumiCrossCloud.Koyeb\PulumiCrossCloud.Koyeb.csproj" />
     <ProjectReference Include="..\PulumiCrossCloud.Mailgun\PulumiCrossCloud.Mailgun.csproj" />
     <ProjectReference Include="..\PulumiCrossCloud.Neon\PulumiCrossCloud.Neon.csproj" />
+    <ProjectReference Include="..\PulumiCrossCloud.Sentry\PulumiCrossCloud.Sentry.csproj" />
     <ProjectReference Include="..\PulumiCrossCloud.Upstash\PulumiCrossCloud.Upstash.csproj" />
   </ItemGroup>
 

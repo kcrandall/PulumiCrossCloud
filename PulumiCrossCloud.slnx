@@ -29,6 +29,8 @@
     <Project Path="src/PulumiCrossCloud.Mailgun/PulumiCrossCloud.Mailgun.csproj" />
     <Project Path="src/PulumiCrossCloud.Neon/PulumiCrossCloud.Neon.csproj" />
     <Project Path="src/PulumiCrossCloud.Neon/Generated/neon/Pulumi.Neon.csproj" />
+    <Project Path="src/PulumiCrossCloud.Sentry/PulumiCrossCloud.Sentry.csproj" />
+    <Project Path="src/PulumiCrossCloud.Sentry/Generated/sentry/Pulumi.Sentry.csproj" />
     <Project Path="src/PulumiCrossCloud.Upstash/PulumiCrossCloud.Upstash.csproj" />
     <Project Path="src/PulumiCrossCloud.Upstash/Generated/upstash/Pulumi.Upstash.csproj" />
   </Folder>
