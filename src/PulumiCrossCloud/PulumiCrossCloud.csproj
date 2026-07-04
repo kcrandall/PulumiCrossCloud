@@ -18,6 +18,7 @@
     <ProjectReference Include="..\PulumiCrossCloud.Extensions\PulumiCrossCloud.Extensions.csproj" />
     <ProjectReference Include="..\PulumiCrossCloud.Fly\PulumiCrossCloud.Fly.csproj" />
     <ProjectReference Include="..\PulumiCrossCloud.Gcp\PulumiCrossCloud.Gcp.csproj" />
+    <ProjectReference Include="..\PulumiCrossCloud.Grafana\PulumiCrossCloud.Grafana.csproj" />
     <ProjectReference Include="..\PulumiCrossCloud.Keycloak\PulumiCrossCloud.Keycloak.csproj" />
     <ProjectReference Include="..\PulumiCrossCloud.Koyeb\PulumiCrossCloud.Koyeb.csproj" />
     <ProjectReference Include="..\PulumiCrossCloud.Mailgun\PulumiCrossCloud.Mailgun.csproj" />
