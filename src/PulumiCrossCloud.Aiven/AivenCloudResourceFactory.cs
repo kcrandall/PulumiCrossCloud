@@ -95,13 +95,16 @@ public class AivenCloudResourceFactory : CloudResourceFactory
         var aivenOptions = options as IAivenDatabaseOptions;
         var project = aivenOptions?.Project != null ? (Input<string>)aivenOptions.Project : 
                      _projectName ?? throw new InvalidOperationException("Project name must be provided either in options or constructor.");
+        var searchOptions = options as AivenSearchDatabaseOptions;
+        var plan = ResolveSearchPlan(searchOptions, aivenOptions);
+        var cloud = ResolveSearchCloud(aivenOptions, plan);
 
         return new AivenSearchDatabase(
             name,
             project,
             type,
-            aivenOptions?.Plan ?? "startup-4",
-            aivenOptions?.Cloud ?? _defaultCloud,
+            plan,
+            cloud,
             _aivenProvider
         );
     }
@@ -124,5 +127,32 @@ public class AivenCloudResourceFactory : CloudResourceFactory
             options?.Region ?? aivenOptions?.Cloud ?? _defaultCloud,
             _aivenProvider
         );
+    }
+
+    private string ResolveSearchPlan(AivenSearchDatabaseOptions? searchOptions, IAivenDatabaseOptions? aivenOptions)
+    {
+        if (searchOptions?.UseFreeTier == true)
+        {
+            return AivenSearchDatabaseOptions.FreeOpenSearchPlan;
+        }
+
+        return aivenOptions?.Plan ?? "startup-4";
+    }
+
+    private string? ResolveSearchCloud(IAivenDatabaseOptions? aivenOptions, string plan)
+    {
+        if (!string.IsNullOrWhiteSpace(aivenOptions?.Cloud))
+        {
+            return aivenOptions.Cloud;
+        }
+
+        if (
+            string.Equals(plan, AivenSearchDatabaseOptions.FreeOpenSearchPlan, StringComparison.OrdinalIgnoreCase)
+        )
+        {
+            return AivenSearchDatabaseOptions.DefaultFreeOpenSearchCloud;
+        }
+
+        return _defaultCloud;
     }
 }

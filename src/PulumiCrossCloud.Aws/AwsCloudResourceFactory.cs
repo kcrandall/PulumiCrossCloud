@@ -104,4 +104,13 @@ public class AwsCloudResourceFactory : CloudResourceFactory
     {
         return new AwsKinesisStream(name, args, _awsProvider);
     }
+
+    public override ISearchDatabase CreateSearchDatabase(
+        string name,
+        SearchDatabaseType type,
+        ISearchDatabaseOptions? options = null
+    )
+    {
+        return new AwsSearchDatabase(name, type, options, _awsProvider);
+    }
 }

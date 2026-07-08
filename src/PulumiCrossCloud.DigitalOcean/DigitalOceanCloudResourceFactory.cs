@@ -8,6 +8,7 @@ public sealed class DigitalOceanCloudResourceFactory : CloudResourceFactory
 {
     private readonly string _defaultAppRegion;
     private readonly string _defaultRegistryRegion;
+    private readonly string _defaultDatabaseRegion;
     private readonly string _defaultInstanceSizeSlug;
     private readonly string _defaultRegistrySubscriptionTierSlug;
     private readonly DO.Provider _digitalOceanProvider;
@@ -17,12 +18,14 @@ public sealed class DigitalOceanCloudResourceFactory : CloudResourceFactory
         string defaultRegistryRegion = "nyc3",
         string defaultInstanceSizeSlug = "apps-s-1vcpu-1gb",
         string defaultRegistrySubscriptionTierSlug = "starter",
-        string? token = null
+        string? token = null,
+        string defaultDatabaseRegion = "nyc3"
     )
         : base(CloudProvider.DigitalOcean)
     {
         _defaultAppRegion = defaultAppRegion;
         _defaultRegistryRegion = defaultRegistryRegion;
+        _defaultDatabaseRegion = defaultDatabaseRegion;
         _defaultInstanceSizeSlug = defaultInstanceSizeSlug;
         _defaultRegistrySubscriptionTierSlug = defaultRegistrySubscriptionTierSlug;
 
@@ -87,5 +90,20 @@ public sealed class DigitalOceanCloudResourceFactory : CloudResourceFactory
             _defaultInstanceSizeSlug,
             _digitalOceanProvider
         );
+    }
+
+    public override ISearchDatabase CreateSearchDatabase(
+        string name,
+        SearchDatabaseType type,
+        ISearchDatabaseOptions? options = null
+    )
+    {
+        var digitalOceanOptions = options as DigitalOceanSearchDatabaseOptions;
+        digitalOceanOptions ??= new DigitalOceanSearchDatabaseOptions
+        {
+            Region = _defaultDatabaseRegion
+        };
+
+        return new DigitalOceanSearchDatabase(name, type, digitalOceanOptions, _digitalOceanProvider);
     }
 }
