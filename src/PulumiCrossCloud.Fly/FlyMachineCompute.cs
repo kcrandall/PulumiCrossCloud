@@ -32,7 +32,10 @@ public sealed class FlyMachineCompute : ICompute
     {
         Name = name;
         ContainerRegistry = containerRegistry;
-        _imageName = imageName ?? containerImage?.Name ?? throw new ArgumentException("Either imageName or containerImage must be provided.");
+        _imageName =
+            imageName
+            ?? containerImage?.Name
+            ?? throw new ArgumentException("Either imageName or containerImage must be provided.");
         _imageTag = imageTag;
         _orgSlug = orgSlug;
         _region = region;
@@ -52,7 +55,12 @@ public sealed class FlyMachineCompute : ICompute
     public IHealthCheckConfiguration? HealthCheckConfiguration { get; set; }
     public IList<PortForwardingConfiguration> PortForwardings { get; set; } =
     [
-        new PortForwardingConfiguration { ContainerPort = 8080, ExternalPort = 443, Protocol = "tcp" }
+        new PortForwardingConfiguration
+        {
+            ContainerPort = 8080,
+            ExternalPort = 443,
+            Protocol = "tcp",
+        },
     ];
     public string? MemoryLimit { get; set; }
     public string? CpuLimit { get; set; }
@@ -60,7 +68,8 @@ public sealed class FlyMachineCompute : ICompute
     public void AddRequiredSecret(ISecret secret, string? environmentVariableName = null) =>
         _requiredSecrets.Add((secret, environmentVariableName));
 
-    public void AddEnvironmentVariable(string name, string value) => _environmentVariables[name] = value;
+    public void AddEnvironmentVariable(string name, string value) =>
+        _environmentVariables[name] = value;
 
     public void AddEnvironmentVariable(string name, Output<string> value) =>
         _environmentVariablesOutput[name] = value;
@@ -68,23 +77,18 @@ public sealed class FlyMachineCompute : ICompute
     public void AddEnvironmentVariables(IDictionary<string, string> variables)
     {
         foreach (var variable in variables)
-        {
             _environmentVariables[variable.Key] = variable.Value;
-        }
     }
 
-    public void AddPolicyStatement(IPolicyStatement statement) => _customPolicyStatements.Add(statement);
+    public void AddPolicyStatement(IPolicyStatement statement) =>
+        _customPolicyStatements.Add(statement);
 
     public void Build()
     {
         var options = new CustomResourceOptions { Provider = _provider };
         _app = new global::Pulumi.Fly.App(
             $"{Name}-app",
-            new global::Pulumi.Fly.AppArgs
-            {
-                Name = Name,
-                OrgSlug = _orgSlug
-            },
+            new global::Pulumi.Fly.AppArgs { Name = Name, OrgSlug = _orgSlug },
             options
         );
 
@@ -100,21 +104,25 @@ public sealed class FlyMachineCompute : ICompute
     public IEnumerable<DnsRecord> GetRequiredDnsRecords(IEnumerable<string> names) =>
         names.Select(name => new DnsRecord(DnsRecordType.CNAME, name, ServiceUrl, $"{name}-cname"));
 
-    public IEnumerable<DnsRecord> RegisterDnsMappingAndCertificates(IEnumerable<string> customDomains) =>
-        GetRequiredDnsRecords(customDomains);
+    public IEnumerable<DnsRecord> RegisterDnsMappingAndCertificates(
+        IEnumerable<string> customDomains
+    ) => GetRequiredDnsRecords(customDomains);
 
     public ComputeConfigurationResponse GetConfiguration() =>
         new()
         {
             EnvironmentVariables = new Dictionary<string, string>(_environmentVariables),
-            EnvironmentVariablesOutput = new Dictionary<string, Output<string>>(_environmentVariablesOutput),
+            EnvironmentVariablesOutput = new Dictionary<string, Output<string>>(
+                _environmentVariablesOutput
+            ),
             RequiredSecrets = _requiredSecrets.Select(x => x.secret).ToList(),
-            SecretMappings = _requiredSecrets.ToDictionary(x => x.secret.Name, x => x.envVarName)
+            SecretMappings = _requiredSecrets.ToDictionary(x => x.secret.Name, x => x.envVarName),
         };
 
     public IEnumerable<IPolicyStatement> GetPolicy(params ComputePermissions[] permissions) => [];
 
-    public void OnHealthy(params Func<ICompute, Task>[] actions) => _onHealthyActions.AddRange(actions);
+    public void OnHealthy(params Func<ICompute, Task>[] actions) =>
+        _onHealthyActions.AddRange(actions);
 
     public void OnReady(params Func<ICompute, Task>[] actions) => _onReadyActions.AddRange(actions);
 
@@ -127,48 +135,48 @@ public sealed class FlyMachineCompute : ICompute
             Name = Name,
             Image = BuildImageUri(),
             DesiredStatus = "started",
-            Restart = new global::Pulumi.Fly.Inputs.MachineRestartArgs { Policy = "always" }
+            Restart = new global::Pulumi.Fly.Inputs.MachineRestartArgs { Policy = "always" },
         };
 
         var guest = BuildGuestArgs();
         if (guest is not null)
-        {
             args.Guest = guest;
-        }
 
         foreach (var variable in _environmentVariables)
-        {
             args.Env.Add(variable.Key, variable.Value);
-        }
 
         foreach (var variable in _environmentVariablesOutput)
-        {
             args.Env.Add(variable.Key, variable.Value);
-        }
 
         foreach (var (secret, envVarName) in _requiredSecrets)
-        {
             args.Env.Add(envVarName ?? ToEnvironmentName(secret.Name), secret.Name);
-        }
 
         foreach (var forwarding in PortForwardings)
         {
-            var externalPort = forwarding.ExternalPort ?? (forwarding.Protocol?.Equals("http", StringComparison.OrdinalIgnoreCase) == true ? 80 : 443);
-            args.Services.Add(new global::Pulumi.Fly.Inputs.MachineServiceArgs
-            {
-                InternalPort = forwarding.ContainerPort,
-                Protocol = forwarding.Protocol ?? "tcp",
-                MinMachinesRunning = MinCount,
-                Ports =
-                [
-                    new global::Pulumi.Fly.Inputs.MachineServicePortArgs
-                    {
-                        Port = externalPort,
-                        Handlers = externalPort == 443 ? ["tls", "http"] : ["http"],
-                        ForceHttps = externalPort == 443
-                    }
-                ]
-            });
+            var externalPort =
+                forwarding.ExternalPort
+                ?? (
+                    forwarding.Protocol?.Equals("http", StringComparison.OrdinalIgnoreCase) == true
+                        ? 80
+                        : 443
+                );
+            args.Services.Add(
+                new global::Pulumi.Fly.Inputs.MachineServiceArgs
+                {
+                    InternalPort = forwarding.ContainerPort,
+                    Protocol = forwarding.Protocol ?? "tcp",
+                    MinMachinesRunning = MinCount,
+                    Ports =
+                    [
+                        new global::Pulumi.Fly.Inputs.MachineServicePortArgs
+                        {
+                            Port = externalPort,
+                            Handlers = externalPort == 443 ? ["tls", "http"] : ["http"],
+                            ForceHttps = externalPort == 443,
+                        },
+                    ],
+                }
+            );
         }
 
         return args;
@@ -179,15 +187,13 @@ public sealed class FlyMachineCompute : ICompute
         var memoryMb = ParseMemoryMb(MemoryLimit);
         var cpus = ParseCpu(CpuLimit);
         if (memoryMb is null && cpus is null)
-        {
             return null;
-        }
 
         return new global::Pulumi.Fly.Inputs.MachineGuestArgs
         {
             MemoryMb = memoryMb,
             Cpus = cpus,
-            CpuKind = "shared"
+            CpuKind = "shared",
         };
     }
 
@@ -201,22 +207,20 @@ public sealed class FlyMachineCompute : ICompute
     private static double? ParseMemoryMb(string? memoryLimit)
     {
         if (string.IsNullOrWhiteSpace(memoryLimit))
-        {
             return null;
-        }
 
         var trimmed = memoryLimit.Trim();
-        if (trimmed.EndsWith("Gi", StringComparison.OrdinalIgnoreCase) &&
-            double.TryParse(trimmed[..^2], out var gib))
-        {
+        if (
+            trimmed.EndsWith("Gi", StringComparison.OrdinalIgnoreCase)
+            && double.TryParse(trimmed[..^2], out var gib)
+        )
             return gib * 1024;
-        }
 
-        if (trimmed.EndsWith("Mi", StringComparison.OrdinalIgnoreCase) &&
-            double.TryParse(trimmed[..^2], out var mib))
-        {
+        if (
+            trimmed.EndsWith("Mi", StringComparison.OrdinalIgnoreCase)
+            && double.TryParse(trimmed[..^2], out var mib)
+        )
             return mib;
-        }
 
         return double.TryParse(trimmed, out var raw) ? raw : null;
     }

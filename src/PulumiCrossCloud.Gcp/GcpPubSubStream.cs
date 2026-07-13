@@ -8,16 +8,25 @@ public class GcpPubSubStream : IStreamEndpoint
 {
     private readonly Topic _topic;
 
-    public GcpPubSubStream(string name, PulumiCrossCloud.Core.StreamArgs? args = null, Pulumi.Gcp.Provider? provider = null)
+    public GcpPubSubStream(
+        string name,
+        PulumiCrossCloud.Core.StreamArgs? args = null,
+        Pulumi.Gcp.Provider? provider = null
+    )
     {
         Name = name;
-        
+
         // Pub/Sub Topics can have message retention
-        _topic = new Topic(name, new Pulumi.Gcp.PubSub.TopicArgs
-        {
-            Project = GcpProjectConfig.ProjectId,
-            MessageRetentionDuration = args?.RetentionHours != null ? $"{args.RetentionHours * 3600}s" : "86400s"
-        }, new CustomResourceOptions { Provider = provider });
+        _topic = new Topic(
+            name,
+            new Pulumi.Gcp.PubSub.TopicArgs
+            {
+                Project = GcpProjectConfig.ProjectId,
+                MessageRetentionDuration =
+                    args?.RetentionHours != null ? $"{args.RetentionHours * 3600}s" : "86400s",
+            },
+            new CustomResourceOptions { Provider = provider }
+        );
     }
 
     public string Name { get; }
@@ -34,27 +43,30 @@ public class GcpPubSubStream : IStreamEndpoint
     {
         var statements = new List<IPolicyStatement>();
         foreach (var permission in permissions)
-        {
             switch (permission)
             {
                 case MessagingPermissions.Send:
-                    statements.Add(new GcpPolicyStatement
-                    {
-                        Effect = "Allow",
-                        Actions = ["roles/pubsub.publisher"],
-                        Resources = [Arn]
-                    });
+                    statements.Add(
+                        new GcpPolicyStatement
+                        {
+                            Effect = "Allow",
+                            Actions = ["roles/pubsub.publisher"],
+                            Resources = [Arn],
+                        }
+                    );
                     break;
                 case MessagingPermissions.Admin:
-                    statements.Add(new GcpPolicyStatement
-                    {
-                        Effect = "Allow",
-                        Actions = ["roles/pubsub.admin"],
-                        Resources = [Arn]
-                    });
+                    statements.Add(
+                        new GcpPolicyStatement
+                        {
+                            Effect = "Allow",
+                            Actions = ["roles/pubsub.admin"],
+                            Resources = [Arn],
+                        }
+                    );
                     break;
             }
-        }
+
         return statements;
     }
 }

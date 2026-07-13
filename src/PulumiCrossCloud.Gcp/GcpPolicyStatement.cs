@@ -22,9 +22,9 @@ public class GcpPolicyStatement : BasePolicyStatement
                     title = Conditions.ContainsKey("title") ? Conditions["title"] : "",
                     description = Conditions.ContainsKey("description")
                         ? Conditions["description"]
-                        : ""
+                        : "",
                 }
-                : null
+                : null,
         };
 
         return JsonSerializer.Serialize(

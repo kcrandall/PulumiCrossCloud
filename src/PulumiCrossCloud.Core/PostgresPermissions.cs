@@ -6,5 +6,5 @@ public enum PostgresPermissions
     Read,
     Write,
     Admin,
-    Replication
+    Replication,
 }

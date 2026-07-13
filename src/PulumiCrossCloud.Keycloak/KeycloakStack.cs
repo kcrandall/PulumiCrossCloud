@@ -128,14 +128,12 @@ public class KeycloakStack : ComponentResource
         compute.AddEnvironmentVariable("KC_LOG_LEVEL", "INFO");
         compute.AddEnvironmentVariable("KC_LOG_CONSOLE_OUTPUT", "default"); // default,json
         compute.AddEnvironmentVariable("KC_LOG_CONSOLE_COLOR", "false");
-        
+
         // Set all Keycloak configuration variables at runtime to ensure they're available
         // These mirror the build-time configuration but may be needed at runtime too
         var keycloakConfig = GetKeycloakConfiguration();
         foreach (var (key, value) in keycloakConfig)
-        {
             compute.AddEnvironmentVariable(key, value);
-        }
 
         // Configure health check using cross-cloud abstraction
         compute.HealthCheckConfiguration = new HealthCheckConfiguration
@@ -147,7 +145,7 @@ public class KeycloakStack : ComponentResource
             HealthyThreshold = 2,
             StartupTimeoutSeconds = 10, // Timeout per individual startup probe request
             StartupIntervalSeconds = 15, // Check every 15 seconds during startup
-            StartupUnhealthyThreshold = 20 // 20 failures × 15 seconds = 300 seconds (5 minutes total)
+            StartupUnhealthyThreshold = 20, // 20 failures × 15 seconds = 300 seconds (5 minutes total)
         };
 
         // Configure port forwarding for Keycloak
@@ -191,16 +189,14 @@ public class KeycloakStack : ComponentResource
                                     Realm = null!, // Will be created during actual deployment
                                     CreatedResources = new List<Resource>(),
                                     ClientResults =
-                                        new Dictionary<string, Output<KeycloakClientResult>>()
+                                        new Dictionary<string, Output<KeycloakClientResult>>(),
                                 }
                             );
                         }
                         else
-                        {
                             throw new InvalidOperationException(
                                 "Keycloak ServiceUrl is empty during actual deployment."
                             );
-                        }
                     }
 
                     if (string.IsNullOrWhiteSpace(adminPassword))
@@ -217,16 +213,14 @@ public class KeycloakStack : ComponentResource
                                     Realm = null!, // Will be created during actual deployment
                                     CreatedResources = new List<Resource>(),
                                     ClientResults =
-                                        new Dictionary<string, Output<KeycloakClientResult>>()
+                                        new Dictionary<string, Output<KeycloakClientResult>>(),
                                 }
                             );
                         }
                         else
-                        {
                             throw new InvalidOperationException(
                                 "Admin password secret is empty during actual deployment."
                             );
-                        }
                     }
 
                     // Wait for KC to be ready
@@ -238,7 +232,7 @@ public class KeycloakStack : ComponentResource
                         new Pulumi.Command.Local.CommandArgs
                         {
                             Create = readyScript,
-                            Update = readyScript
+                            Update = readyScript,
                         },
                         computeDependencies.Length > 0
                             ? new CustomResourceOptions { DependsOn = computeDependencies }
@@ -253,7 +247,7 @@ public class KeycloakStack : ComponentResource
                             ClientId = "admin-cli",
                             Username = "admin",
                             Password = adminPassword,
-                            ClientTimeout = 120
+                            ClientTimeout = 120,
                         };
 
                     var provider = new Pulumi.Keycloak.Provider(
@@ -294,7 +288,7 @@ public class KeycloakStack : ComponentResource
             ["KC_CACHE"] = "local",
             ["KC_PROXY_HEADERS"] = "xforwarded",
             ["KC_HTTP_PORT"] = "8080",
-            ["KC_LEGACY_OBSERVABILITY_INTERFACE"] = "true"
+            ["KC_LEGACY_OBSERVABILITY_INTERFACE"] = "true",
         };
     }
 
@@ -309,9 +303,8 @@ public class KeycloakStack : ComponentResource
         System.Security.Cryptography.RandomNumberGenerator.Fill(bytes);
         var chars = new char[length];
         for (int i = 0; i < length; i++)
-        {
             chars[i] = allowedChars[bytes[i] % allowedChars.Length];
-        }
+
         return new string(chars);
     }
 
@@ -349,9 +342,7 @@ public class KeycloakStack : ComponentResource
 
         // Replace placeholder variables in the Dockerfile with actual values
         foreach (var (key, value) in keycloakConfig)
-        {
             dockerfileBuilder.Replace($"${{{key}}}", value);
-        }
 
         // Handle theme providers if provided - use placeholder replacement
         var themeCopyCommands = new System.Text.StringBuilder();
@@ -368,7 +359,6 @@ public class KeycloakStack : ComponentResource
                 themeCopyCommands.AppendLine("# Copy theme provider JAR files");
 
                 foreach (var jarFile in themeProviders.ThemeJarFiles)
-                {
                     if (File.Exists(jarFile))
                     {
                         var jarFileName = Path.GetFileName(jarFile);
@@ -382,12 +372,9 @@ public class KeycloakStack : ComponentResource
                         );
                     }
                     else
-                    {
                         Console.WriteLine(
                             $"[KeycloakStack] Warning: Theme JAR file not found: {jarFile}"
                         );
-                    }
-                }
             }
 
             // Add custom themes directory if provided

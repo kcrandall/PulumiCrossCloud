@@ -28,7 +28,7 @@ public class AwsDnsRegistration : IDnsRegistration
                 Name = record.Name,
                 Type = MapRecordType(record.Type),
                 Ttl = Ttl,
-                Records = new InputList<string> { record.Value }
+                Records = new InputList<string> { record.Value },
             }
         );
     }
@@ -54,6 +54,6 @@ public class AwsDnsRegistration : IDnsRegistration
             DnsRecordType.NS => "NS",
             DnsRecordType.CAA => "CAA",
             DnsRecordType.PTR => "PTR",
-            _ => throw new ArgumentException($"Unsupported DNS record type: {type}")
+            _ => throw new ArgumentException($"Unsupported DNS record type: {type}"),
         };
 }

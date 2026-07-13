@@ -8,14 +8,22 @@ public class AwsKinesisStream : IStreamEndpoint
 {
     private readonly Pulumi.Aws.Kinesis.Stream _stream;
 
-    public AwsKinesisStream(string name, PulumiCrossCloud.Core.StreamArgs? args = null, Pulumi.Aws.Provider? provider = null)
+    public AwsKinesisStream(
+        string name,
+        PulumiCrossCloud.Core.StreamArgs? args = null,
+        Pulumi.Aws.Provider? provider = null
+    )
     {
         Name = name;
-        _stream = new Pulumi.Aws.Kinesis.Stream(name, new Pulumi.Aws.Kinesis.StreamArgs
-        {
-            ShardCount = args?.ThroughputUnits ?? 1,
-            RetentionPeriod = args?.RetentionHours ?? 24
-        }, new CustomResourceOptions { Provider = provider });
+        _stream = new Pulumi.Aws.Kinesis.Stream(
+            name,
+            new Pulumi.Aws.Kinesis.StreamArgs
+            {
+                ShardCount = args?.ThroughputUnits ?? 1,
+                RetentionPeriod = args?.RetentionHours ?? 24,
+            },
+            new CustomResourceOptions { Provider = provider }
+        );
     }
 
     public string Name { get; }
@@ -32,35 +40,45 @@ public class AwsKinesisStream : IStreamEndpoint
     {
         var statements = new List<IPolicyStatement>();
         foreach (var permission in permissions)
-        {
             switch (permission)
             {
                 case MessagingPermissions.Send:
-                    statements.Add(new AwsPolicyStatement
-                    {
-                        Effect = "Allow",
-                        Actions = ["kinesis:PutRecord", "kinesis:PutRecords"],
-                        Resources = [Arn]
-                    });
+                    statements.Add(
+                        new AwsPolicyStatement
+                        {
+                            Effect = "Allow",
+                            Actions = ["kinesis:PutRecord", "kinesis:PutRecords"],
+                            Resources = [Arn],
+                        }
+                    );
                     break;
                 case MessagingPermissions.Receive:
-                    statements.Add(new AwsPolicyStatement
-                    {
-                        Effect = "Allow",
-                        Actions = ["kinesis:GetRecords", "kinesis:GetShardIterator", "kinesis:DescribeStream"],
-                        Resources = [Arn]
-                    });
+                    statements.Add(
+                        new AwsPolicyStatement
+                        {
+                            Effect = "Allow",
+                            Actions =
+                            [
+                                "kinesis:GetRecords",
+                                "kinesis:GetShardIterator",
+                                "kinesis:DescribeStream",
+                            ],
+                            Resources = [Arn],
+                        }
+                    );
                     break;
                 case MessagingPermissions.Admin:
-                    statements.Add(new AwsPolicyStatement
-                    {
-                        Effect = "Allow",
-                        Actions = ["kinesis:*"],
-                        Resources = [Arn]
-                    });
+                    statements.Add(
+                        new AwsPolicyStatement
+                        {
+                            Effect = "Allow",
+                            Actions = ["kinesis:*"],
+                            Resources = [Arn],
+                        }
+                    );
                     break;
             }
-        }
+
         return statements;
     }
 }

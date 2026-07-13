@@ -9,23 +9,23 @@
 //     private readonly Dictionary<string, string> _environmentVariables = new();
 //     private readonly Dictionary<string, Output<string>> _environmentVariablesOutput = new();
 //     private readonly List<IPolicyStatement> _customPolicyStatements = new();
-//     
+//
 //     public AzureContainerAppsCompute(string name, IContainerRegistry containerRegistry, string imageTag = "latest")
 //     {
 //         Name = name;
 //         ContainerRegistry = containerRegistry;
 //         ServiceType = ComputeServiceType.ContainerApps;
 //         _requiredSecrets = new List<ISecret>();
-//         
+//
 //         // Azure Container Apps implementation would go here
 //         Arn = Output.Create($"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.App/containerApps/{name}");
-//         
+//
 //         // Handle the registry URL as an Output
-//         var imageUri = containerRegistry is AzureContainerRegistry azureRegistry 
+//         var imageUri = containerRegistry is AzureContainerRegistry azureRegistry
 //             ? azureRegistry.RegistryUrlOutput.Apply(url => $"{url}/{name}:{imageTag}")
 //             : Output.Create($"PLACEHOLDER_REGISTRY_URL/{name}:{imageTag}");
 //     }
-//     
+//
 //     public string Name { get; }
 //     public ComputeServiceType ServiceType { get; }
 //     public IContainerRegistry ContainerRegistry { get; }
@@ -33,35 +33,35 @@
 //     public Output<string> Arn { get; private set; }  // Changed to Output<string>
 //     public CloudProvider Provider => CloudProvider.Azure;
 //     public IDictionary<string, string> EnvironmentVariables => _environmentVariables;
-//     
+//
 //     public int MinCount { get; set; } = 1;
 //     public int MaxCount { get; set; } = 1;
 //     public Output<string> ServiceUrl { get; private set; } = Output.Create("");
 //     public IHealthCheckConfiguration? HealthCheckConfiguration { get; set; }
-//     
+//
 //     public void AttachRole(IRole role)
 //     {
 //         if (role is not AzureManagedIdentity managedIdentity)
 //         {
 //             throw new ArgumentException("Azure compute resources require AzureManagedIdentity, not generic IRole");
 //         }
-//     
+//
 //         var policies = new List<IPolicyStatement>();
-//     
+//
 //         foreach (var secret in RequiredSecrets)
 //         {
 //             policies.AddRange(secret.GetPolicy(SecretPermissions.Read));
 //         }
-//     
+//
 //         policies.AddRange(ContainerRegistry.GetPolicy(ContainerRegistryPermissions.Pull));
-//     
+//
 //         // Create role assignments for this managed identity
 //         managedIdentity.AttachInlinePolicy($"{Name}-permissions", policies);
-//     
+//
 //         // TODO: Configure the Container App to use this managed identity
 //         // This would involve setting the identity property on the Container App
 //     }
-//     
+//
 //     public void AddRequiredSecret(ISecret secret, string? environmentVariableName = null)
 //     {
 //         _requiredSecrets.Add(secret);
@@ -166,7 +166,7 @@
 //             _environmentVariables[kvp.Key] = kvp.Value;
 //         }
 //     }
-//     
+//
 //     public void Start() => throw new NotImplementedException("Azure Container Apps implementation needed");
 //     public void Stop() => throw new NotImplementedException();
 //     public void Scale(int replicas)
@@ -175,7 +175,7 @@
 //         var count = Math.Max(MinCount, Math.Min(MaxCount, replicas));
 //         // Azure Container Apps scaling logic would go here
 //     }
-//     
+//
 //     public void ConfigurePermissions()
 //     {
 //         // Implement Azure role assignments for required secrets, registry, and custom policy statements

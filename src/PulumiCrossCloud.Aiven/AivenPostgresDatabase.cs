@@ -7,16 +7,26 @@ public class AivenPostgresDatabase : IPostgresDatabase
 {
     private readonly global::Pulumi.Aiven.Pg _service;
 
-    public AivenPostgresDatabase(string name, Input<string> project, string plan, string? cloud = null, global::Pulumi.Aiven.Provider? provider = null)
+    public AivenPostgresDatabase(
+        string name,
+        Input<string> project,
+        string plan,
+        string? cloud = null,
+        global::Pulumi.Aiven.Provider? provider = null
+    )
     {
         Name = name;
-        _service = new global::Pulumi.Aiven.Pg(name, new global::Pulumi.Aiven.PgArgs
-        {
-            Project = project,
-            CloudName = cloud ?? "aws-eu-west-1",
-            Plan = plan,
-            ServiceName = name,
-        }, new CustomResourceOptions { Provider = provider });
+        _service = new global::Pulumi.Aiven.Pg(
+            name,
+            new global::Pulumi.Aiven.PgArgs
+            {
+                Project = project,
+                CloudName = cloud ?? "aws-eu-west-1",
+                Plan = plan,
+                ServiceName = name,
+            },
+            new CustomResourceOptions { Provider = provider }
+        );
     }
 
     public string Name { get; }
@@ -28,7 +38,7 @@ public class AivenPostgresDatabase : IPostgresDatabase
     public Output<string> Username => _service.ServiceUsername.Apply(u => u ?? string.Empty);
     public Output<string> Password => _service.ServicePassword.Apply(p => p ?? string.Empty);
     public Output<string> ConnectionString => _service.ServiceUri;
-    
+
     public Output<string> DatabaseName => Output.Create("defaultdb");
 
     public void EnableExtension(string extensionName)

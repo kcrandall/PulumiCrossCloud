@@ -18,5 +18,5 @@ public enum MessagingKind
     /// <summary>
     /// Ordered event stream/log that can be replayed.
     /// </summary>
-    Stream
+    Stream,
 }

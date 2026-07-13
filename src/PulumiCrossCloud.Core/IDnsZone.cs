@@ -39,7 +39,11 @@ public interface IDnsZone : ICloudResource
     /// <param name="ttl">TTL in seconds. If null, provider default is used.</param>
     /// <param name="proxied">Whether to proxy the records through the provider's CDN (CloudFlare-specific, ignored by other providers).</param>
     /// <returns>The DNS registration resources.</returns>
-    IEnumerable<IDnsRegistration> RegisterRecords(IEnumerable<DnsRecord> records, int? ttl = null, bool proxied = false);
+    IEnumerable<IDnsRegistration> RegisterRecords(
+        IEnumerable<DnsRecord> records,
+        int? ttl = null,
+        bool proxied = false
+    );
 
     /// <summary>
     /// The underlying Pulumi resource for dependency tracking.

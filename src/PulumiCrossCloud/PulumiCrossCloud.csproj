@@ -1,5 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <PackageId>PulumiCrossCloud</PackageId>
@@ -27,5 +26,4 @@
     <ProjectReference Include="..\PulumiCrossCloud.Sentry\PulumiCrossCloud.Sentry.csproj" />
     <ProjectReference Include="..\PulumiCrossCloud.Upstash\PulumiCrossCloud.Upstash.csproj" />
   </ItemGroup>
-
 </Project>

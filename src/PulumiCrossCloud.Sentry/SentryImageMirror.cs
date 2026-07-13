@@ -20,7 +20,11 @@ internal static class SentryImageMirror
 
     private static string WriteDockerfile(string imageName, string imageTag)
     {
-        var directory = Path.Combine(Path.GetTempPath(), "pulumi-cross-cloud-sentry", Guid.NewGuid().ToString("N"));
+        var directory = Path.Combine(
+            Path.GetTempPath(),
+            "pulumi-cross-cloud-sentry",
+            Guid.NewGuid().ToString("N")
+        );
         Directory.CreateDirectory(directory);
 
         var dockerfilePath = Path.Combine(directory, "Dockerfile");

@@ -1,6 +1,6 @@
 using Pulumi;
-using PulumiCrossCloud.Core;
 using Pulumi.Upstash;
+using PulumiCrossCloud.Core;
 
 namespace PulumiCrossCloud.Upstash;
 
@@ -16,11 +16,10 @@ public class UpstashCloudResourceFactory : CloudResourceFactory
     public UpstashCloudResourceFactory(Input<string> email, Input<string> apiKey)
         : base(CloudProvider.Upstash)
     {
-        _upstashProvider = new Pulumi.Upstash.Provider("upstash-provider", new Pulumi.Upstash.ProviderArgs
-        {
-            Email = email,
-            ApiKey = apiKey
-        });
+        _upstashProvider = new Pulumi.Upstash.Provider(
+            "upstash-provider",
+            new Pulumi.Upstash.ProviderArgs { Email = email, ApiKey = apiKey }
+        );
     }
 
     public UpstashCloudResourceFactory(Pulumi.Upstash.Provider? provider = null)
@@ -29,7 +28,10 @@ public class UpstashCloudResourceFactory : CloudResourceFactory
         _upstashProvider = provider;
     }
 
-    public override IMemoryCacheDatabase CreateMemoryCache(string name, MemoryCacheOptions? options = null)
+    public override IMemoryCacheDatabase CreateMemoryCache(
+        string name,
+        MemoryCacheOptions? options = null
+    )
     {
         return new UpstashRedisDatabase(name, options as UpstashRedisOptions, _upstashProvider);
     }

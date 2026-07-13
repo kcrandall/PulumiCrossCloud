@@ -22,7 +22,7 @@ public sealed class PostHogCloudResources
                 ApiKey = apiKey,
                 Host = host,
                 OrganizationId = organizationId,
-                ProjectId = projectId
+                ProjectId = projectId,
             }
         );
     }
@@ -32,10 +32,8 @@ public sealed class PostHogCloudResources
         Provider = provider;
     }
 
-    public PostHogOrganization CreateOrganization(
-        string name,
-        PostHogOrganizationArgs args
-    ) => new(name, args);
+    public PostHogOrganization CreateOrganization(string name, PostHogOrganizationArgs args) =>
+        new(name, args);
 
     public GeneratedPostHog.Project CreateProject(string name, GeneratedPostHog.ProjectArgs args) =>
         new(name, args, Options());

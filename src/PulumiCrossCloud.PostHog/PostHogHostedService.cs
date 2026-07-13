@@ -8,11 +8,7 @@ public sealed class PostHogHostedService : ComponentResource
     public ICompute Compute { get; }
     public Output<string> ServiceUrl => Compute.ServiceUrl;
 
-    public PostHogHostedService(
-        CloudResourceFactory factory,
-        string name,
-        PostHogHostingArgs args
-    )
+    public PostHogHostedService(CloudResourceFactory factory, string name, PostHogHostingArgs args)
         : base("posthog:HostedService", name, null, null)
     {
         ArgumentNullException.ThrowIfNull(factory);
@@ -20,7 +16,13 @@ public sealed class PostHogHostedService : ComponentResource
 
         var registry = args.Registry ?? factory.CreateContainerRegistry($"{name}-registry", false);
         var image = args.MirrorImageToRegistry
-            ? PostHogImageMirror.Push(factory, registry, $"{name}-image", args.ImageName, args.ImageTag)
+            ? PostHogImageMirror.Push(
+                factory,
+                registry,
+                $"{name}-image",
+                args.ImageName,
+                args.ImageTag
+            )
             : null;
 
         Compute = factory.CreateCompute(
@@ -42,8 +44,8 @@ public sealed class PostHogHostedService : ComponentResource
             {
                 ContainerPort = args.ContainerPort,
                 ExternalPort = args.ContainerPort,
-                Protocol = "TCP"
-            }
+                Protocol = "TCP",
+            },
         ];
         Compute.HealthCheckConfiguration = new HealthCheckConfiguration
         {
@@ -54,16 +56,13 @@ public sealed class PostHogHostedService : ComponentResource
             UnhealthyThreshold = 3,
             StartupIntervalSeconds = 30,
             StartupTimeoutSeconds = 10,
-            StartupUnhealthyThreshold = 30
+            StartupUnhealthyThreshold = 30,
         };
 
         AddPostHogEnvironment(args);
         Compute.Build();
 
-        RegisterOutputs(new Dictionary<string, object?>
-        {
-            ["serviceUrl"] = ServiceUrl
-        });
+        RegisterOutputs(new Dictionary<string, object?> { ["serviceUrl"] = ServiceUrl });
     }
 
     private void AddPostHogEnvironment(PostHogHostingArgs args)
@@ -96,17 +95,13 @@ public sealed class PostHogHostedService : ComponentResource
 
         Compute.AddEnvironmentVariables(args.EnvironmentVariables);
         foreach (var (environmentVariableName, secret) in args.SecretEnvironmentVariables)
-        {
             Compute.AddRequiredSecret(secret, environmentVariableName);
-        }
     }
 
     private void AddDatabaseEnvironment(PostHogDatabaseInputs? database)
     {
         if (database is null)
-        {
             return;
-        }
 
         if (database.Url is not null)
         {
@@ -125,9 +120,7 @@ public sealed class PostHogHostedService : ComponentResource
     private void AddRedisEnvironment(PostHogRedisInputs? redis)
     {
         if (redis is null)
-        {
             return;
-        }
 
         if (redis.Url is not null)
         {
@@ -155,15 +148,19 @@ public sealed class PostHogHostedService : ComponentResource
     private void AddClickHouseEnvironment(PostHogClickHouseInputs? clickHouse)
     {
         if (clickHouse is null)
-        {
             return;
-        }
 
         Compute.AddEnvironmentVariable("CLICKHOUSE_HOST", clickHouse.Host);
         Compute.AddEnvironmentVariable("CLICKHOUSE_PORT", clickHouse.Port.ToString());
         Compute.AddEnvironmentVariable("CLICKHOUSE_DATABASE", clickHouse.Database);
-        Compute.AddEnvironmentVariable("CLICKHOUSE_SECURE", clickHouse.Secure.ToString().ToLowerInvariant());
-        Compute.AddEnvironmentVariable("CLICKHOUSE_VERIFY", clickHouse.Verify.ToString().ToLowerInvariant());
+        Compute.AddEnvironmentVariable(
+            "CLICKHOUSE_SECURE",
+            clickHouse.Secure.ToString().ToLowerInvariant()
+        );
+        Compute.AddEnvironmentVariable(
+            "CLICKHOUSE_VERIFY",
+            clickHouse.Verify.ToString().ToLowerInvariant()
+        );
         Compute.AddEnvironmentVariable(
             "CLICKHOUSE_DISABLE_EXTERNAL_SCHEMAS",
             clickHouse.DisableExternalSchemas.ToString()
@@ -175,9 +172,7 @@ public sealed class PostHogHostedService : ComponentResource
     private void AddObjectStorageEnvironment(PostHogObjectStorageInputs? objectStorage)
     {
         if (objectStorage is null)
-        {
             return;
-        }
 
         Compute.AddEnvironmentVariable("OBJECT_STORAGE_ENABLED", "true");
         Compute.AddEnvironmentVariable("OBJECT_STORAGE_BUCKET", objectStorage.Bucket);
@@ -191,9 +186,7 @@ public sealed class PostHogHostedService : ComponentResource
     private void AddEmailEnvironment(PostHogEmailInputs? email)
     {
         if (email is null)
-        {
             return;
-        }
 
         Compute.AddEnvironmentVariable("EMAIL_ENABLED", email.Enabled.ToString());
         Compute.AddEnvironmentVariable("EMAIL_HOST", email.Host);
@@ -208,16 +201,12 @@ public sealed class PostHogHostedService : ComponentResource
     private void AddOptionalEnvironment(string name, string? value)
     {
         if (!string.IsNullOrWhiteSpace(value))
-        {
             Compute.AddEnvironmentVariable(name, value);
-        }
     }
 
     private void AddOptionalSecret(ISecret? secret, string environmentVariableName)
     {
         if (secret is not null)
-        {
             Compute.AddRequiredSecret(secret, environmentVariableName);
-        }
     }
 }

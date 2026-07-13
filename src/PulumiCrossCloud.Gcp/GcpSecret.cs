@@ -9,7 +9,12 @@ public class GcpSecret : ISecret
     private readonly Pulumi.Gcp.SecretManager.Secret _secret;
     private readonly Pulumi.Gcp.SecretManager.SecretVersion? _secretVersion;
 
-    public GcpSecret(string name, string value, bool ignoreChangesAfterCreate = false, Pulumi.Gcp.Provider? provider = null)
+    public GcpSecret(
+        string name,
+        string value,
+        bool ignoreChangesAfterCreate = false,
+        Pulumi.Gcp.Provider? provider = null
+    )
     {
         Name = name;
         IgnoreChangesAfterCreate = ignoreChangesAfterCreate;
@@ -23,7 +28,10 @@ public class GcpSecret : ISecret
             {
                 SecretId = name,
                 Project = projectId,
-                Replication = new SecretReplicationArgs { Auto = new SecretReplicationAutoArgs { } }
+                Replication = new SecretReplicationArgs
+                {
+                    Auto = new SecretReplicationAutoArgs { },
+                },
             },
             new Pulumi.CustomResourceOptions { DependsOn = dependsOn, Provider = provider }
         );
@@ -32,7 +40,7 @@ public class GcpSecret : ISecret
             var secretVersionArgs = new Pulumi.Gcp.SecretManager.SecretVersionArgs
             {
                 Secret = _secret.Id,
-                SecretData = value
+                SecretData = value,
             };
             var options = ignoreChangesAfterCreate
                 ? new CustomResourceOptions { IgnoreChanges = ["secretData"], Provider = provider }
@@ -44,12 +52,15 @@ public class GcpSecret : ISecret
             );
         }
         else
-        {
             _secretVersion = null;
-        }
     }
 
-    public GcpSecret(string name, Output<string> value, bool ignoreChangesAfterCreate = false, Pulumi.Gcp.Provider? provider = null)
+    public GcpSecret(
+        string name,
+        Output<string> value,
+        bool ignoreChangesAfterCreate = false,
+        Pulumi.Gcp.Provider? provider = null
+    )
     {
         Name = name;
         IgnoreChangesAfterCreate = ignoreChangesAfterCreate;
@@ -63,7 +74,10 @@ public class GcpSecret : ISecret
             {
                 SecretId = name,
                 Project = projectId,
-                Replication = new SecretReplicationArgs { Auto = new SecretReplicationAutoArgs { } }
+                Replication = new SecretReplicationArgs
+                {
+                    Auto = new SecretReplicationAutoArgs { },
+                },
             },
             new Pulumi.CustomResourceOptions { DependsOn = dependsOn, Provider = provider }
         );
@@ -72,7 +86,7 @@ public class GcpSecret : ISecret
         var secretVersionArgs = new Pulumi.Gcp.SecretManager.SecretVersionArgs
         {
             Secret = _secret.Id,
-            SecretData = value
+            SecretData = value,
         };
         var options = ignoreChangesAfterCreate
             ? new CustomResourceOptions { IgnoreChanges = ["secretData"], Provider = provider }
@@ -125,7 +139,7 @@ public class GcpSecret : ISecret
             secretName,
             new Google.Cloud.SecretManager.V1.SecretPayload
             {
-                Data = Google.Protobuf.ByteString.CopyFromUtf8(value)
+                Data = Google.Protobuf.ByteString.CopyFromUtf8(value),
             }
         );
     }
@@ -144,7 +158,7 @@ public class GcpSecret : ISecret
                         {
                             Effect = "Allow",
                             Actions = new[] { "roles/secretmanager.secretAccessor" },
-                            Resources = new Output<string>[] { Arn } // Fixed to use Output<string>[]
+                            Resources = new Output<string>[] { Arn }, // Fixed to use Output<string>[]
                         }
                     );
                     break;
@@ -154,7 +168,7 @@ public class GcpSecret : ISecret
                         {
                             Effect = "Allow",
                             Actions = new[] { "roles/secretmanager.secretVersionAdder" },
-                            Resources = new Output<string>[] { Arn }
+                            Resources = new Output<string>[] { Arn },
                         }
                     );
                     break;
@@ -166,8 +180,8 @@ public class GcpSecret : ISecret
                             Actions = new[] { "roles/secretmanager.viewer" },
                             Resources = new Output<string>[]
                             {
-                                Arn.Apply(arn => arn.Replace($"/secrets/{Name}", "/secrets/*"))
-                            }
+                                Arn.Apply(arn => arn.Replace($"/secrets/{Name}", "/secrets/*")),
+                            },
                         }
                     );
                     break;
@@ -177,7 +191,7 @@ public class GcpSecret : ISecret
                         {
                             Effect = "Allow",
                             Actions = new[] { "roles/secretmanager.admin" },
-                            Resources = new Output<string>[] { Arn }
+                            Resources = new Output<string>[] { Arn },
                         }
                     );
                     break;
@@ -187,7 +201,7 @@ public class GcpSecret : ISecret
                         {
                             Effect = "Allow",
                             Actions = new[] { "roles/secretmanager.viewer" },
-                            Resources = new Output<string>[] { Arn }
+                            Resources = new Output<string>[] { Arn },
                         }
                     );
                     break;

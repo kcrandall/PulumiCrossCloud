@@ -1,5 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <ItemGroup>
     <ProjectReference Include="..\PulumiCrossCloud.Core\PulumiCrossCloud.Core.csproj" />
     <ProjectReference Include="Generated\posthog\Pulumi.Posthog.csproj" PrivateAssets="all" />
@@ -18,12 +17,14 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);Generated\**</DefaultItemExcludes>
   </PropertyGroup>
 
-  <Target Name="IncludeGeneratedPostHogProviderInPackage" BeforeTargets="_GetBuildOutputFilesWithTfm">
+  <Target
+    Name="IncludeGeneratedPostHogProviderInPackage"
+    BeforeTargets="_GetBuildOutputFilesWithTfm"
+  >
     <ItemGroup>
       <BuildOutputInPackage Include="$(MSBuildProjectDirectory)\Generated\posthog\bin\$(Configuration)\$(TargetFramework)\Pulumi.Posthog.dll">
         <TargetPath>Pulumi.Posthog.dll</TargetPath>
       </BuildOutputInPackage>
     </ItemGroup>
   </Target>
-
 </Project>

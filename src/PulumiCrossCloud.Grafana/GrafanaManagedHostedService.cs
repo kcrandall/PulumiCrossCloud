@@ -35,15 +35,16 @@ public sealed class GrafanaManagedHostedService : ComponentResource
         {
             Postgres = factory.CreatePostgresDatabase(
                 $"{name}-postgres",
-                args.PostgresOptions ?? new PostgresOptions
-                {
-                    InitialDatabaseName = "grafana",
-                    MasterUsername = "grafana"
-                }
+                args.PostgresOptions
+                    ?? new PostgresOptions
+                    {
+                        InitialDatabaseName = "grafana",
+                        MasterUsername = "grafana",
+                    }
             );
             postgresInputs = new GrafanaDatabaseInputs
             {
-                Url = factory.CreateSecret($"{name}-postgres-url", Postgres.ConnectionString)
+                Url = factory.CreateSecret($"{name}-postgres-url", Postgres.ConnectionString),
             };
         }
 
@@ -57,7 +58,7 @@ public sealed class GrafanaManagedHostedService : ComponentResource
                     $"{name}-redis-connstr",
                     BuildRemoteCacheConnectionString(Redis)
                 ),
-                EnableAlertingHighAvailability = false
+                EnableAlertingHighAvailability = false,
             };
         }
 
@@ -67,26 +68,20 @@ public sealed class GrafanaManagedHostedService : ComponentResource
             WithDependencies(args.Hosting, postgresInputs, redisInputs)
         );
 
-        RegisterOutputs(new Dictionary<string, object?>
-        {
-            ["serviceUrl"] = ServiceUrl
-        });
+        RegisterOutputs(new Dictionary<string, object?> { ["serviceUrl"] = ServiceUrl });
     }
 
     private static Output<string> BuildRemoteCacheConnectionString(IMemoryCacheDatabase redis) =>
-        Output.Tuple(redis.Host, redis.Port, redis.Username, redis.Password)
+        Output
+            .Tuple(redis.Host, redis.Port, redis.Username, redis.Password)
             .Apply(values =>
             {
                 var connectionString = $"addr={values.Item1}:{values.Item2}";
                 if (!string.IsNullOrWhiteSpace(values.Item3))
-                {
                     connectionString += $",username={values.Item3}";
-                }
 
                 if (!string.IsNullOrWhiteSpace(values.Item4))
-                {
                     connectionString += $",password={values.Item4}";
-                }
 
                 return connectionString;
             });
@@ -121,6 +116,6 @@ public sealed class GrafanaManagedHostedService : ComponentResource
             MaxCount = args.MaxCount,
             MemoryLimit = args.MemoryLimit,
             CpuLimit = args.CpuLimit,
-            MirrorImageToRegistry = args.MirrorImageToRegistry
+            MirrorImageToRegistry = args.MirrorImageToRegistry,
         };
 }

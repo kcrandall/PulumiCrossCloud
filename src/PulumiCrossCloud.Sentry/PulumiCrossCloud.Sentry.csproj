@@ -1,5 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <ItemGroup>
     <ProjectReference Include="..\PulumiCrossCloud.Core\PulumiCrossCloud.Core.csproj" />
     <ProjectReference Include="Generated\sentry\Pulumi.Sentry.csproj" PrivateAssets="all" />
@@ -17,12 +16,14 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);Generated\**</DefaultItemExcludes>
   </PropertyGroup>
 
-  <Target Name="IncludeGeneratedSentryProviderInPackage" BeforeTargets="_GetBuildOutputFilesWithTfm">
+  <Target
+    Name="IncludeGeneratedSentryProviderInPackage"
+    BeforeTargets="_GetBuildOutputFilesWithTfm"
+  >
     <ItemGroup>
       <BuildOutputInPackage Include="$(MSBuildProjectDirectory)\Generated\sentry\bin\$(Configuration)\$(TargetFramework)\Pulumi.Sentry.dll">
         <TargetPath>Pulumi.Sentry.dll</TargetPath>
       </BuildOutputInPackage>
     </ItemGroup>
   </Target>
-
 </Project>

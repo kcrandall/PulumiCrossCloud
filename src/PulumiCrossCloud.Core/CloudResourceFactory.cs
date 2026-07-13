@@ -61,7 +61,10 @@ public abstract class CloudResourceFactory
     public virtual IContainerRegistry CreateContainerRegistry(
         string name,
         bool createDefaultImage = true
-    ) => throw new NotSupportedException($"Container registries are not supported for provider {_provider}.");
+    ) =>
+        throw new NotSupportedException(
+            $"Container registries are not supported for provider {_provider}."
+        );
 
     /// <summary>
     /// Creates a container image resource. See implementation for details.
@@ -71,7 +74,9 @@ public abstract class CloudResourceFactory
     /// <param name="registry">The container registry to use.</param>
     /// <returns>An <see cref="IContainerImage"/> instance.</returns>
     public virtual IContainerImage CreateContainerImage(string name, IContainerRegistry registry) =>
-        throw new NotSupportedException($"Container images are not supported for provider {_provider}.");
+        throw new NotSupportedException(
+            $"Container images are not supported for provider {_provider}."
+        );
 
     /// <summary>
     /// Creates a compute resource (e.g., Cloud Run, App Runner). See implementation for details.
@@ -91,7 +96,10 @@ public abstract class CloudResourceFactory
         string imageTag = "latest",
         IContainerImage? containerImage = null,
         ComputeServiceType? serviceType = null
-    ) => throw new NotSupportedException($"Compute resources are not supported for provider {_provider}.");
+    ) =>
+        throw new NotSupportedException(
+            $"Compute resources are not supported for provider {_provider}."
+        );
 
     /// <summary>
     /// Creates a role resource. See implementation for details.
@@ -141,7 +149,9 @@ public abstract class CloudResourceFactory
     /// <param name="domainName">The domain name of the zone to look up.</param>
     /// <returns>An <see cref="IDnsZone"/> instance.</returns>
     public virtual IDnsZone LookupDnsZone(string name, string domainName) =>
-        throw new NotSupportedException($"DNS zone lookup is not supported for provider {_provider}.");
+        throw new NotSupportedException(
+            $"DNS zone lookup is not supported for provider {_provider}."
+        );
 
     /// <summary>
     /// Creates an email service resource.
@@ -151,8 +161,14 @@ public abstract class CloudResourceFactory
     /// <param name="domainName">The domain name to set up for email (e.g. "mail.example.com").</param>
     /// <param name="zone">Optional DNS zone to configure records in.</param>
     /// <returns>An <see cref="IEmailService"/> instance.</returns>
-    public virtual IEmailService CreateEmailService(string name, string domainName, IDnsZone? zone = null) =>
-        throw new NotSupportedException($"Email service is not supported for provider {_provider}.");
+    public virtual IEmailService CreateEmailService(
+        string name,
+        string domainName,
+        IDnsZone? zone = null
+    ) =>
+        throw new NotSupportedException(
+            $"Email service is not supported for provider {_provider}."
+        );
 
     /// <summary>
     /// Creates a Postgres database resource.
@@ -164,7 +180,10 @@ public abstract class CloudResourceFactory
     public virtual IPostgresDatabase CreatePostgresDatabase(
         string name,
         IPostgresOptions? options = null
-    ) => throw new NotSupportedException($"Postgres databases are not supported for provider {_provider}.");
+    ) =>
+        throw new NotSupportedException(
+            $"Postgres databases are not supported for provider {_provider}."
+        );
 
     /// <summary>
     /// Creates a point-to-point work queue.
@@ -191,8 +210,13 @@ public abstract class CloudResourceFactory
     /// Creates a memory cache database (e.g. Redis, Valkey).
     /// Default implementation throws NotSupportedException.
     /// </summary>
-    public virtual IMemoryCacheDatabase CreateMemoryCache(string name, MemoryCacheOptions? options = null) =>
-        throw new NotSupportedException($"Memory caches are not supported for provider {_provider}.");
+    public virtual IMemoryCacheDatabase CreateMemoryCache(
+        string name,
+        MemoryCacheOptions? options = null
+    ) =>
+        throw new NotSupportedException(
+            $"Memory caches are not supported for provider {_provider}."
+        );
 
     /// <summary>
     /// Creates a search database resource (e.g. OpenSearch, Elasticsearch).
@@ -202,5 +226,8 @@ public abstract class CloudResourceFactory
         string name,
         SearchDatabaseType type,
         ISearchDatabaseOptions? options = null
-    ) => throw new NotSupportedException($"Search databases are not supported for provider {_provider}.");
+    ) =>
+        throw new NotSupportedException(
+            $"Search databases are not supported for provider {_provider}."
+        );
 }

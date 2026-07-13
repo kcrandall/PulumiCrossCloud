@@ -8,11 +8,7 @@ public sealed class SentryHostedService : ComponentResource
     public ICompute Compute { get; }
     public Output<string> ServiceUrl => Compute.ServiceUrl;
 
-    public SentryHostedService(
-        CloudResourceFactory factory,
-        string name,
-        SentryHostingArgs args
-    )
+    public SentryHostedService(CloudResourceFactory factory, string name, SentryHostingArgs args)
         : base("sentry:HostedService", name, null, null)
     {
         ArgumentNullException.ThrowIfNull(factory);
@@ -20,7 +16,13 @@ public sealed class SentryHostedService : ComponentResource
 
         var registry = args.Registry ?? factory.CreateContainerRegistry($"{name}-registry", false);
         var image = args.MirrorImageToRegistry
-            ? SentryImageMirror.Push(factory, registry, $"{name}-image", args.ImageName, args.ImageTag)
+            ? SentryImageMirror.Push(
+                factory,
+                registry,
+                $"{name}-image",
+                args.ImageName,
+                args.ImageTag
+            )
             : null;
 
         Compute = factory.CreateCompute(
@@ -42,8 +44,8 @@ public sealed class SentryHostedService : ComponentResource
             {
                 ContainerPort = args.ContainerPort,
                 ExternalPort = args.ContainerPort,
-                Protocol = "TCP"
-            }
+                Protocol = "TCP",
+            },
         ];
         Compute.HealthCheckConfiguration = new HealthCheckConfiguration
         {
@@ -54,16 +56,13 @@ public sealed class SentryHostedService : ComponentResource
             UnhealthyThreshold = 3,
             StartupIntervalSeconds = 30,
             StartupTimeoutSeconds = 10,
-            StartupUnhealthyThreshold = 20
+            StartupUnhealthyThreshold = 20,
         };
 
         AddSentryEnvironment(args);
         Compute.Build();
 
-        RegisterOutputs(new Dictionary<string, object?>
-        {
-            ["serviceUrl"] = ServiceUrl
-        });
+        RegisterOutputs(new Dictionary<string, object?> { ["serviceUrl"] = ServiceUrl });
     }
 
     private void AddSentryEnvironment(SentryHostingArgs args)
@@ -84,30 +83,25 @@ public sealed class SentryHostedService : ComponentResource
         Compute.AddRequiredSecret(postgres.Password, "SENTRY_DB_PASSWORD");
 
         if (postgres.ConnectionString is not null)
-        {
             Compute.AddRequiredSecret(postgres.ConnectionString, "SENTRY_DATABASE_URL");
-        }
 
         Compute.AddEnvironmentVariable("SENTRY_REDIS_HOST", redis.Host);
         Compute.AddEnvironmentVariable("SENTRY_REDIS_PORT", redis.Port.ToString());
         Compute.AddEnvironmentVariable("SENTRY_REDIS_DB", redis.Database.ToString());
 
         if (redis.Password is not null)
-        {
             Compute.AddRequiredSecret(redis.Password, "SENTRY_REDIS_PASSWORD");
-        }
 
         if (redis.Url is not null)
-        {
             Compute.AddRequiredSecret(redis.Url, "SENTRY_REDIS_URL");
-        }
 
         if (!string.IsNullOrWhiteSpace(args.SystemUrlPrefix))
-        {
             Compute.AddEnvironmentVariable("SENTRY_SYSTEM_URL_PREFIX", args.SystemUrlPrefix);
-        }
 
-        AddOptionalEnvironment("SENTRY_KAFKA_BOOTSTRAP_SERVERS", args.Dependencies.KafkaBootstrapServers);
+        AddOptionalEnvironment(
+            "SENTRY_KAFKA_BOOTSTRAP_SERVERS",
+            args.Dependencies.KafkaBootstrapServers
+        );
         AddOptionalEnvironment("SENTRY_CLICKHOUSE_HOST", args.Dependencies.ClickHouseHost);
         AddOptionalEnvironment(
             "SENTRY_CLICKHOUSE_PORT",
@@ -118,16 +112,12 @@ public sealed class SentryHostedService : ComponentResource
 
         Compute.AddEnvironmentVariables(args.EnvironmentVariables);
         foreach (var (environmentVariableName, secret) in args.SecretEnvironmentVariables)
-        {
             Compute.AddRequiredSecret(secret, environmentVariableName);
-        }
     }
 
     private void AddOptionalEnvironment(string name, string? value)
     {
         if (!string.IsNullOrWhiteSpace(value))
-        {
             Compute.AddEnvironmentVariable(name, value);
-        }
     }
 }

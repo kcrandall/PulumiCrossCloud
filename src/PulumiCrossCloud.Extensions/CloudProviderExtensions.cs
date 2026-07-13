@@ -17,10 +17,10 @@ public static class CloudProviderExtensions
             CloudProvider.Koyeb => "Koyeb",
             CloudProvider.Fly => "Fly.io",
             CloudProvider.DigitalOcean => "DigitalOcean",
-            _ => provider.ToString()
+            _ => provider.ToString(),
         };
     }
-    
+
     /// <summary>
     /// Gets the short name/abbreviation for the cloud provider
     /// </summary>
@@ -34,35 +34,56 @@ public static class CloudProviderExtensions
             CloudProvider.Koyeb => "Koyeb",
             CloudProvider.Fly => "Fly.io",
             CloudProvider.DigitalOcean => "DigitalOcean",
-            _ => provider.ToString()
+            _ => provider.ToString(),
         };
     }
-    
+
     /// <summary>
     /// Gets supported compute service types for the provider
     /// </summary>
-    public static IEnumerable<ComputeServiceType> GetSupportedComputeTypes(this CloudProvider provider)
+    public static IEnumerable<ComputeServiceType> GetSupportedComputeTypes(
+        this CloudProvider provider
+    )
     {
         return provider switch
         {
-            CloudProvider.AWS => new[] { ComputeServiceType.AppRunner, ComputeServiceType.Fargate, ComputeServiceType.EC2, ComputeServiceType.ECS },
-            CloudProvider.Azure => new[] { ComputeServiceType.ContainerApps, ComputeServiceType.ContainerInstances, ComputeServiceType.AppService },
-            CloudProvider.GCP => new[] { ComputeServiceType.CloudRun, ComputeServiceType.CloudRunJobs, ComputeServiceType.ComputeEngine },
+            CloudProvider.AWS => new[]
+            {
+                ComputeServiceType.AppRunner,
+                ComputeServiceType.Fargate,
+                ComputeServiceType.EC2,
+                ComputeServiceType.ECS,
+            },
+            CloudProvider.Azure => new[]
+            {
+                ComputeServiceType.ContainerApps,
+                ComputeServiceType.ContainerInstances,
+                ComputeServiceType.AppService,
+            },
+            CloudProvider.GCP => new[]
+            {
+                ComputeServiceType.CloudRun,
+                ComputeServiceType.CloudRunJobs,
+                ComputeServiceType.ComputeEngine,
+            },
             CloudProvider.Koyeb => new[] { ComputeServiceType.KoyebService },
             CloudProvider.Fly => new[] { ComputeServiceType.FlyMachine },
             CloudProvider.DigitalOcean => new[] { ComputeServiceType.DigitalOceanAppPlatform },
-            _ => Enumerable.Empty<ComputeServiceType>()
+            _ => Enumerable.Empty<ComputeServiceType>(),
         };
     }
-    
+
     /// <summary>
     /// Checks if a compute service type is supported by the provider
     /// </summary>
-    public static bool SupportsComputeType(this CloudProvider provider, ComputeServiceType serviceType)
+    public static bool SupportsComputeType(
+        this CloudProvider provider,
+        ComputeServiceType serviceType
+    )
     {
         return provider.GetSupportedComputeTypes().Contains(serviceType);
     }
-    
+
     /// <summary>
     /// Gets the default compute service type for the provider
     /// </summary>
@@ -76,10 +97,10 @@ public static class CloudProviderExtensions
             CloudProvider.Koyeb => ComputeServiceType.KoyebService,
             CloudProvider.Fly => ComputeServiceType.FlyMachine,
             CloudProvider.DigitalOcean => ComputeServiceType.DigitalOceanAppPlatform,
-            _ => throw new ArgumentException($"No default compute type for provider: {provider}")
+            _ => throw new ArgumentException($"No default compute type for provider: {provider}"),
         };
     }
-    
+
     /// <summary>
     /// Gets the resource identifier format for the provider
     /// </summary>
@@ -88,12 +109,13 @@ public static class CloudProviderExtensions
         return provider switch
         {
             CloudProvider.AWS => "arn:aws:service:region:account:resource",
-            CloudProvider.Azure => "/subscriptions/sub/resourceGroups/rg/providers/provider/resource",
+            CloudProvider.Azure =>
+                "/subscriptions/sub/resourceGroups/rg/providers/provider/resource",
             CloudProvider.GCP => "projects/project/locations/location/resource",
             CloudProvider.Koyeb => "koyeb://resource/id",
             CloudProvider.Fly => "fly://app/resource/id",
             CloudProvider.DigitalOcean => "do://resource/id",
-            _ => "unknown"
+            _ => "unknown",
         };
     }
 }

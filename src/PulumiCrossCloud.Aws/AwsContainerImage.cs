@@ -22,9 +22,7 @@ public class AwsContainerImage : IContainerImage
         Registry = registry ?? throw new ArgumentNullException(nameof(registry));
 
         if (registry.Provider != CloudProvider.AWS)
-        {
             throw new ArgumentException("Registry must be an AWS registry", nameof(registry));
-        }
     }
 
     Output<ImageDeploymentResult> PushImage(
@@ -47,7 +45,7 @@ public class AwsContainerImage : IContainerImage
         var repository = awsRegistry?.Resource as Pulumi.Aws.Ecr.Repository;
         // Get ECR auth token
         var authToken = Pulumi.Aws.Ecr.GetAuthorizationToken.Invoke(
-            new() { RegistryId = repository!.RegistryId, }
+            new() { RegistryId = repository!.RegistryId }
         );
 
         return new InputList<RegistryArgs>
@@ -56,8 +54,8 @@ public class AwsContainerImage : IContainerImage
             {
                 Address = awsRegistry!.RegistryUrlOutput.Apply(url => url.Split('/')[0]), // Just the registry domain
                 Username = authToken.Apply(token => token.UserName),
-                Password = authToken.Apply(token => token.Password)
-            }
+                Password = authToken.Apply(token => token.Password),
+            },
         };
     }
 

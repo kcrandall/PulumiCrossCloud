@@ -12,7 +12,11 @@ public class GcpPostgresDatabase : IPostgresDatabase
     private readonly User _user;
     private readonly Output<string> _password;
 
-    public GcpPostgresDatabase(string name, IPostgresOptions? options = null, Pulumi.Gcp.Provider? provider = null)
+    public GcpPostgresDatabase(
+        string name,
+        IPostgresOptions? options = null,
+        Pulumi.Gcp.Provider? provider = null
+    )
     {
         Name = name;
         var gcpOptions = options as GcpPostgresOptions ?? new GcpPostgresOptions();
@@ -22,55 +26,71 @@ public class GcpPostgresDatabase : IPostgresDatabase
 
         var databaseFlags = new List<DatabaseInstanceSettingsDatabaseFlagArgs>();
         if (options?.EnableLogicalReplication == true)
-        {
-            databaseFlags.Add(new DatabaseInstanceSettingsDatabaseFlagArgs
-            {
-                Name = "cloudsql.logical_decoding",
-                Value = "on"
-            });
-        }
-
-        _instance = new DatabaseInstance(name, new DatabaseInstanceArgs
-        {
-            Project = projectId,
-            Region = region,
-            DatabaseVersion = $"POSTGRES_{options?.MajorVersion ?? 17}",
-            Settings = new DatabaseInstanceSettingsArgs
-            {
-                Tier = gcpOptions.Tier,
-                IpConfiguration = new DatabaseInstanceSettingsIpConfigurationArgs
+            databaseFlags.Add(
+                new DatabaseInstanceSettingsDatabaseFlagArgs
                 {
-                    Ipv4Enabled = options?.PubliclyAccessible ?? false,
+                    Name = "cloudsql.logical_decoding",
+                    Value = "on",
+                }
+            );
+
+        _instance = new DatabaseInstance(
+            name,
+            new DatabaseInstanceArgs
+            {
+                Project = projectId,
+                Region = region,
+                DatabaseVersion = $"POSTGRES_{options?.MajorVersion ?? 17}",
+                Settings = new DatabaseInstanceSettingsArgs
+                {
+                    Tier = gcpOptions.Tier,
+                    IpConfiguration = new DatabaseInstanceSettingsIpConfigurationArgs
+                    {
+                        Ipv4Enabled = options?.PubliclyAccessible ?? false,
+                    },
+                    DatabaseFlags = databaseFlags,
                 },
-                DatabaseFlags = databaseFlags
+                DeletionProtection = false,
             },
-            DeletionProtection = false
-        }, customResourceOptions);
+            customResourceOptions
+        );
 
         var dbName = options?.InitialDatabaseName ?? name;
-        _database = new Database($"{name}-db", new DatabaseArgs
-        {
-            Instance = _instance.Name,
-            Name = dbName,
-            Project = projectId,
-        }, customResourceOptions);
+        _database = new Database(
+            $"{name}-db",
+            new DatabaseArgs
+            {
+                Instance = _instance.Name,
+                Name = dbName,
+                Project = projectId,
+            },
+            customResourceOptions
+        );
 
         var masterUser = options?.MasterUsername ?? "admin";
-        var passwordResource = new Pulumi.Random.RandomPassword($"{name}-password", new Pulumi.Random.RandomPasswordArgs
-        {
-            Length = 16,
-            Special = true,
-            OverrideSpecial = "!#$%&*()-_=+[]{}<>:?"
-        }, customResourceOptions);
+        var passwordResource = new Pulumi.Random.RandomPassword(
+            $"{name}-password",
+            new Pulumi.Random.RandomPasswordArgs
+            {
+                Length = 16,
+                Special = true,
+                OverrideSpecial = "!#$%&*()-_=+[]{}<>:?",
+            },
+            customResourceOptions
+        );
         _password = passwordResource.Result;
 
-        _user = new User($"{name}-user", new UserArgs
-        {
-            Instance = _instance.Name,
-            Name = masterUser,
-            Password = _password,
-            Project = projectId,
-        }, customResourceOptions);
+        _user = new User(
+            $"{name}-user",
+            new UserArgs
+            {
+                Instance = _instance.Name,
+                Name = masterUser,
+                Password = _password,
+                Project = projectId,
+            },
+            customResourceOptions
+        );
     }
 
     public string Name { get; }
@@ -83,7 +103,7 @@ public class GcpPostgresDatabase : IPostgresDatabase
     public Output<string> Password => _password;
     public Output<string> DatabaseName => _database.Name;
 
-    public Output<string> ConnectionString => 
+    public Output<string> ConnectionString =>
         Output.Format($"postgresql://{Username}:{Password}@{Host}:{Port}/{DatabaseName}");
 
     public void EnableExtension(string extensionName)
@@ -95,27 +115,30 @@ public class GcpPostgresDatabase : IPostgresDatabase
     {
         var statements = new List<IPolicyStatement>();
         foreach (var permission in permissions)
-        {
             switch (permission)
             {
                 case PostgresPermissions.Connect:
-                    statements.Add(new GcpPolicyStatement
-                    {
-                        Effect = "Allow",
-                        Actions = ["roles/cloudsql.client"],
-                        Resources = [Arn]
-                    });
+                    statements.Add(
+                        new GcpPolicyStatement
+                        {
+                            Effect = "Allow",
+                            Actions = ["roles/cloudsql.client"],
+                            Resources = [Arn],
+                        }
+                    );
                     break;
                 case PostgresPermissions.Admin:
-                    statements.Add(new GcpPolicyStatement
-                    {
-                        Effect = "Allow",
-                        Actions = ["roles/cloudsql.admin"],
-                        Resources = [Arn]
-                    });
+                    statements.Add(
+                        new GcpPolicyStatement
+                        {
+                            Effect = "Allow",
+                            Actions = ["roles/cloudsql.admin"],
+                            Resources = [Arn],
+                        }
+                    );
                     break;
             }
-        }
+
         return statements;
     }
 }

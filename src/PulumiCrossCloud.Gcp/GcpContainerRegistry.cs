@@ -23,7 +23,11 @@ public class GcpContainerRegistry : IContainerRegistry
     /// </summary>
     /// <param name="name">The resource name</param>
     /// <param name="useDefaultHelloWorldImage"></param>
-    public GcpContainerRegistry(string name, bool createDefaultImage = false, Pulumi.Gcp.Provider? provider = null)
+    public GcpContainerRegistry(
+        string name,
+        bool createDefaultImage = false,
+        Pulumi.Gcp.Provider? provider = null
+    )
     {
         Name = name;
         var projectId = GcpProjectConfig.ProjectId;
@@ -43,7 +47,7 @@ public class GcpContainerRegistry : IContainerRegistry
                 Location = region,
                 RepositoryId = name,
                 Format = "DOCKER",
-                Description = $"Docker repository for {name}"
+                Description = $"Docker repository for {name}",
             },
             new CustomResourceOptions { DependsOn = [artifactRegistryService], Provider = provider }
         );
@@ -54,7 +58,6 @@ public class GcpContainerRegistry : IContainerRegistry
         _useDefaultHelloWorldImage = createDefaultImage;
         _readyResource = _repository;
     }
-
 
     public string Name { get; }
     public string RepositoryId { get; }
@@ -124,7 +127,8 @@ public class GcpContainerRegistry : IContainerRegistry
             Task.Run(async () =>
             {
                 var credential = await GoogleCredential.GetApplicationDefaultAsync();
-                var accessToken = await credential.UnderlyingCredential.GetAccessTokenForRequestAsync();
+                var accessToken =
+                    await credential.UnderlyingCredential.GetAccessTokenForRequestAsync();
                 return accessToken ?? throw new Exception("Failed to get access token");
             })
         );
@@ -135,8 +139,8 @@ public class GcpContainerRegistry : IContainerRegistry
             {
                 Address = $"{_region}-docker.pkg.dev",
                 Username = "oauth2accesstoken",
-                Password = token
-            }
+                Password = token,
+            },
         };
     }
 
@@ -175,7 +179,7 @@ public class GcpContainerRegistry : IContainerRegistry
                         {
                             Effect = "Allow",
                             Actions = new[] { "roles/artifactregistry.reader" },
-                            Resources = new Output<string>[] { Arn } // Fixed to use Output<string>[]
+                            Resources = new Output<string>[] { Arn }, // Fixed to use Output<string>[]
                         }
                     );
                     break;
@@ -185,7 +189,7 @@ public class GcpContainerRegistry : IContainerRegistry
                         {
                             Effect = "Allow",
                             Actions = new[] { "roles/artifactregistry.writer" },
-                            Resources = new Output<string>[] { Arn }
+                            Resources = new Output<string>[] { Arn },
                         }
                     );
                     break;
@@ -195,7 +199,7 @@ public class GcpContainerRegistry : IContainerRegistry
                         {
                             Effect = "Allow",
                             Actions = new[] { "roles/artifactregistry.reader" },
-                            Resources = new Output<string>[] { Arn }
+                            Resources = new Output<string>[] { Arn },
                         }
                     );
                     break;
@@ -205,7 +209,7 @@ public class GcpContainerRegistry : IContainerRegistry
                         {
                             Effect = "Allow",
                             Actions = new[] { "roles/artifactregistry.repoAdmin" },
-                            Resources = new Output<string>[] { Arn }
+                            Resources = new Output<string>[] { Arn },
                         }
                     );
                     break;
@@ -215,7 +219,7 @@ public class GcpContainerRegistry : IContainerRegistry
                         {
                             Effect = "Allow",
                             Actions = new[] { "roles/artifactregistry.reader" },
-                            Resources = new Output<string>[] { Arn }
+                            Resources = new Output<string>[] { Arn },
                         }
                     );
                     break;
@@ -225,7 +229,7 @@ public class GcpContainerRegistry : IContainerRegistry
                         {
                             Effect = "Allow",
                             Actions = new[] { "roles/artifactregistry.admin" },
-                            Resources = new Output<string>[] { Arn }
+                            Resources = new Output<string>[] { Arn },
                         }
                     );
                     break;
@@ -235,7 +239,7 @@ public class GcpContainerRegistry : IContainerRegistry
                         {
                             Effect = "Allow",
                             Actions = new[] { "roles/artifactregistry.reader" },
-                            Resources = new Output<string>[] { Arn }
+                            Resources = new Output<string>[] { Arn },
                         }
                     );
                     break;

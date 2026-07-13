@@ -53,8 +53,8 @@ public class GcpBucket : IBucket
         var customResourceOptions = new CustomResourceOptions { Provider = provider };
 
         // Website configuration
-        BucketWebsiteArgs? websiteArgs = IndexDocument is not null 
-            ? new BucketWebsiteArgs { MainPageSuffix = IndexDocument } 
+        BucketWebsiteArgs? websiteArgs = IndexDocument is not null
+            ? new BucketWebsiteArgs { MainPageSuffix = IndexDocument }
             : null;
 
         // Create GCS bucket with versioning enabled if requested
@@ -63,13 +63,11 @@ public class GcpBucket : IBucket
             Project = projectId,
             Name = name,
             Location = location,
-            UniformBucketLevelAccess = true
+            UniformBucketLevelAccess = true,
         };
 
         if (websiteArgs is not null)
-        {
             bucketArgs.Website = websiteArgs;
-        }
 
         // Note: GCP Cloud Storage has versioning enabled by default for new buckets
         // If versioning is explicitly requested, we log it for transparency
@@ -93,7 +91,7 @@ public class GcpBucket : IBucket
                     // ExposedHeaders -> ResponseHeaders (GCS exposes, not request-allow list)
                     ResponseHeaders = (r.ExposedHeaders).ToList(),
                     // Max age
-                    MaxAgeSeconds = r.MaxAgeSeconds
+                    MaxAgeSeconds = r.MaxAgeSeconds,
                 })
                 .ToList();
 
@@ -116,7 +114,7 @@ public class GcpBucket : IBucket
                 {
                     Bucket = _bucket.Name,
                     Role = "roles/storage.objectViewer",
-                    Member = "allUsers"
+                    Member = "allUsers",
                 },
                 new CustomResourceOptions { DependsOn = new[] { _bucket }, Provider = provider }
             );
@@ -132,7 +130,7 @@ public class GcpBucket : IBucket
                 {
                     Project = projectId,
                     BucketName = _bucket.Name,
-                    EnableCdn = true
+                    EnableCdn = true,
                 },
                 customResourceOptions
             );
@@ -153,8 +151,8 @@ public class GcpBucket : IBucket
                         Project = projectId,
                         Managed = new Pulumi.Gcp.Compute.Inputs.ManagedSslCertificateManagedArgs
                         {
-                            Domains = cdn.Domains.ToArray()
-                        }
+                            Domains = cdn.Domains.ToArray(),
+                        },
                     },
                     customResourceOptions
                 );
@@ -165,7 +163,7 @@ public class GcpBucket : IBucket
                     {
                         Project = projectId,
                         SslCertificates = new[] { _managedCert.Name },
-                        UrlMap = _urlMap.Name
+                        UrlMap = _urlMap.Name,
                     },
                     customResourceOptions
                 );
@@ -176,7 +174,7 @@ public class GcpBucket : IBucket
                     {
                         Project = projectId,
                         AddressType = "EXTERNAL",
-                        IpVersion = "IPV4"
+                        IpVersion = "IPV4",
                     },
                     customResourceOptions
                 );
@@ -189,7 +187,7 @@ public class GcpBucket : IBucket
                         Target = _httpsProxy.SelfLink,
                         IpAddress = _globalAddress.Address,
                         PortRange = "443",
-                        LoadBalancingScheme = "EXTERNAL"
+                        LoadBalancingScheme = "EXTERNAL",
                     },
                     customResourceOptions
                 );
@@ -202,7 +200,7 @@ public class GcpBucket : IBucket
                     new Pulumi.Gcp.Compute.TargetHttpProxyArgs
                     {
                         Project = projectId,
-                        UrlMap = _urlMap.Name
+                        UrlMap = _urlMap.Name,
                     },
                     customResourceOptions
                 );
@@ -213,7 +211,7 @@ public class GcpBucket : IBucket
                     {
                         Project = projectId,
                         AddressType = "EXTERNAL",
-                        IpVersion = "IPV4"
+                        IpVersion = "IPV4",
                     },
                     customResourceOptions
                 );
@@ -226,7 +224,7 @@ public class GcpBucket : IBucket
                         Target = _httpProxy.SelfLink,
                         IpAddress = _httpGlobalAddress.Address,
                         PortRange = "80",
-                        LoadBalancingScheme = "EXTERNAL"
+                        LoadBalancingScheme = "EXTERNAL",
                     },
                     customResourceOptions
                 );
@@ -252,11 +250,14 @@ public class GcpBucket : IBucket
         List<DnsRecord> bucketRecords = [];
         // Point to generic GCS endpoint; users can also choose to skip if using CDN exclusively
         foreach (var host in hostList)
-        {
             bucketRecords.Add(
-                new DnsRecord(DnsRecordType.CNAME, host, Output.Create("storage.googleapis.com"), $"{host}-cname")
+                new DnsRecord(
+                    DnsRecordType.CNAME,
+                    host,
+                    Output.Create("storage.googleapis.com"),
+                    $"{host}-cname"
+                )
             );
-        }
 
         return new BucketDnsRecords(cdnRecords, bucketRecords);
     }
@@ -265,7 +266,6 @@ public class GcpBucket : IBucket
     {
         List<IPolicyStatement> statements = [];
         foreach (var permission in permissions)
-        {
             switch (permission)
             {
                 case BucketPermissions.ReadObject:
@@ -274,7 +274,7 @@ public class GcpBucket : IBucket
                         {
                             Effect = "Allow",
                             Actions = new[] { "roles/storage.objectViewer" },
-                            Resources = new[] { Arn }
+                            Resources = new[] { Arn },
                         }
                     );
                     break;
@@ -285,7 +285,7 @@ public class GcpBucket : IBucket
                         {
                             Effect = "Allow",
                             Actions = new[] { "roles/storage.objectAdmin" },
-                            Resources = new[] { Arn }
+                            Resources = new[] { Arn },
                         }
                     );
                     break;
@@ -295,7 +295,7 @@ public class GcpBucket : IBucket
                         {
                             Effect = "Allow",
                             Actions = new[] { "roles/storage.legacyBucketReader" },
-                            Resources = new[] { Arn }
+                            Resources = new[] { Arn },
                         }
                     );
                     break;
@@ -305,7 +305,7 @@ public class GcpBucket : IBucket
                         {
                             Effect = "Allow",
                             Actions = new[] { "roles/storage.viewer" },
-                            Resources = new[] { Arn }
+                            Resources = new[] { Arn },
                         }
                     );
                     break;
@@ -315,18 +315,29 @@ public class GcpBucket : IBucket
                         {
                             Effect = "Allow",
                             Actions = new[] { "roles/storage.admin" },
-                            Resources = new[] { Arn }
+                            Resources = new[] { Arn },
                         }
                     );
                     break;
             }
-        }
+
         return statements;
     }
 
-    public Output<string> SyncDirectory(string localPath, string? keyPrefix = null, BucketSyncOptions? options = null)
+    public Output<string> SyncDirectory(
+        string localPath,
+        string? keyPrefix = null,
+        BucketSyncOptions? options = null
+    )
     {
-        var deployment = new GcpBucketDeployment($"{Name}-deploy", Name, localPath, keyPrefix, options, new ComponentResourceOptions { Parent = _bucket });
+        var deployment = new GcpBucketDeployment(
+            $"{Name}-deploy",
+            Name,
+            localPath,
+            keyPrefix,
+            options,
+            new ComponentResourceOptions { Parent = _bucket }
+        );
         return deployment.WebsiteUrl;
     }
 }

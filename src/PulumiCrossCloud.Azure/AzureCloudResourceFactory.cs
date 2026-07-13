@@ -12,11 +12,12 @@ public class AzureCloudResourceFactory : CloudResourceFactory
     private readonly Provider? _azureProvider;
 
     public AzureCloudResourceFactory(
-        string? resourceGroupName = null, 
+        string? resourceGroupName = null,
         string? serviceBusNamespace = null,
         string? eventHubNamespace = null,
         Provider? provider = null
-    ) : base(CloudProvider.Azure)
+    )
+        : base(CloudProvider.Azure)
     {
         _resourceGroupName = resourceGroupName;
         _serviceBusNamespace = serviceBusNamespace;
@@ -24,37 +25,61 @@ public class AzureCloudResourceFactory : CloudResourceFactory
         _azureProvider = provider;
     }
 
-    private string EnsureResourceGroup() => 
-        _resourceGroupName ?? (string.IsNullOrEmpty(AzureProjectConfig.ResourceGroupName) 
-            ? throw new InvalidOperationException("Resource Group Name must be configured for Azure factory.") 
-            : AzureProjectConfig.ResourceGroupName);
+    private string EnsureResourceGroup() =>
+        _resourceGroupName
+        ?? (
+            string.IsNullOrEmpty(AzureProjectConfig.ResourceGroupName)
+                ? throw new InvalidOperationException(
+                    "Resource Group Name must be configured for Azure factory."
+                )
+                : AzureProjectConfig.ResourceGroupName
+        );
 
-    public override IPostgresDatabase CreatePostgresDatabase(string name, IPostgresOptions? options = null)
+    public override IPostgresDatabase CreatePostgresDatabase(
+        string name,
+        IPostgresOptions? options = null
+    )
     {
         return new AzurePostgresDatabase(name, EnsureResourceGroup(), options, _azureProvider);
     }
 
     public override IQueueEndpoint CreateQueue(string name, QueueArgs? args = null)
     {
-        var ns = _serviceBusNamespace ?? (string.IsNullOrEmpty(AzureProjectConfig.ServiceBusNamespace) 
-            ? throw new InvalidOperationException("Service Bus Namespace must be configured.") 
-            : AzureProjectConfig.ServiceBusNamespace);
+        var ns =
+            _serviceBusNamespace
+            ?? (
+                string.IsNullOrEmpty(AzureProjectConfig.ServiceBusNamespace)
+                    ? throw new InvalidOperationException(
+                        "Service Bus Namespace must be configured."
+                    )
+                    : AzureProjectConfig.ServiceBusNamespace
+            );
         return new AzureServiceBusQueue(name, EnsureResourceGroup(), ns, args, _azureProvider);
     }
 
     public override ITopicEndpoint CreateTopic(string name, TopicArgs? args = null)
     {
-        var ns = _serviceBusNamespace ?? (string.IsNullOrEmpty(AzureProjectConfig.ServiceBusNamespace) 
-            ? throw new InvalidOperationException("Service Bus Namespace must be configured.") 
-            : AzureProjectConfig.ServiceBusNamespace);
+        var ns =
+            _serviceBusNamespace
+            ?? (
+                string.IsNullOrEmpty(AzureProjectConfig.ServiceBusNamespace)
+                    ? throw new InvalidOperationException(
+                        "Service Bus Namespace must be configured."
+                    )
+                    : AzureProjectConfig.ServiceBusNamespace
+            );
         return new AzureServiceBusTopic(name, EnsureResourceGroup(), ns, args, _azureProvider);
     }
 
     public override IStreamEndpoint CreateStream(string name, StreamArgs? args = null)
     {
-        var ns = _eventHubNamespace ?? (string.IsNullOrEmpty(AzureProjectConfig.EventHubNamespace) 
-            ? throw new InvalidOperationException("Event Hub Namespace must be configured.") 
-            : AzureProjectConfig.EventHubNamespace);
+        var ns =
+            _eventHubNamespace
+            ?? (
+                string.IsNullOrEmpty(AzureProjectConfig.EventHubNamespace)
+                    ? throw new InvalidOperationException("Event Hub Namespace must be configured.")
+                    : AzureProjectConfig.EventHubNamespace
+            );
         return new AzureEventHubStream(name, EnsureResourceGroup(), ns, args, _azureProvider);
     }
 
@@ -67,6 +92,15 @@ public class AzureCloudResourceFactory : CloudResourceFactory
         string? indexDocument = null
     )
     {
-        return new AzureBlobBucket(name, EnsureResourceGroup(), isPublic, cdn, versioningEnabled, corsRules, indexDocument, _azureProvider);
+        return new AzureBlobBucket(
+            name,
+            EnsureResourceGroup(),
+            isPublic,
+            cdn,
+            versioningEnabled,
+            corsRules,
+            indexDocument,
+            _azureProvider
+        );
     }
 }

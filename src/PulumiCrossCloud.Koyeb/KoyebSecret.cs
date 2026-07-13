@@ -20,9 +20,7 @@ public sealed class KoyebSecret : ISecret
         IgnoreChangesAfterCreate = ignoreChangesAfterCreate;
         var options = new CustomResourceOptions { Provider = provider };
         if (ignoreChangesAfterCreate)
-        {
             options.IgnoreChanges = ["value"];
-        }
 
         _secret = new global::Pulumi.Koyeb.Secret(
             name,
@@ -30,7 +28,7 @@ public sealed class KoyebSecret : ISecret
             {
                 Name = name,
                 Type = "simple",
-                Value = value
+                Value = value,
             },
             options
         );

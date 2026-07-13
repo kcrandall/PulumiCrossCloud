@@ -15,7 +15,7 @@ public enum DnsRecordType
     SRV,
     NS,
     CAA,
-    PTR
+    PTR,
 }
 
 /// <summary>
@@ -30,12 +30,12 @@ public record DnsRecord(DnsRecordType Type, Output<string> Name, Output<string> 
     /// <summary>
     /// Helper constructor for string inputs.
     /// </summary>
-    public DnsRecord(DnsRecordType Type, string Name, Output<string> Value, string Key) 
+    public DnsRecord(DnsRecordType Type, string Name, Output<string> Value, string Key)
         : this(Type, Output.Create(Name), Value, Key) { }
 
     /// <summary>
     /// Helper constructor for string inputs.
     /// </summary>
-    public DnsRecord(DnsRecordType Type, string Name, string Value, string Key) 
+    public DnsRecord(DnsRecordType Type, string Name, string Value, string Key)
         : this(Type, Output.Create(Name), Output.Create(Value), Key) { }
 }

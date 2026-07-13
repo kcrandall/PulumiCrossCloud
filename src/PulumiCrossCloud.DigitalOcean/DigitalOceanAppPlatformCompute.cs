@@ -32,13 +32,17 @@ public sealed class DigitalOceanAppPlatformCompute : ICompute
     )
     {
         if (containerRegistry.Provider != CloudProvider.DigitalOcean)
-        {
-            throw new ArgumentException("Registry must be a DigitalOcean registry.", nameof(containerRegistry));
-        }
+            throw new ArgumentException(
+                "Registry must be a DigitalOcean registry.",
+                nameof(containerRegistry)
+            );
 
         Name = name;
         ContainerRegistry = containerRegistry;
-        _imageName = imageName ?? containerImage?.Name ?? throw new ArgumentException("Either imageName or containerImage must be provided.");
+        _imageName =
+            imageName
+            ?? containerImage?.Name
+            ?? throw new ArgumentException("Either imageName or containerImage must be provided.");
         _imageTag = imageTag;
         _region = region;
         InstanceSizeSlug = instanceSizeSlug;
@@ -58,9 +62,7 @@ public sealed class DigitalOceanAppPlatformCompute : ICompute
     public int MaxCount { get; set; } = 1;
     public IHealthCheckConfiguration? HealthCheckConfiguration { get; set; }
     public IList<PortForwardingConfiguration> PortForwardings { get; set; } =
-    [
-        new PortForwardingConfiguration { ContainerPort = 8080, Protocol = "http" }
-    ];
+    [new PortForwardingConfiguration { ContainerPort = 8080, Protocol = "http" }];
     public string? MemoryLimit { get; set; }
     public string? CpuLimit { get; set; }
     public string InstanceSizeSlug { get; set; }
@@ -68,7 +70,8 @@ public sealed class DigitalOceanAppPlatformCompute : ICompute
     public void AddRequiredSecret(ISecret secret, string? environmentVariableName = null) =>
         _requiredSecrets.Add((secret, environmentVariableName));
 
-    public void AddEnvironmentVariable(string name, string value) => _environmentVariables[name] = value;
+    public void AddEnvironmentVariable(string name, string value) =>
+        _environmentVariables[name] = value;
 
     public void AddEnvironmentVariable(string name, Output<string> value) =>
         _environmentVariablesOutput[name] = value;
@@ -76,20 +79,17 @@ public sealed class DigitalOceanAppPlatformCompute : ICompute
     public void AddEnvironmentVariables(IDictionary<string, string> variables)
     {
         foreach (var variable in variables)
-        {
             _environmentVariables[variable.Key] = variable.Value;
-        }
     }
 
-    public void AddPolicyStatement(IPolicyStatement statement) => _customPolicyStatements.Add(statement);
+    public void AddPolicyStatement(IPolicyStatement statement) =>
+        _customPolicyStatements.Add(statement);
 
     public void Build()
     {
         var dependsOn = new List<Resource> { ContainerRegistry.Resource };
         if (_containerImage?.Resource is not null)
-        {
             dependsOn.Add(_containerImage.Resource);
-        }
 
         dependsOn.AddRange(_requiredSecrets.Select(secret => secret.secret.Resource));
 
@@ -103,8 +103,8 @@ public sealed class DigitalOceanAppPlatformCompute : ICompute
                     Region = _region,
                     Services = [BuildServiceArgs()],
                     Ingress = BuildIngressArgs(),
-                    DomainNames = BuildDomainNameArgs()
-                }
+                    DomainNames = BuildDomainNameArgs(),
+                },
             },
             new CustomResourceOptions { Provider = _provider, DependsOn = dependsOn }
         );
@@ -113,17 +113,20 @@ public sealed class DigitalOceanAppPlatformCompute : ICompute
     public IEnumerable<Resource> GetDependencies() => _app is null ? [] : [_app];
 
     public IEnumerable<DnsRecord> GetRequiredDnsRecords(IEnumerable<string> names) =>
-        names.Select(name => new DnsRecord(DnsRecordType.CNAME, name, ServiceUrl.Apply(ExtractHost), $"{name}-cname"));
+        names.Select(name => new DnsRecord(
+            DnsRecordType.CNAME,
+            name,
+            ServiceUrl.Apply(ExtractHost),
+            $"{name}-cname"
+        ));
 
-    public IEnumerable<DnsRecord> RegisterDnsMappingAndCertificates(IEnumerable<string> customDomains)
+    public IEnumerable<DnsRecord> RegisterDnsMappingAndCertificates(
+        IEnumerable<string> customDomains
+    )
     {
         foreach (var domain in customDomains)
-        {
             if (!_customDomains.Contains(domain, StringComparer.OrdinalIgnoreCase))
-            {
                 _customDomains.Add(domain);
-            }
-        }
 
         return GetRequiredDnsRecords(customDomains);
     }
@@ -132,14 +135,17 @@ public sealed class DigitalOceanAppPlatformCompute : ICompute
         new()
         {
             EnvironmentVariables = new Dictionary<string, string>(_environmentVariables),
-            EnvironmentVariablesOutput = new Dictionary<string, Output<string>>(_environmentVariablesOutput),
+            EnvironmentVariablesOutput = new Dictionary<string, Output<string>>(
+                _environmentVariablesOutput
+            ),
             RequiredSecrets = _requiredSecrets.Select(x => x.secret).ToList(),
-            SecretMappings = _requiredSecrets.ToDictionary(x => x.secret.Name, x => x.envVarName)
+            SecretMappings = _requiredSecrets.ToDictionary(x => x.secret.Name, x => x.envVarName),
         };
 
     public IEnumerable<IPolicyStatement> GetPolicy(params ComputePermissions[] permissions) => [];
 
-    public void OnHealthy(params Func<ICompute, Task>[] actions) => _onHealthyActions.AddRange(actions);
+    public void OnHealthy(params Func<ICompute, Task>[] actions) =>
+        _onHealthyActions.AddRange(actions);
 
     public void OnReady(params Func<ICompute, Task>[] actions) => _onReadyActions.AddRange(actions);
 
@@ -147,9 +153,7 @@ public sealed class DigitalOceanAppPlatformCompute : ICompute
     {
         var port = PortForwardings.FirstOrDefault().ContainerPort;
         if (port == 0)
-        {
             port = 8080;
-        }
 
         var service = new DO.Inputs.AppSpecServiceArgs
         {
@@ -159,26 +163,21 @@ public sealed class DigitalOceanAppPlatformCompute : ICompute
             {
                 RegistryType = "DOCR",
                 Repository = _imageName,
-                Tag = _imageTag
+                Tag = _imageTag,
             },
-            InstanceSizeSlug = InstanceSizeSlug
+            InstanceSizeSlug = InstanceSizeSlug,
         };
 
         if (MaxCount > MinCount)
-        {
             service.Autoscaling = new DO.Inputs.AppSpecServiceAutoscalingArgs
             {
                 MinInstanceCount = MinCount,
-                MaxInstanceCount = MaxCount
+                MaxInstanceCount = MaxCount,
             };
-        }
         else
-        {
             service.InstanceCount = Math.Max(1, MinCount);
-        }
 
         if (HealthCheckConfiguration is not null)
-        {
             service.HealthCheck = new DO.Inputs.AppSpecServiceHealthCheckArgs
             {
                 HttpPath = HealthCheckConfiguration.Path,
@@ -187,42 +186,41 @@ public sealed class DigitalOceanAppPlatformCompute : ICompute
                 PeriodSeconds = HealthCheckConfiguration.IntervalSeconds,
                 TimeoutSeconds = HealthCheckConfiguration.TimeoutSeconds,
                 FailureThreshold = HealthCheckConfiguration.UnhealthyThreshold,
-                SuccessThreshold = HealthCheckConfiguration.HealthyThreshold
+                SuccessThreshold = HealthCheckConfiguration.HealthyThreshold,
             };
-        }
 
         foreach (var variable in _environmentVariables)
-        {
-            service.Envs.Add(new DO.Inputs.AppSpecServiceEnvArgs
-            {
-                Key = variable.Key,
-                Value = variable.Value,
-                Type = "GENERAL",
-                Scope = "RUN_TIME"
-            });
-        }
+            service.Envs.Add(
+                new DO.Inputs.AppSpecServiceEnvArgs
+                {
+                    Key = variable.Key,
+                    Value = variable.Value,
+                    Type = "GENERAL",
+                    Scope = "RUN_TIME",
+                }
+            );
 
         foreach (var variable in _environmentVariablesOutput)
-        {
-            service.Envs.Add(new DO.Inputs.AppSpecServiceEnvArgs
-            {
-                Key = variable.Key,
-                Value = variable.Value,
-                Type = "GENERAL",
-                Scope = "RUN_TIME"
-            });
-        }
+            service.Envs.Add(
+                new DO.Inputs.AppSpecServiceEnvArgs
+                {
+                    Key = variable.Key,
+                    Value = variable.Value,
+                    Type = "GENERAL",
+                    Scope = "RUN_TIME",
+                }
+            );
 
         foreach (var (secret, envVarName) in _requiredSecrets)
-        {
-            service.Envs.Add(new DO.Inputs.AppSpecServiceEnvArgs
-            {
-                Key = envVarName ?? ToEnvironmentName(secret.Name),
-                Value = secret.Value.Apply(value => value ?? string.Empty),
-                Type = "SECRET",
-                Scope = "RUN_TIME"
-            });
-        }
+            service.Envs.Add(
+                new DO.Inputs.AppSpecServiceEnvArgs
+                {
+                    Key = envVarName ?? ToEnvironmentName(secret.Name),
+                    Value = secret.Value.Apply(value => value ?? string.Empty),
+                    Type = "SECRET",
+                    Scope = "RUN_TIME",
+                }
+            );
 
         return service;
     }
@@ -236,24 +234,18 @@ public sealed class DigitalOceanAppPlatformCompute : ICompute
                 {
                     Match = new DO.Inputs.AppSpecIngressRuleMatchArgs
                     {
-                        Path = new DO.Inputs.AppSpecIngressRuleMatchPathArgs { Prefix = "/" }
+                        Path = new DO.Inputs.AppSpecIngressRuleMatchPathArgs { Prefix = "/" },
                     },
-                    Component = new DO.Inputs.AppSpecIngressRuleComponentArgs { Name = Name }
-                }
-            ]
+                    Component = new DO.Inputs.AppSpecIngressRuleComponentArgs { Name = Name },
+                },
+            ],
         };
 
     private InputList<DO.Inputs.AppSpecDomainNameArgs> BuildDomainNameArgs()
     {
         var domains = new InputList<DO.Inputs.AppSpecDomainNameArgs>();
         foreach (var domain in _customDomains)
-        {
-            domains.Add(new DO.Inputs.AppSpecDomainNameArgs
-            {
-                Name = domain,
-                Type = "PRIMARY"
-            });
-        }
+            domains.Add(new DO.Inputs.AppSpecDomainNameArgs { Name = domain, Type = "PRIMARY" });
 
         return domains;
     }
@@ -261,11 +253,11 @@ public sealed class DigitalOceanAppPlatformCompute : ICompute
     private static string ExtractHost(string url)
     {
         if (string.IsNullOrWhiteSpace(url))
-        {
             return string.Empty;
-        }
 
-        var toParse = url.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? url : $"https://{url}";
+        var toParse = url.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+            ? url
+            : $"https://{url}";
         return Uri.TryCreate(toParse, UriKind.Absolute, out var uri) ? uri.Host : url;
     }
 

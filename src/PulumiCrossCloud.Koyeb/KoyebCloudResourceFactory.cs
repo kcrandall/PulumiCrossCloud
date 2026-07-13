@@ -9,7 +9,10 @@ public sealed class KoyebCloudResourceFactory : CloudResourceFactory
     private readonly string _defaultRegion;
     private readonly string _defaultInstanceType;
 
-    public KoyebCloudResourceFactory(string defaultRegion = "was", string defaultInstanceType = "micro")
+    public KoyebCloudResourceFactory(
+        string defaultRegion = "was",
+        string defaultInstanceType = "micro"
+    )
         : base(CloudProvider.Koyeb)
     {
         _defaultRegion = defaultRegion;
@@ -38,9 +41,9 @@ public sealed class KoyebCloudResourceFactory : CloudResourceFactory
     )
     {
         if (serviceType is not null && serviceType != ComputeServiceType.KoyebService)
-        {
-            throw new NotSupportedException($"Koyeb supports {ComputeServiceType.KoyebService}, not {serviceType}.");
-        }
+            throw new NotSupportedException(
+                $"Koyeb supports {ComputeServiceType.KoyebService}, not {serviceType}."
+            );
 
         return new KoyebServiceCompute(
             name,

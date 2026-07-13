@@ -10,7 +10,7 @@
 //     public CloudProvider Provider => CloudProvider.Azure;
 //     public string RegistryUrl => throw new NotImplementedException("Use RegistryUrlOutput property for Pulumi deployments");
 //     public Output<string> RegistryUrlOutput { get; private set; }
-//     
+//
 //     public AzureContainerRegistry(string name)
 //     {
 //         Name = name;
@@ -18,16 +18,16 @@
 //         Arn = Output.Create($"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.ContainerRegistry/registries/{name}");
 //         RegistryUrlOutput = Output.Create($"{name}.azurecr.io");
 //     }
-//     
+//
 //     public void PushImage(string imageName, string tag) => throw new NotImplementedException("Azure ACR implementation needed");
 //     public void PullImage(string imageName, string tag) => throw new NotImplementedException("Azure ACR implementation needed");
 //     public IEnumerable<string> ListRepositories() => throw new NotImplementedException("Azure ACR implementation needed");
 //     public void DeleteRepository(string repositoryName) => throw new NotImplementedException("Azure ACR implementation needed");
-//     
+//
 //     public IEnumerable<IPolicyStatement> GetPolicy(params ContainerRegistryPermissions[] permissions)
 //     {
 //         var statements = new List<IPolicyStatement>();
-//         
+//
 //         foreach (var permission in permissions)
 //         {
 //             switch (permission)
@@ -76,7 +76,7 @@
 //                     statements.Add(new AzurePolicyStatement
 //                     {
 //                         Effect = "Allow",
-//                         Actions = new[] { 
+//                         Actions = new[] {
 //                             "Microsoft.ContainerRegistry/registries/write",
 //                             "Microsoft.ContainerRegistry/registries/delete"
 //                         },
@@ -93,7 +93,7 @@
 //                     break;
 //             }
 //         }
-//         
+//
 //         return statements;
 //     }
 // }

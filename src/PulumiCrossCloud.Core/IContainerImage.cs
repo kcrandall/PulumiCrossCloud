@@ -61,7 +61,7 @@ public interface IContainerImage : ICloudResource
             {
                 ImageUrl = tuple.Item1,
                 ImageTag = tuple.Item2,
-                Image = tuple.Item3
+                Image = tuple.Item3,
             });
         return deploymentResult;
     }

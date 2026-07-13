@@ -2,8 +2,8 @@ using System;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
-using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Microsoft.IdentityModel.Tokens;
 
 namespace PulumiCrossCloud.Keycloak;
 
@@ -26,7 +26,8 @@ public static class AppleJwtHelper
         string teamId,
         string keyId,
         string privateKey,
-        int expirationMinutes = 10)
+        int expirationMinutes = 10
+    )
     {
         var now = DateTimeOffset.UtcNow;
         var securityKey = GetAppleSecurityKey(privateKey, keyId);
@@ -58,4 +59,3 @@ public static class AppleJwtHelper
         return securityKey;
     }
 }
-

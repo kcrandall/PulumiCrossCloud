@@ -1,5 +1,4 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-
   <ItemGroup>
     <ProjectReference Include="..\PulumiCrossCloud.Core\PulumiCrossCloud.Core.csproj" />
     <ProjectReference Include="..\PulumiCrossCloud.Aws\PulumiCrossCloud.Aws.csproj" />
@@ -10,5 +9,4 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
-
 </Project>

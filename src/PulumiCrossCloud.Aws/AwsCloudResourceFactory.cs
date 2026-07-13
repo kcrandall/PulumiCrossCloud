@@ -44,14 +44,19 @@ public class AwsCloudResourceFactory : CloudResourceFactory
     )
     {
         if (serviceType is null)
-        {
             serviceType = ComputeServiceType.AppRunner;
-        }
+
         return serviceType switch
         {
-            ComputeServiceType.AppRunner
-                => new AwsAppRunnerCompute(name, registry, imageName, imageTag, containerImage, _awsProvider),
-            _ => throw new ArgumentException($"Unsupported AWS service type: {serviceType}")
+            ComputeServiceType.AppRunner => new AwsAppRunnerCompute(
+                name,
+                registry,
+                imageName,
+                imageTag,
+                containerImage,
+                _awsProvider
+            ),
+            _ => throw new ArgumentException($"Unsupported AWS service type: {serviceType}"),
         };
     }
 
@@ -69,7 +74,15 @@ public class AwsCloudResourceFactory : CloudResourceFactory
         string? indexDocument = null
     )
     {
-        return new AwsBucket(name, isPublic, cdn, versioningEnabled, corsRules, indexDocument, _awsProvider);
+        return new AwsBucket(
+            name,
+            isPublic,
+            cdn,
+            versioningEnabled,
+            corsRules,
+            indexDocument,
+            _awsProvider
+        );
     }
 
     public override IDnsZone CreateDnsZone(string name, string domainName)

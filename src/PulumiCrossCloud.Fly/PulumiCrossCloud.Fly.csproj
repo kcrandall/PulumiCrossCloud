@@ -1,5 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <ItemGroup>
     <ProjectReference Include="..\PulumiCrossCloud.Core\PulumiCrossCloud.Core.csproj" />
     <ProjectReference Include="Generated\fly\Pulumi.Fly.csproj" />
@@ -16,5 +15,4 @@
     <Nullable>enable</Nullable>
     <DefaultItemExcludes>$(DefaultItemExcludes);Generated\**</DefaultItemExcludes>
   </PropertyGroup>
-
 </Project>

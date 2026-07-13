@@ -45,7 +45,11 @@ public interface IBucket : ICloudResource, IPolicyProvider<BucketPermissions>
     /// <param name="keyPrefix">Optional prefix (folder) in the bucket.</param>
     /// <param name="options">Optional build and sync configuration.</param>
     /// <returns>The URL or path where the site is deployed.</returns>
-    Output<string> SyncDirectory(string localPath, string? keyPrefix = null, BucketSyncOptions? options = null);
+    Output<string> SyncDirectory(
+        string localPath,
+        string? keyPrefix = null,
+        BucketSyncOptions? options = null
+    );
 
     /// <summary>
     /// Exposes the underlying bucket resource.
@@ -69,7 +73,7 @@ public record BucketSyncOptions
     public string? BuildCwd { get; init; }
 
     /// <summary>
-    /// The directory to hash to decide if build/sync is needed. 
+    /// The directory to hash to decide if build/sync is needed.
     /// If null, the localPath (output directory) is hashed instead.
     /// Use this if your build command is triggered by source files.
     /// </summary>

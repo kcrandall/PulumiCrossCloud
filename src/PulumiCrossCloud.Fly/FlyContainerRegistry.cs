@@ -23,5 +23,7 @@ public sealed class FlyContainerRegistry : ComponentResource, IContainerRegistry
 
     public InputList<RegistryArgs> GetDockerBuildRegistryConfig() => [];
 
-    public IEnumerable<IPolicyStatement> GetPolicy(params ContainerRegistryPermissions[] permissions) => [];
+    public IEnumerable<IPolicyStatement> GetPolicy(
+        params ContainerRegistryPermissions[] permissions
+    ) => [];
 }

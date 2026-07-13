@@ -11,7 +11,7 @@ public class AzureBlobBucket : IBucket
     private readonly BlobContainer _container;
 
     public AzureBlobBucket(
-        string name, 
+        string name,
         string resourceGroupName,
         bool isPublic = false,
         BucketCdnConfiguration? cdn = null,
@@ -30,47 +30,58 @@ public class AzureBlobBucket : IBucket
 
         var customResourceOptions = new CustomResourceOptions { Provider = provider };
 
-        _storageAccount = new StorageAccount(name.Replace("-", ""), new StorageAccountArgs
-        {
-            ResourceGroupName = resourceGroupName,
-            AccountName = name.Replace("-", "").Substring(0, Math.Min(24, name.Length)),
-            Kind = Kind.StorageV2,
-            Sku = new SkuArgs
+        _storageAccount = new StorageAccount(
+            name.Replace("-", ""),
+            new StorageAccountArgs
             {
-                Name = SkuName.Standard_LRS
-            }
-        }, customResourceOptions);
+                ResourceGroupName = resourceGroupName,
+                AccountName = name.Replace("-", "").Substring(0, Math.Min(24, name.Length)),
+                Kind = Kind.StorageV2,
+                Sku = new SkuArgs { Name = SkuName.Standard_LRS },
+            },
+            customResourceOptions
+        );
 
-        _container = new BlobContainer(name, new BlobContainerArgs
-        {
-            ResourceGroupName = resourceGroupName,
-            AccountName = _storageAccount.Name,
-            ContainerName = name,
-            PublicAccess = isPublic ? PublicAccess.Blob : PublicAccess.None,
-        }, customResourceOptions);
+        _container = new BlobContainer(
+            name,
+            new BlobContainerArgs
+            {
+                ResourceGroupName = resourceGroupName,
+                AccountName = _storageAccount.Name,
+                ContainerName = name,
+                PublicAccess = isPublic ? PublicAccess.Blob : PublicAccess.None,
+            },
+            customResourceOptions
+        );
 
         if (versioningEnabled)
         {
             // Versioning is managed at the blob service level in Azure
-            new BlobServiceProperties($"{name}-blobservice", new BlobServicePropertiesArgs
-            {
-                ResourceGroupName = resourceGroupName,
-                AccountName = _storageAccount.Name,
-                BlobServicesName = "default",
-                IsVersioningEnabled = true,
-            }, customResourceOptions);
+            new BlobServiceProperties(
+                $"{name}-blobservice",
+                new BlobServicePropertiesArgs
+                {
+                    ResourceGroupName = resourceGroupName,
+                    AccountName = _storageAccount.Name,
+                    BlobServicesName = "default",
+                    IsVersioningEnabled = true,
+                },
+                customResourceOptions
+            );
         }
 
         if (!string.IsNullOrEmpty(IndexDocument))
-        {
-            new StorageAccountStaticWebsite($"{name}-static-website", new StorageAccountStaticWebsiteArgs
-            {
-                ResourceGroupName = resourceGroupName,
-                AccountName = _storageAccount.Name,
-                IndexDocument = IndexDocument,
-                Error404Document = "404.html"
-            }, customResourceOptions);
-        }
+            new StorageAccountStaticWebsite(
+                $"{name}-static-website",
+                new StorageAccountStaticWebsiteArgs
+                {
+                    ResourceGroupName = resourceGroupName,
+                    AccountName = _storageAccount.Name,
+                    IndexDocument = IndexDocument,
+                    Error404Document = "404.html",
+                },
+                customResourceOptions
+            );
     }
 
     public string Name { get; }
@@ -93,9 +104,21 @@ public class AzureBlobBucket : IBucket
         return [];
     }
 
-    public Output<string> SyncDirectory(string localPath, string? keyPrefix = null, BucketSyncOptions? options = null)
+    public Output<string> SyncDirectory(
+        string localPath,
+        string? keyPrefix = null,
+        BucketSyncOptions? options = null
+    )
     {
-        var deployment = new AzureBucketDeployment($"{Name}-deploy", _storageAccount.Name, Name, localPath, keyPrefix, options, new ComponentResourceOptions { Parent = _container });
+        var deployment = new AzureBucketDeployment(
+            $"{Name}-deploy",
+            _storageAccount.Name,
+            Name,
+            localPath,
+            keyPrefix,
+            options,
+            new ComponentResourceOptions { Parent = _container }
+        );
         return deployment.WebsiteUrl;
     }
 }

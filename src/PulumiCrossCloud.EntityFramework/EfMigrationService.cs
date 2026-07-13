@@ -62,7 +62,10 @@ public class EfMigrationService
                 var startupProject = _options.Contexts[0].StartupProjectPath;
                 Log.Info($"Building {Path.GetFileName(startupProject)}...");
                 // Use -v q (quiet) to suppress all build output
-                RunQuietCommand("dotnet", $"build \"{startupProject}\" -v q /nologo /p:PublishAot=false");
+                RunQuietCommand(
+                    "dotnet",
+                    $"build \"{startupProject}\" -v q /nologo /p:PublishAot=false"
+                );
                 _hasBuilt = true;
             }
         }
@@ -74,7 +77,9 @@ public class EfMigrationService
                 var pending = await GetPendingMigrationsAsync(context);
                 if (pending.Count > 0)
                 {
-                    Log.Info($"Context {context.ContextName} has {pending.Count} pending migrations: {string.Join(", ", pending)}");
+                    Log.Info(
+                        $"Context {context.ContextName} has {pending.Count} pending migrations: {string.Join(", ", pending)}"
+                    );
                     await ValidateUpdatePossibleAsync(context);
                 }
             }
@@ -82,26 +87,39 @@ public class EfMigrationService
             {
                 // Optional reset support: if EF_RESET env contains this context name or 'all',
                 // first migrate to 0 then back to latest to rebuild from scratch.
-                var resetTargets = (_options.EnvironmentVariables != null && _options.EnvironmentVariables.TryGetValue("EF_RESET", out var resetVal))
-                    ? (resetVal ?? string.Empty)
-                    : string.Empty;
+                var resetTargets =
+                    (
+                        _options.EnvironmentVariables != null
+                        && _options.EnvironmentVariables.TryGetValue("EF_RESET", out var resetVal)
+                    )
+                        ? (resetVal ?? string.Empty)
+                        : string.Empty;
 
-                var shouldReset = !string.IsNullOrWhiteSpace(resetTargets)
-                    && (resetTargets.Equals("all", StringComparison.OrdinalIgnoreCase)
+                var shouldReset =
+                    !string.IsNullOrWhiteSpace(resetTargets)
+                    && (
+                        resetTargets.Equals("all", StringComparison.OrdinalIgnoreCase)
                         || resetTargets
-                            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                            .Any(s => s.Equals(context.ContextName, StringComparison.OrdinalIgnoreCase)));
+                            .Split(
+                                ',',
+                                StringSplitOptions.RemoveEmptyEntries
+                                    | StringSplitOptions.TrimEntries
+                            )
+                            .Any(s =>
+                                s.Equals(context.ContextName, StringComparison.OrdinalIgnoreCase)
+                            )
+                    );
 
                 if (shouldReset)
                 {
-                    Log.Warn($"EF_RESET matched for {context.ContextName}. Rebuilding: update 0 -> latest...");
+                    Log.Warn(
+                        $"EF_RESET matched for {context.ContextName}. Rebuilding: update 0 -> latest..."
+                    );
                     await RunEfUpdateAsync(context, targetMigration: "0");
                     await RunEfUpdateAsync(context, targetMigration: null);
                 }
                 else
-                {
                     await RunEfUpdateAsync(context, targetMigration: null);
-                }
             }
         }
     }
@@ -117,9 +135,15 @@ public class EfMigrationService
         try
         {
             var versionOutput = RunQuietCommand("dotnet", "ef --version");
-            var versionLine = versionOutput.Split('\n').FirstOrDefault(l => l.Contains("Entity Framework Core .NET Command-line Tools")) ?? "unknown";
+            var versionLine =
+                versionOutput
+                    .Split('\n')
+                    .FirstOrDefault(l =>
+                        l.Contains("Entity Framework Core .NET Command-line Tools")
+                    )
+                ?? "unknown";
             Log.Debug($"Found dotnet-ef: {versionLine.Trim()}");
-            
+
             RunQuietCommand("dotnet", "tool update --global dotnet-ef");
         }
         catch
@@ -134,7 +158,8 @@ public class EfMigrationService
         Log.Info($"Validating update for {context.ContextName}...");
         try
         {
-            var args = $"ef migrations script --context \"{context.ContextName}\" --project \"{context.ProjectPath}\" --startup-project \"{context.StartupProjectPath}\" --no-build";
+            var args =
+                $"ef migrations script --context \"{context.ContextName}\" --project \"{context.ProjectPath}\" --startup-project \"{context.StartupProjectPath}\" --no-build";
             await RunQuietCommandWithEnvAsync("dotnet", args);
             Log.Info($"Validation successful for {context.ContextName}.");
         }
@@ -146,20 +171,27 @@ public class EfMigrationService
 
     private async Task<List<string>> GetPendingMigrationsAsync(EfContextSettings context)
     {
-        try 
+        try
         {
-            var args = $"ef migrations list --context \"{context.ContextName}\" --project \"{context.ProjectPath}\" --startup-project \"{context.StartupProjectPath}\" --no-build";
+            var args =
+                $"ef migrations list --context \"{context.ContextName}\" --project \"{context.ProjectPath}\" --startup-project \"{context.StartupProjectPath}\" --no-build";
             var output = await RunQuietCommandWithEnvAsync("dotnet", args);
-            var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            
+            var lines = output.Split(
+                '\n',
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
+            );
+
             var migrationRegex = new System.Text.RegularExpressions.Regex(@"^\d{14}_");
             var migrationLines = lines.Where(l => migrationRegex.IsMatch(l)).ToList();
-            var pending = migrationLines.Where(l => l.EndsWith("(Pending)")).Select(l => l.Replace("(Pending)", "").Trim()).ToList();
+            var pending = migrationLines
+                .Where(l => l.EndsWith("(Pending)"))
+                .Select(l => l.Replace("(Pending)", "").Trim())
+                .ToList();
 
             if (pending.Count == 0)
-            {
-                Log.Info($"Context {context.ContextName} is up to date ({migrationLines.Count} applied).");
-            }
+                Log.Info(
+                    $"Context {context.ContextName} is up to date ({migrationLines.Count} applied)."
+                );
 
             return pending;
         }
@@ -172,15 +204,18 @@ public class EfMigrationService
 
     private async Task RunEfUpdateAsync(EfContextSettings context, string? targetMigration)
     {
-        Log.Info($"Applying migrations for {context.ContextName}{(targetMigration is null ? string.Empty : $" (target: {targetMigration})")}...");
-        
+        Log.Info(
+            $"Applying migrations for {context.ContextName}{(targetMigration is null ? string.Empty : $" (target: {targetMigration})")}..."
+        );
+
         var args = new StringBuilder();
         args.Append($"ef database update ");
         if (!string.IsNullOrWhiteSpace(targetMigration))
-        {
             args.Append($"{targetMigration} ");
-        }
-        args.Append($"--context \"{context.ContextName}\" --project \"{context.ProjectPath}\" --startup-project \"{context.StartupProjectPath}\" --no-build");
+
+        args.Append(
+            $"--context \"{context.ContextName}\" --project \"{context.ProjectPath}\" --startup-project \"{context.StartupProjectPath}\" --no-build"
+        );
 
         var process = new Process
         {
@@ -192,32 +227,30 @@ public class EfMigrationService
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                WorkingDirectory = _options.WorkingDirectory ?? Directory.GetCurrentDirectory()
-            }
+                WorkingDirectory = _options.WorkingDirectory ?? Directory.GetCurrentDirectory(),
+            },
         };
 
         process.StartInfo.EnvironmentVariables["IS_EF_MIGRATION"] = "true";
         if (_options.EnvironmentVariables != null)
-        {
             foreach (var kvp in _options.EnvironmentVariables)
-            {
                 process.StartInfo.EnvironmentVariables[kvp.Key] = kvp.Value;
-            }
-        }
 
-        process.OutputDataReceived += (sender, e) => 
-        { 
-            if (e.Data != null) 
+        process.OutputDataReceived += (sender, e) =>
+        {
+            if (e.Data != null)
             {
                 var data = e.Data;
                 // STRICT FILTER: Only log actual EF progress messages. Discard everything else.
                 if (data.Contains("Applying migration") || data.Contains("Successfully applied"))
-                {
-                    Log.Info(data); 
-                }
+                    Log.Info(data);
             }
         };
-        process.ErrorDataReceived += (sender, e) => { if (e.Data != null) Log.Error(e.Data); };
+        process.ErrorDataReceived += (sender, e) =>
+        {
+            if (e.Data != null)
+                Log.Error(e.Data);
+        };
 
         process.Start();
         process.BeginOutputReadLine();
@@ -225,9 +258,9 @@ public class EfMigrationService
         await process.WaitForExitAsync();
 
         if (process.ExitCode != 0)
-        {
-            throw new Exception($"EF update failed for {context.ContextName} (exit {process.ExitCode})");
-        }
+            throw new Exception(
+                $"EF update failed for {context.ContextName} (exit {process.ExitCode})"
+            );
     }
 
     private string RunQuietCommand(string fileName, string arguments)
@@ -242,7 +275,7 @@ public class EfMigrationService
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
-            }
+            },
         };
 
         process.StartInfo.EnvironmentVariables["IS_EF_MIGRATION"] = "true";
@@ -273,21 +306,25 @@ public class EfMigrationService
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                WorkingDirectory = _options.WorkingDirectory ?? Directory.GetCurrentDirectory()
-            }
+                WorkingDirectory = _options.WorkingDirectory ?? Directory.GetCurrentDirectory(),
+            },
         };
 
         process.StartInfo.EnvironmentVariables["IS_EF_MIGRATION"] = "true";
         if (_options.EnvironmentVariables != null)
-        {
             foreach (var kvp in _options.EnvironmentVariables)
-            {
                 process.StartInfo.EnvironmentVariables[kvp.Key] = kvp.Value;
-            }
-        }
 
-        process.OutputDataReceived += (sender, e) => { if (e.Data != null) outputBuffer.AppendLine(e.Data); };
-        process.ErrorDataReceived += (sender, e) => { if (e.Data != null) Log.Error(e.Data); };
+        process.OutputDataReceived += (sender, e) =>
+        {
+            if (e.Data != null)
+                outputBuffer.AppendLine(e.Data);
+        };
+        process.ErrorDataReceived += (sender, e) =>
+        {
+            if (e.Data != null)
+                Log.Error(e.Data);
+        };
 
         process.Start();
         process.BeginOutputReadLine();
@@ -295,9 +332,7 @@ public class EfMigrationService
         await process.WaitForExitAsync();
 
         if (process.ExitCode != 0)
-        {
             throw new Exception($"Command failed (exit {process.ExitCode})");
-        }
 
         return outputBuffer.ToString();
     }

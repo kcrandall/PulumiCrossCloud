@@ -19,24 +19,18 @@ public static class GcpProjectConfig
         {
             // Check programmatically set value first
             if (!string.IsNullOrEmpty(_projectId))
-            {
                 return _projectId;
-            }
 
             // Fallback to Pulumi config
             var config = new Config("gcp");
             var configProject = config.Get("project");
             if (!string.IsNullOrEmpty(configProject))
-            {
                 return configProject;
-            }
 
             // Fallback to environment variable
             var envProject = System.Environment.GetEnvironmentVariable("GOOGLE_CLOUD_PROJECT");
             if (!string.IsNullOrEmpty(envProject))
-            {
                 return envProject;
-            }
 
             throw new InvalidOperationException(
                 "GCP Project ID not configured. Set via:\n"
@@ -58,17 +52,13 @@ public static class GcpProjectConfig
         {
             // Check programmatically set value first
             if (!string.IsNullOrEmpty(_region))
-            {
                 return _region;
-            }
 
             // Fallback to Pulumi config
             var config = new Config("gcp");
             var configRegion = config.Get("region");
             if (!string.IsNullOrEmpty(configRegion))
-            {
                 return configRegion;
-            }
 
             // Default fallback
             return "us-central1";
@@ -86,17 +76,13 @@ public static class GcpProjectConfig
         {
             // Check programmatically set value first
             if (!string.IsNullOrEmpty(_zone))
-            {
                 return _zone;
-            }
 
             // Fallback to Pulumi config
             var config = new Config("gcp");
             var configZone = config.Get("zone");
             if (!string.IsNullOrEmpty(configZone))
-            {
                 return configZone;
-            }
 
             // Default fallback
             return "us-central1-a";

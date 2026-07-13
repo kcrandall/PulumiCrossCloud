@@ -11,7 +11,8 @@ public static class CloudflareProjectConfig
     {
         get
         {
-            if (!string.IsNullOrEmpty(_accountId)) return _accountId;
+            if (!string.IsNullOrEmpty(_accountId))
+                return _accountId;
             var config = new Config("cloudflare");
             return config.Get("accountId") ?? string.Empty;
         }
@@ -22,7 +23,8 @@ public static class CloudflareProjectConfig
     {
         get
         {
-            if (!string.IsNullOrEmpty(_zoneId)) return _zoneId;
+            if (!string.IsNullOrEmpty(_zoneId))
+                return _zoneId;
             var config = new Config("cloudflare");
             return config.Get("zoneId") ?? string.Empty;
         }

@@ -13,5 +13,5 @@ public enum CloudProvider
     Koyeb,
     Fly,
     DigitalOcean,
-    Other
+    Other,
 }

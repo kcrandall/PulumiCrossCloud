@@ -15,7 +15,7 @@ public static class PolicyConverter
             CloudProvider.AWS => ConvertToAwsPolicy(statements),
             CloudProvider.Azure => ConvertToAzureRoleDefinition(statements),
             CloudProvider.GCP => ConvertToGcpPolicy(statements),
-            _ => Output.Create($"Unsupported provider: {provider}")
+            _ => Output.Create($"Unsupported provider: {provider}"),
         };
     }
 
@@ -49,7 +49,9 @@ public static class PolicyConverter
                             Effect = statement.Effect,
                             Action = statement.Actions.ToArray(),
                             Resource = statementResources,
-                            Condition = statement.Conditions.Count > 0 ? statement.Conditions : null
+                            Condition = statement.Conditions.Count > 0
+                                ? statement.Conditions
+                                : null,
                         }
                     );
                 }
@@ -85,10 +87,10 @@ public static class PolicyConverter
                             actions = s.Actions.ToArray(),
                             notActions = new string[0],
                             dataActions = new string[0],
-                            notDataActions = new string[0]
+                            notDataActions = new string[0],
                         }),
-                        assignableScopes = allResources.Distinct().ToArray()
-                    }
+                        assignableScopes = allResources.Distinct().ToArray(),
+                    },
                 };
 
                 return JsonSerializer.Serialize(
@@ -125,11 +127,11 @@ public static class PolicyConverter
                                         : "",
                                     description = s.Conditions.ContainsKey("description")
                                         ? s.Conditions["description"]?.ToString() ?? ""
-                                        : ""
+                                        : "",
                                 }
-                                : null
+                                : null,
                         })
-                        .ToArray()
+                        .ToArray(),
                 };
 
                 return JsonSerializer.Serialize(

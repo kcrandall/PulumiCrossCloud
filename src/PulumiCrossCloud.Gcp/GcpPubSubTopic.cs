@@ -8,13 +8,18 @@ public class GcpPubSubTopic : ITopicEndpoint
 {
     private readonly Topic _topic;
 
-    public GcpPubSubTopic(string name, PulumiCrossCloud.Core.TopicArgs? args = null, Pulumi.Gcp.Provider? provider = null)
+    public GcpPubSubTopic(
+        string name,
+        PulumiCrossCloud.Core.TopicArgs? args = null,
+        Pulumi.Gcp.Provider? provider = null
+    )
     {
         Name = name;
-        _topic = new Topic(name, new Pulumi.Gcp.PubSub.TopicArgs
-        {
-            Project = GcpProjectConfig.ProjectId
-        }, new CustomResourceOptions { Provider = provider });
+        _topic = new Topic(
+            name,
+            new Pulumi.Gcp.PubSub.TopicArgs { Project = GcpProjectConfig.ProjectId },
+            new CustomResourceOptions { Provider = provider }
+        );
     }
 
     public string Name { get; }
@@ -29,27 +34,30 @@ public class GcpPubSubTopic : ITopicEndpoint
     {
         var statements = new List<IPolicyStatement>();
         foreach (var permission in permissions)
-        {
             switch (permission)
             {
                 case MessagingPermissions.Send:
-                    statements.Add(new GcpPolicyStatement
-                    {
-                        Effect = "Allow",
-                        Actions = ["roles/pubsub.publisher"],
-                        Resources = [Arn]
-                    });
+                    statements.Add(
+                        new GcpPolicyStatement
+                        {
+                            Effect = "Allow",
+                            Actions = ["roles/pubsub.publisher"],
+                            Resources = [Arn],
+                        }
+                    );
                     break;
                 case MessagingPermissions.Admin:
-                    statements.Add(new GcpPolicyStatement
-                    {
-                        Effect = "Allow",
-                        Actions = ["roles/pubsub.admin"],
-                        Resources = [Arn]
-                    });
+                    statements.Add(
+                        new GcpPolicyStatement
+                        {
+                            Effect = "Allow",
+                            Actions = ["roles/pubsub.admin"],
+                            Resources = [Arn],
+                        }
+                    );
                     break;
             }
-        }
+
         return statements;
     }
 }

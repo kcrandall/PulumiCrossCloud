@@ -36,7 +36,12 @@ public class AwsDnsZone : IDnsZone
     /// <summary>
     /// Creates an AwsDnsZone from an existing hosted zone lookup.
     /// </summary>
-    private AwsDnsZone(string name, string domainName, Output<GetZoneResult> lookupResult, Pulumi.Aws.Provider? provider = null)
+    private AwsDnsZone(
+        string name,
+        string domainName,
+        Output<GetZoneResult> lookupResult,
+        Pulumi.Aws.Provider? provider = null
+    )
     {
         Name = name;
         DomainName = domainName;
@@ -55,9 +60,16 @@ public class AwsDnsZone : IDnsZone
     /// <param name="domainName">The domain name of the zone to look up.</param>
     /// <param name="provider">Optional explicit provider.</param>
     /// <returns>An AwsDnsZone instance.</returns>
-    public static AwsDnsZone Lookup(string name, string domainName, Pulumi.Aws.Provider? provider = null)
+    public static AwsDnsZone Lookup(
+        string name,
+        string domainName,
+        Pulumi.Aws.Provider? provider = null
+    )
     {
-        var lookup = GetZone.Invoke(new GetZoneInvokeArgs { Name = domainName }, new InvokeOptions { Provider = provider });
+        var lookup = GetZone.Invoke(
+            new GetZoneInvokeArgs { Name = domainName },
+            new InvokeOptions { Provider = provider }
+        );
         return new AwsDnsZone(name, domainName, lookup, provider);
     }
 
@@ -66,10 +78,14 @@ public class AwsDnsZone : IDnsZone
     public CloudProvider Provider => CloudProvider.AWS;
 
     public Output<string> Arn =>
-        _lookupResult is not null ? _lookupResult.Apply(r => r.Arn) : _zone?.Arn ?? Output.Create(string.Empty);
+        _lookupResult is not null
+            ? _lookupResult.Apply(r => r.Arn)
+            : _zone?.Arn ?? Output.Create(string.Empty);
 
     public Output<string> ZoneId =>
-        _lookupResult is not null ? _lookupResult.Apply(r => r.ZoneId) : _zone?.ZoneId ?? Output.Create(string.Empty);
+        _lookupResult is not null
+            ? _lookupResult.Apply(r => r.ZoneId)
+            : _zone?.ZoneId ?? Output.Create(string.Empty);
 
     public Output<ImmutableArray<string>> NameServers =>
         _lookupResult is not null

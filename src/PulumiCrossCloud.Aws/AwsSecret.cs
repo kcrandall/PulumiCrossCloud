@@ -8,25 +8,30 @@ public class AwsSecret : ISecret
     private readonly Pulumi.Aws.SecretsManager.Secret _secret;
     private readonly Pulumi.Aws.SecretsManager.SecretVersion _secretVersion;
 
-    public AwsSecret(string name, string value, bool ignoreChangesAfterCreate = false, Pulumi.Aws.Provider? provider = null)
+    public AwsSecret(
+        string name,
+        string value,
+        bool ignoreChangesAfterCreate = false,
+        Pulumi.Aws.Provider? provider = null
+    )
     {
         Name = name;
         IgnoreChangesAfterCreate = ignoreChangesAfterCreate;
         var customResourceOptions = new CustomResourceOptions { Provider = provider };
-        
+
         _secret = new Pulumi.Aws.SecretsManager.Secret(
             name,
             new Pulumi.Aws.SecretsManager.SecretArgs
             {
                 Name = name,
-                Description = $"Secret for {name}"
+                Description = $"Secret for {name}",
             },
             customResourceOptions
         );
         var secretVersionArgs = new Pulumi.Aws.SecretsManager.SecretVersionArgs
         {
             SecretId = _secret.Id,
-            SecretString = value
+            SecretString = value,
         };
         var options = ignoreChangesAfterCreate
             ? new CustomResourceOptions { IgnoreChanges = ["secretString"], Provider = provider }
@@ -71,7 +76,7 @@ public class AwsSecret : ISecret
                         {
                             Effect = "Allow",
                             Actions = new[] { "secretsmanager:GetSecretValue" },
-                            Resources = new Output<string>[] { Arn } // Now using Output<string>[]
+                            Resources = new Output<string>[] { Arn }, // Now using Output<string>[]
                         }
                     );
                     break;
@@ -83,9 +88,9 @@ public class AwsSecret : ISecret
                             Actions = new[]
                             {
                                 "secretsmanager:PutSecretValue",
-                                "secretsmanager:UpdateSecret"
+                                "secretsmanager:UpdateSecret",
                             },
-                            Resources = new Output<string>[] { Arn }
+                            Resources = new Output<string>[] { Arn },
                         }
                     );
                     break;
@@ -95,7 +100,7 @@ public class AwsSecret : ISecret
                         {
                             Effect = "Allow",
                             Actions = new[] { "secretsmanager:DeleteSecret" },
-                            Resources = new Output<string>[] { Arn }
+                            Resources = new Output<string>[] { Arn },
                         }
                     );
                     break;
@@ -105,7 +110,7 @@ public class AwsSecret : ISecret
                         {
                             Effect = "Allow",
                             Actions = new[] { "secretsmanager:ListSecrets" },
-                            Resources = new Output<string>[] { Output.Create("*") } // Convert string to Output<string>
+                            Resources = new Output<string>[] { Output.Create("*") }, // Convert string to Output<string>
                         }
                     );
                     break;
@@ -115,7 +120,7 @@ public class AwsSecret : ISecret
                         {
                             Effect = "Allow",
                             Actions = new[] { "secretsmanager:DescribeSecret" },
-                            Resources = new Output<string>[] { Arn }
+                            Resources = new Output<string>[] { Arn },
                         }
                     );
                     break;

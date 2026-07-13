@@ -35,7 +35,10 @@ public sealed class KoyebServiceCompute : ICompute
     {
         Name = name;
         ContainerRegistry = containerRegistry;
-        _imageName = imageName ?? containerImage?.Name ?? throw new ArgumentException("Either imageName or containerImage must be provided.");
+        _imageName =
+            imageName
+            ?? containerImage?.Name
+            ?? throw new ArgumentException("Either imageName or containerImage must be provided.");
         _imageTag = imageTag;
         _region = region;
         _instanceType = instanceType;
@@ -54,9 +57,7 @@ public sealed class KoyebServiceCompute : ICompute
     public int MaxCount { get; set; } = 1;
     public IHealthCheckConfiguration? HealthCheckConfiguration { get; set; }
     public IList<PortForwardingConfiguration> PortForwardings { get; set; } =
-    [
-        new PortForwardingConfiguration { ContainerPort = 8080, Protocol = "http" }
-    ];
+    [new PortForwardingConfiguration { ContainerPort = 8080, Protocol = "http" }];
     public string? MemoryLimit { get; set; }
     public string? CpuLimit { get; set; }
     public KoyebScaleToZeroOptions? ScaleToZeroOptions { get; set; }
@@ -64,7 +65,8 @@ public sealed class KoyebServiceCompute : ICompute
     public void AddRequiredSecret(ISecret secret, string? environmentVariableName = null) =>
         _requiredSecrets.Add((secret, environmentVariableName));
 
-    public void AddEnvironmentVariable(string name, string value) => _environmentVariables[name] = value;
+    public void AddEnvironmentVariable(string name, string value) =>
+        _environmentVariables[name] = value;
 
     public void AddEnvironmentVariable(string name, Output<string> value) =>
         _environmentVariablesOutput[name] = value;
@@ -72,12 +74,11 @@ public sealed class KoyebServiceCompute : ICompute
     public void AddEnvironmentVariables(IDictionary<string, string> variables)
     {
         foreach (var variable in variables)
-        {
             _environmentVariables[variable.Key] = variable.Value;
-        }
     }
 
-    public void AddPolicyStatement(IPolicyStatement statement) => _customPolicyStatements.Add(statement);
+    public void AddPolicyStatement(IPolicyStatement statement) =>
+        _customPolicyStatements.Add(statement);
 
     public void Build()
     {
@@ -93,7 +94,7 @@ public sealed class KoyebServiceCompute : ICompute
             new global::Pulumi.Koyeb.ServiceArgs
             {
                 AppName = _app.Name,
-                Definition = BuildDefinition()
+                Definition = BuildDefinition(),
             },
             new CustomResourceOptions { Provider = _provider, DependsOn = [_app] }
         );
@@ -104,9 +105,7 @@ public sealed class KoyebServiceCompute : ICompute
     public IEnumerable<Resource> GetDependencies()
     {
         if (_service is null)
-        {
             return [];
-        }
 
         return _scaleToZeroSleepCommand is null ? [_service] : [_service, _scaleToZeroSleepCommand];
     }
@@ -114,21 +113,25 @@ public sealed class KoyebServiceCompute : ICompute
     public IEnumerable<DnsRecord> GetRequiredDnsRecords(IEnumerable<string> names) =>
         names.Select(name => new DnsRecord(DnsRecordType.CNAME, name, ServiceUrl, $"{name}-cname"));
 
-    public IEnumerable<DnsRecord> RegisterDnsMappingAndCertificates(IEnumerable<string> customDomains) =>
-        GetRequiredDnsRecords(customDomains);
+    public IEnumerable<DnsRecord> RegisterDnsMappingAndCertificates(
+        IEnumerable<string> customDomains
+    ) => GetRequiredDnsRecords(customDomains);
 
     public ComputeConfigurationResponse GetConfiguration() =>
         new()
         {
             EnvironmentVariables = new Dictionary<string, string>(_environmentVariables),
-            EnvironmentVariablesOutput = new Dictionary<string, Output<string>>(_environmentVariablesOutput),
+            EnvironmentVariablesOutput = new Dictionary<string, Output<string>>(
+                _environmentVariablesOutput
+            ),
             RequiredSecrets = _requiredSecrets.Select(x => x.secret).ToList(),
-            SecretMappings = _requiredSecrets.ToDictionary(x => x.secret.Name, x => x.envVarName)
+            SecretMappings = _requiredSecrets.ToDictionary(x => x.secret.Name, x => x.envVarName),
         };
 
     public IEnumerable<IPolicyStatement> GetPolicy(params ComputePermissions[] permissions) => [];
 
-    public void OnHealthy(params Func<ICompute, Task>[] actions) => _onHealthyActions.AddRange(actions);
+    public void OnHealthy(params Func<ICompute, Task>[] actions) =>
+        _onHealthyActions.AddRange(actions);
 
     public void OnReady(params Func<ICompute, Task>[] actions) => _onReadyActions.AddRange(actions);
 
@@ -136,90 +139,106 @@ public sealed class KoyebServiceCompute : ICompute
     {
         var port = PortForwardings.FirstOrDefault().ContainerPort;
         if (port == 0)
-        {
             port = 8080;
-        }
 
         var definition = new global::Pulumi.Koyeb.Inputs.ServiceDefinitionArgs
         {
             Name = Name,
-            Docker = new global::Pulumi.Koyeb.Inputs.ServiceDefinitionDockerArgs { Image = BuildImageUri() },
+            Docker = new global::Pulumi.Koyeb.Inputs.ServiceDefinitionDockerArgs
+            {
+                Image = BuildImageUri(),
+            },
             Type = "WEB",
             InstanceTypes =
             [
-                new global::Pulumi.Koyeb.Inputs.ServiceDefinitionInstanceTypeArgs { Type = _instanceType }
+                new global::Pulumi.Koyeb.Inputs.ServiceDefinitionInstanceTypeArgs
+                {
+                    Type = _instanceType,
+                },
             ],
             Ports =
             [
-                new global::Pulumi.Koyeb.Inputs.ServiceDefinitionPortArgs { Port = port, Protocol = "http" }
+                new global::Pulumi.Koyeb.Inputs.ServiceDefinitionPortArgs
+                {
+                    Port = port,
+                    Protocol = "http",
+                },
             ],
             Regions = [_region],
             Routes =
             [
-                new global::Pulumi.Koyeb.Inputs.ServiceDefinitionRouteArgs { Path = "/", Port = port }
+                new global::Pulumi.Koyeb.Inputs.ServiceDefinitionRouteArgs
+                {
+                    Path = "/",
+                    Port = port,
+                },
             ],
             Scalings =
             [
                 new global::Pulumi.Koyeb.Inputs.ServiceDefinitionScalingArgs
                 {
                     Min = MinCount,
-                    Max = MaxCount
-                }
-            ]
+                    Max = MaxCount,
+                },
+            ],
         };
 
         foreach (var variable in _environmentVariables)
-        {
-            definition.Envs.Add(new global::Pulumi.Koyeb.Inputs.ServiceDefinitionEnvArgs
-            {
-                Key = variable.Key,
-                Value = variable.Value
-            });
-        }
+            definition.Envs.Add(
+                new global::Pulumi.Koyeb.Inputs.ServiceDefinitionEnvArgs
+                {
+                    Key = variable.Key,
+                    Value = variable.Value,
+                }
+            );
 
         foreach (var variable in _environmentVariablesOutput)
-        {
-            definition.Envs.Add(new global::Pulumi.Koyeb.Inputs.ServiceDefinitionEnvArgs
-            {
-                Key = variable.Key,
-                Value = variable.Value
-            });
-        }
+            definition.Envs.Add(
+                new global::Pulumi.Koyeb.Inputs.ServiceDefinitionEnvArgs
+                {
+                    Key = variable.Key,
+                    Value = variable.Value,
+                }
+            );
 
         foreach (var (secret, envVarName) in _requiredSecrets)
-        {
-            definition.Envs.Add(new global::Pulumi.Koyeb.Inputs.ServiceDefinitionEnvArgs
-            {
-                Key = envVarName ?? ToEnvironmentName(secret.Name),
-                Secret = secret.Name
-            });
-        }
+            definition.Envs.Add(
+                new global::Pulumi.Koyeb.Inputs.ServiceDefinitionEnvArgs
+                {
+                    Key = envVarName ?? ToEnvironmentName(secret.Name),
+                    Secret = secret.Name,
+                }
+            );
 
         return definition;
     }
 
     private Command? BuildScaleToZeroSleepCommand()
     {
-        if (ScaleToZeroOptions is null || !ScaleToZeroOptions.HasConfiguredSleepDelays || _app is null || _service is null)
-        {
+        if (
+            ScaleToZeroOptions is null
+            || !ScaleToZeroOptions.HasConfiguredSleepDelays
+            || _app is null
+            || _service is null
+        )
             return null;
-        }
 
         var arguments = new List<string>();
         if (ScaleToZeroOptions.LightSleepDelay.HasValue)
-        {
-            arguments.Add($"--light-sleep-delay {FormatKoyebDuration(ScaleToZeroOptions.LightSleepDelay.Value)}");
-        }
+            arguments.Add(
+                $"--light-sleep-delay {FormatKoyebDuration(ScaleToZeroOptions.LightSleepDelay.Value)}"
+            );
 
         if (ScaleToZeroOptions.DeepSleepDelay.HasValue)
-        {
-            arguments.Add($"--deep-sleep-delay {FormatKoyebDuration(ScaleToZeroOptions.DeepSleepDelay.Value)}");
-        }
+            arguments.Add(
+                $"--deep-sleep-delay {FormatKoyebDuration(ScaleToZeroOptions.DeepSleepDelay.Value)}"
+            );
 
         var appName = _app.Name.Apply(ShellQuote);
         var serviceName = ShellQuote(Name);
         var updateCommand = appName.Apply(app =>
-            $"koyeb services update {app}/{serviceName} --min-scale {MinCount} --max-scale {MaxCount} {string.Join(' ', arguments)} --wait");
+            $"koyeb services update {app}/{serviceName} --min-scale {MinCount} --max-scale {MaxCount} {string.Join(' ', arguments)} --wait"
+        );
 
         return new Command(
             $"{Name}-scale-to-zero-sleep",
@@ -232,8 +251,8 @@ public sealed class KoyebServiceCompute : ICompute
                     (Input<object>)FormatKoyebDuration(ScaleToZeroOptions.LightSleepDelay),
                     (Input<object>)FormatKoyebDuration(ScaleToZeroOptions.DeepSleepDelay),
                     (Input<object>)MinCount.ToString(),
-                    (Input<object>)MaxCount.ToString()
-                }
+                    (Input<object>)MaxCount.ToString(),
+                },
             },
             new CustomResourceOptions { DependsOn = [_service] }
         );
@@ -246,7 +265,9 @@ public sealed class KoyebServiceCompute : ICompute
                 : $"{registryUrl.TrimEnd('/')}/{_imageName}:{_imageTag}"
         );
 
-    private static string GetFirstDomainUrl(ImmutableArray<global::Pulumi.Koyeb.Outputs.AppDomain> domains)
+    private static string GetFirstDomainUrl(
+        ImmutableArray<global::Pulumi.Koyeb.Outputs.AppDomain> domains
+    )
     {
         var domain = domains.FirstOrDefault();
         return string.IsNullOrWhiteSpace(domain?.Name) ? string.Empty : $"https://{domain.Name}";
@@ -258,24 +279,19 @@ public sealed class KoyebServiceCompute : ICompute
     private static string FormatKoyebDuration(TimeSpan duration)
     {
         if (duration == TimeSpan.Zero)
-        {
             return "0";
-        }
 
         if (duration < TimeSpan.Zero)
-        {
-            throw new ArgumentOutOfRangeException(nameof(duration), "Koyeb sleep delays cannot be negative.");
-        }
+            throw new ArgumentOutOfRangeException(
+                nameof(duration),
+                "Koyeb sleep delays cannot be negative."
+            );
 
         if (duration.TotalSeconds % 3600 == 0)
-        {
             return $"{(int)duration.TotalHours}h";
-        }
 
         if (duration.TotalSeconds % 60 == 0)
-        {
             return $"{(int)duration.TotalMinutes}m";
-        }
 
         return $"{(int)duration.TotalSeconds}s";
     }

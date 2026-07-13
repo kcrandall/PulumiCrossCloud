@@ -22,7 +22,7 @@ public class GcpDnsRegistration : IDnsRegistration
 
         // GCP requires record names to be fully qualified (end with the zone's DNS name)
         // Pulumi GCP provider often handles this, or we rely on the input being correct.
-        
+
         _recordSet = new RecordSet(
             name,
             new RecordSetArgs
@@ -31,7 +31,7 @@ public class GcpDnsRegistration : IDnsRegistration
                 Name = record.Name,
                 Type = MapRecordType(record.Type),
                 Ttl = Ttl,
-                Rrdatas = new InputList<string> { record.Value }
+                Rrdatas = new InputList<string> { record.Value },
             }
         );
     }
@@ -57,6 +57,6 @@ public class GcpDnsRegistration : IDnsRegistration
             DnsRecordType.NS => "NS",
             DnsRecordType.CAA => "CAA",
             DnsRecordType.PTR => "PTR",
-            _ => throw new ArgumentException($"Unsupported DNS record type: {type}")
+            _ => throw new ArgumentException($"Unsupported DNS record type: {type}"),
         };
 }

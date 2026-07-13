@@ -19,23 +19,14 @@ public sealed class FlyCloudResourceFactory : CloudResourceFactory
     {
         _orgSlug = orgSlug;
         _region = region;
-        var providerArgs = new global::Pulumi.Fly.ProviderArgs
-        {
-            OrgSlug = orgSlug
-        };
+        var providerArgs = new global::Pulumi.Fly.ProviderArgs { OrgSlug = orgSlug };
         if (apiToken is not null)
-        {
             providerArgs.ApiToken = apiToken;
-        }
-        if (flyctlPath is not null)
-        {
-            providerArgs.FlyctlPath = flyctlPath;
-        }
 
-        _flyProvider = new global::Pulumi.Fly.Provider(
-            "fly-provider",
-            providerArgs
-        );
+        if (flyctlPath is not null)
+            providerArgs.FlyctlPath = flyctlPath;
+
+        _flyProvider = new global::Pulumi.Fly.Provider("fly-provider", providerArgs);
     }
 
     public override ISecret CreateSecret(
@@ -69,9 +60,9 @@ public sealed class FlyCloudResourceFactory : CloudResourceFactory
     )
     {
         if (serviceType is not null && serviceType != ComputeServiceType.FlyMachine)
-        {
-            throw new NotSupportedException($"Fly.io supports {ComputeServiceType.FlyMachine}, not {serviceType}.");
-        }
+            throw new NotSupportedException(
+                $"Fly.io supports {ComputeServiceType.FlyMachine}, not {serviceType}."
+            );
 
         return new FlyMachineCompute(
             name,

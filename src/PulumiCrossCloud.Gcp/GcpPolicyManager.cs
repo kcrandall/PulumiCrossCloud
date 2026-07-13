@@ -38,10 +38,10 @@ public static class GcpPolicyManager
             for (int i = 0; i < resourceList.Count; i++)
             {
                 var resourceId = resourceList[i];
-                
+
                 // Use provided stable name if available, otherwise fall back to index (less ideal but necessary for non-named resources)
                 string stableNamePart = i < nameList.Count ? nameList[i] : i.ToString();
-                
+
                 // Sanitize role and name for use in Pulumi resource name
                 var safeRole = role.Replace("/", "-").Replace(".", "-");
                 var resourceName = $"{namePrefix}-{safeRole}-{stableNamePart}";
@@ -49,25 +49,33 @@ public static class GcpPolicyManager
                 if (role == "roles/pubsub.publisher")
                 {
                     // Publisher role applies to Topics
-                    var binding = new TopicIAMMember(resourceName, new TopicIAMMemberArgs
-                    {
-                        Project = projectId,
-                        Topic = resourceId,
-                        Role = role,
-                        Member = member
-                    }, new CustomResourceOptions { Provider = provider });
+                    var binding = new TopicIAMMember(
+                        resourceName,
+                        new TopicIAMMemberArgs
+                        {
+                            Project = projectId,
+                            Topic = resourceId,
+                            Role = role,
+                            Member = member,
+                        },
+                        new CustomResourceOptions { Provider = provider }
+                    );
                     dependencies.Add(binding);
                 }
                 else if (role == "roles/pubsub.subscriber")
                 {
                     // Subscriber role applies to Subscriptions
-                    var binding = new SubscriptionIAMMember(resourceName, new SubscriptionIAMMemberArgs
-                    {
-                        Project = projectId,
-                        Subscription = resourceId,
-                        Role = role,
-                        Member = member
-                    }, new CustomResourceOptions { Provider = provider });
+                    var binding = new SubscriptionIAMMember(
+                        resourceName,
+                        new SubscriptionIAMMemberArgs
+                        {
+                            Project = projectId,
+                            Subscription = resourceId,
+                            Role = role,
+                            Member = member,
+                        },
+                        new CustomResourceOptions { Provider = provider }
+                    );
                     dependencies.Add(binding);
                 }
                 // Add more role handlers here as needed

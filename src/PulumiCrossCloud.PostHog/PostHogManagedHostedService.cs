@@ -35,15 +35,16 @@ public sealed class PostHogManagedHostedService : ComponentResource
         {
             Postgres = factory.CreatePostgresDatabase(
                 $"{name}-postgres",
-                args.PostgresOptions ?? new PostgresOptions
-                {
-                    InitialDatabaseName = "posthog",
-                    MasterUsername = "posthog"
-                }
+                args.PostgresOptions
+                    ?? new PostgresOptions
+                    {
+                        InitialDatabaseName = "posthog",
+                        MasterUsername = "posthog",
+                    }
             );
             databaseInputs = new PostHogDatabaseInputs
             {
-                Url = factory.CreateSecret($"{name}-postgres-url", Postgres.ConnectionString)
+                Url = factory.CreateSecret($"{name}-postgres-url", Postgres.ConnectionString),
             };
         }
 
@@ -53,7 +54,7 @@ public sealed class PostHogManagedHostedService : ComponentResource
             Redis = factory.CreateMemoryCache($"{name}-redis", args.RedisOptions);
             redisInputs = new PostHogRedisInputs
             {
-                Url = factory.CreateSecret($"{name}-redis-url", Redis.ConnectionString)
+                Url = factory.CreateSecret($"{name}-redis-url", Redis.ConnectionString),
             };
         }
 
@@ -63,10 +64,7 @@ public sealed class PostHogManagedHostedService : ComponentResource
             WithDependencies(args.Hosting, databaseInputs, redisInputs)
         );
 
-        RegisterOutputs(new Dictionary<string, object?>
-        {
-            ["serviceUrl"] = ServiceUrl
-        });
+        RegisterOutputs(new Dictionary<string, object?> { ["serviceUrl"] = ServiceUrl });
     }
 
     private static PostHogHostingArgs WithDependencies(
@@ -103,6 +101,6 @@ public sealed class PostHogManagedHostedService : ComponentResource
             MaxCount = args.MaxCount,
             MemoryLimit = args.MemoryLimit,
             CpuLimit = args.CpuLimit,
-            MirrorImageToRegistry = args.MirrorImageToRegistry
+            MirrorImageToRegistry = args.MirrorImageToRegistry,
         };
 }

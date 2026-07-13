@@ -20,7 +20,13 @@ public sealed class SentryRelayService : ComponentResource
 
         var registry = args.Registry ?? factory.CreateContainerRegistry($"{name}-registry", false);
         var image = args.MirrorImageToRegistry
-            ? SentryImageMirror.Push(factory, registry, $"{name}-image", args.ImageName, args.ImageTag)
+            ? SentryImageMirror.Push(
+                factory,
+                registry,
+                $"{name}-image",
+                args.ImageName,
+                args.ImageTag
+            )
             : null;
 
         Compute = factory.CreateCompute(
@@ -42,8 +48,8 @@ public sealed class SentryRelayService : ComponentResource
             {
                 ContainerPort = args.Port,
                 ExternalPort = args.Port,
-                Protocol = "TCP"
-            }
+                Protocol = "TCP",
+            },
         ];
         Compute.HealthCheckConfiguration = new HealthCheckConfiguration
         {
@@ -54,7 +60,7 @@ public sealed class SentryRelayService : ComponentResource
             UnhealthyThreshold = 3,
             StartupIntervalSeconds = 10,
             StartupTimeoutSeconds = 5,
-            StartupUnhealthyThreshold = 18
+            StartupUnhealthyThreshold = 18,
         };
 
         Compute.AddEnvironmentVariable("RELAY_MODE", args.Mode);
@@ -63,31 +69,20 @@ public sealed class SentryRelayService : ComponentResource
         Compute.AddEnvironmentVariable("RELAY_PORT", args.Port.ToString());
 
         if (!string.IsNullOrWhiteSpace(args.RelayId))
-        {
             Compute.AddEnvironmentVariable("RELAY_ID", args.RelayId);
-        }
 
         if (!string.IsNullOrWhiteSpace(args.PublicKey))
-        {
             Compute.AddEnvironmentVariable("RELAY_PUBLIC_KEY", args.PublicKey);
-        }
 
         if (args.SecretKey is not null)
-        {
             Compute.AddRequiredSecret(args.SecretKey, "RELAY_SECRET_KEY");
-        }
 
         Compute.AddEnvironmentVariables(args.EnvironmentVariables);
         foreach (var (environmentVariableName, secret) in args.SecretEnvironmentVariables)
-        {
             Compute.AddRequiredSecret(secret, environmentVariableName);
-        }
 
         Compute.Build();
 
-        RegisterOutputs(new Dictionary<string, object?>
-        {
-            ["serviceUrl"] = ServiceUrl
-        });
+        RegisterOutputs(new Dictionary<string, object?> { ["serviceUrl"] = ServiceUrl });
     }
 }

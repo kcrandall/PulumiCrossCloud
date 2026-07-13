@@ -12,7 +12,7 @@ public class AwsPolicyStatement : BasePolicyStatement
             Effect = Effect,
             Action = Actions,
             Resource = Resources,
-            Condition = Conditions.Count > 0 ? Conditions : null
+            Condition = Conditions.Count > 0 ? Conditions : null,
         };
 
         return JsonSerializer.Serialize(

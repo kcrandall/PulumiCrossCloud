@@ -1,5 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <ItemGroup>
     <ProjectReference Include="..\PulumiCrossCloud.Core\PulumiCrossCloud.Core.csproj" />
     <ProjectReference Include="Generated\upstash\Pulumi.Upstash.csproj" PrivateAssets="all" />
@@ -17,12 +16,14 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);Generated\**</DefaultItemExcludes>
   </PropertyGroup>
 
-  <Target Name="IncludeGeneratedUpstashProviderInPackage" BeforeTargets="_GetBuildOutputFilesWithTfm">
+  <Target
+    Name="IncludeGeneratedUpstashProviderInPackage"
+    BeforeTargets="_GetBuildOutputFilesWithTfm"
+  >
     <ItemGroup>
       <BuildOutputInPackage Include="$(MSBuildProjectDirectory)\Generated\upstash\bin\$(Configuration)\$(TargetFramework)\Pulumi.Upstash.dll">
         <TargetPath>Pulumi.Upstash.dll</TargetPath>
       </BuildOutputInPackage>
     </ItemGroup>
   </Target>
-
 </Project>

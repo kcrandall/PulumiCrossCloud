@@ -6,5 +6,5 @@ public enum SearchDatabasePermissions
     Write,
     Admin,
     Search,
-    IndexManagement
+    IndexManagement,
 }

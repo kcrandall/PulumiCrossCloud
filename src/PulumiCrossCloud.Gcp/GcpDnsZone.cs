@@ -34,7 +34,7 @@ public class GcpDnsZone : IDnsZone
             {
                 Name = SanitizeZoneName(name),
                 DnsName = dnsName,
-                Description = $"Managed by PulumiCrossCloud - {name}"
+                Description = $"Managed by PulumiCrossCloud - {name}",
             },
             new CustomResourceOptions { Provider = provider }
         );
@@ -43,7 +43,12 @@ public class GcpDnsZone : IDnsZone
     /// <summary>
     /// Creates a GcpDnsZone from an existing managed zone lookup.
     /// </summary>
-    private GcpDnsZone(string name, string domainName, Output<GetManagedZoneResult> lookupResult, Pulumi.Gcp.Provider? provider = null)
+    private GcpDnsZone(
+        string name,
+        string domainName,
+        Output<GetManagedZoneResult> lookupResult,
+        Pulumi.Gcp.Provider? provider = null
+    )
     {
         Name = name;
         DomainName = domainName;
@@ -60,9 +65,16 @@ public class GcpDnsZone : IDnsZone
     /// <param name="zoneName">The name of the managed zone in GCP (not the domain name).</param>
     /// <param name="provider">Optional explicit provider.</param>
     /// <returns>A GcpDnsZone instance.</returns>
-    public static GcpDnsZone Lookup(string name, string zoneName, Pulumi.Gcp.Provider? provider = null)
+    public static GcpDnsZone Lookup(
+        string name,
+        string zoneName,
+        Pulumi.Gcp.Provider? provider = null
+    )
     {
-        var lookup = GetManagedZone.Invoke(new GetManagedZoneInvokeArgs { Name = zoneName }, new InvokeOptions { Provider = provider });
+        var lookup = GetManagedZone.Invoke(
+            new GetManagedZoneInvokeArgs { Name = zoneName },
+            new InvokeOptions { Provider = provider }
+        );
         var domainName = lookup.Apply(r => r.DnsName.TrimEnd('.'));
         return new GcpDnsZone(name, domainName.Apply(d => d), lookup, provider);
     }
@@ -118,7 +130,7 @@ public class GcpDnsZone : IDnsZone
         // Deterministic naming strategy:
         // {ZoneName}-{RecordType}-{Key}
         // Replace dots with dashes in the key to ensure valid resource name segments (if needed)
-        
+
         var suffix = record.Key.Replace(".", "-").ToLowerInvariant();
         var resourceName = $"{Name}-{record.Type.ToString().ToLowerInvariant()}-{suffix}";
         return new GcpDnsRegistration(resourceName, this, record, ttl);
@@ -138,5 +150,7 @@ public class GcpDnsZone : IDnsZone
     /// Sanitizes the zone name for GCP requirements (lowercase, alphanumeric, hyphens only).
     /// </summary>
     private static string SanitizeZoneName(string name) =>
-        new string(name.ToLowerInvariant().Where(c => char.IsLetterOrDigit(c) || c == '-').ToArray());
+        new string(
+            name.ToLowerInvariant().Where(c => char.IsLetterOrDigit(c) || c == '-').ToArray()
+        );
 }

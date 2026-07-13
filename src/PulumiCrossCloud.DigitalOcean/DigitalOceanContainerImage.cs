@@ -13,9 +13,10 @@ public sealed class DigitalOceanContainerImage : IContainerImage
         Registry = registry ?? throw new ArgumentNullException(nameof(registry));
 
         if (registry.Provider != CloudProvider.DigitalOcean)
-        {
-            throw new ArgumentException("Registry must be a DigitalOcean registry.", nameof(registry));
-        }
+            throw new ArgumentException(
+                "Registry must be a DigitalOcean registry.",
+                nameof(registry)
+            );
     }
 
     public string Name { get; }
@@ -49,7 +50,7 @@ public sealed class DigitalOceanContainerImage : IContainerImage
             {
                 ImageUrl = tuple.Item1,
                 ImageTag = tuple.Item2,
-                Image = tuple.Item3
+                Image = tuple.Item3,
             });
 
         return DeploymentResult;

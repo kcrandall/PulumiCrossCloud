@@ -8,7 +8,7 @@ public enum MemoryCachePermissions
     Write,
     Delete,
     Flush,
-    Admin
+    Admin,
 }
 
 public interface IMemoryCacheDatabase : IDatabase

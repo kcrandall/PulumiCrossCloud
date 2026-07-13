@@ -24,10 +24,10 @@ public static class ComputeServiceTypeExtensions
             ComputeServiceType.KoyebService => "Koyeb Service",
             ComputeServiceType.FlyMachine => "Fly.io Machine",
             ComputeServiceType.DigitalOceanAppPlatform => "DigitalOcean App Platform",
-            _ => serviceType.ToString()
+            _ => serviceType.ToString(),
         };
     }
-    
+
     /// <summary>
     /// Gets the cloud provider for the compute service type
     /// </summary>
@@ -48,10 +48,10 @@ public static class ComputeServiceTypeExtensions
             ComputeServiceType.KoyebService => CloudProvider.Koyeb,
             ComputeServiceType.FlyMachine => CloudProvider.Fly,
             ComputeServiceType.DigitalOceanAppPlatform => CloudProvider.DigitalOcean,
-            _ => throw new ArgumentException($"Unknown service type: {serviceType}")
+            _ => throw new ArgumentException($"Unknown service type: {serviceType}"),
         };
     }
-    
+
     /// <summary>
     /// Checks if the service type is serverless
     /// </summary>
@@ -72,10 +72,10 @@ public static class ComputeServiceTypeExtensions
             ComputeServiceType.ECS => false,
             ComputeServiceType.AppService => false,
             ComputeServiceType.ComputeEngine => false,
-            _ => false
+            _ => false,
         };
     }
-    
+
     /// <summary>
     /// Checks if the service type supports containers
     /// </summary>
@@ -96,10 +96,10 @@ public static class ComputeServiceTypeExtensions
             ComputeServiceType.EC2 => false,
             ComputeServiceType.AppService => false,
             ComputeServiceType.ComputeEngine => false,
-            _ => false
+            _ => false,
         };
     }
-    
+
     /// <summary>
     /// Gets the typical use cases for the service type
     /// </summary>
@@ -107,23 +107,83 @@ public static class ComputeServiceTypeExtensions
     {
         return serviceType switch
         {
-            ComputeServiceType.AppRunner => new[] { "Web APIs", "Simple containerized apps", "CI/CD deployments" },
-            ComputeServiceType.Fargate => new[] { "Microservices", "Batch processing", "Background workers" },
-            ComputeServiceType.EC2 => new[] { "Full control applications", "Legacy workloads", "Custom configurations" },
-            ComputeServiceType.ECS => new[] { "Container orchestration", "Multi-container apps", "Service mesh" },
-            ComputeServiceType.ContainerApps => new[] { "Event-driven apps", "Microservices", "Background processing" },
-            ComputeServiceType.ContainerInstances => new[] { "Batch jobs", "Simple containers", "Dev/test workloads" },
+            ComputeServiceType.AppRunner => new[]
+            {
+                "Web APIs",
+                "Simple containerized apps",
+                "CI/CD deployments",
+            },
+            ComputeServiceType.Fargate => new[]
+            {
+                "Microservices",
+                "Batch processing",
+                "Background workers",
+            },
+            ComputeServiceType.EC2 => new[]
+            {
+                "Full control applications",
+                "Legacy workloads",
+                "Custom configurations",
+            },
+            ComputeServiceType.ECS => new[]
+            {
+                "Container orchestration",
+                "Multi-container apps",
+                "Service mesh",
+            },
+            ComputeServiceType.ContainerApps => new[]
+            {
+                "Event-driven apps",
+                "Microservices",
+                "Background processing",
+            },
+            ComputeServiceType.ContainerInstances => new[]
+            {
+                "Batch jobs",
+                "Simple containers",
+                "Dev/test workloads",
+            },
             ComputeServiceType.AppService => new[] { "Web apps", "APIs", "Mobile backends" },
-            ComputeServiceType.CloudRun => new[] { "HTTP services", "Event processing", "Microservices" },
-            ComputeServiceType.CloudRunJobs => new[] { "Batch processing", "Scheduled tasks", "Data processing" },
-            ComputeServiceType.ComputeEngine => new[] { "VM workloads", "Legacy applications", "Custom OS requirements" },
-            ComputeServiceType.KoyebService => new[] { "Web services", "APIs", "Background workers" },
-            ComputeServiceType.FlyMachine => new[] { "Global apps", "Low-latency APIs", "Stateful services" },
-            ComputeServiceType.DigitalOceanAppPlatform => new[] { "Web services", "APIs", "Managed container apps" },
-            _ => new[] { "General purpose computing" }
+            ComputeServiceType.CloudRun => new[]
+            {
+                "HTTP services",
+                "Event processing",
+                "Microservices",
+            },
+            ComputeServiceType.CloudRunJobs => new[]
+            {
+                "Batch processing",
+                "Scheduled tasks",
+                "Data processing",
+            },
+            ComputeServiceType.ComputeEngine => new[]
+            {
+                "VM workloads",
+                "Legacy applications",
+                "Custom OS requirements",
+            },
+            ComputeServiceType.KoyebService => new[]
+            {
+                "Web services",
+                "APIs",
+                "Background workers",
+            },
+            ComputeServiceType.FlyMachine => new[]
+            {
+                "Global apps",
+                "Low-latency APIs",
+                "Stateful services",
+            },
+            ComputeServiceType.DigitalOceanAppPlatform => new[]
+            {
+                "Web services",
+                "APIs",
+                "Managed container apps",
+            },
+            _ => new[] { "General purpose computing" },
         };
     }
-    
+
     /// <summary>
     /// Gets the billing model for the service type
     /// </summary>
@@ -143,8 +203,9 @@ public static class ComputeServiceTypeExtensions
             ComputeServiceType.ComputeEngine => "Pay per VM hour",
             ComputeServiceType.KoyebService => "Pay per instance type and usage",
             ComputeServiceType.FlyMachine => "Pay per machine resources and usage",
-            ComputeServiceType.DigitalOceanAppPlatform => "Pay per App Platform instance size and count",
-            _ => "Variable billing model"
+            ComputeServiceType.DigitalOceanAppPlatform =>
+                "Pay per App Platform instance size and count",
+            _ => "Variable billing model",
         };
     }
 }

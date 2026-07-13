@@ -21,7 +21,7 @@ public class UpstashRedisOptions : MemoryCacheOptions
     public bool AutoScale { get; set; } = false;
 
     /// <summary>
-    /// Budget for the database (default $20). It is used to limit the cost of the database. 
+    /// Budget for the database (default $20). It is used to limit the cost of the database.
     /// If the budget is reached, the database will be throttled until the next month.
     /// </summary>
     public double? Budget { get; set; }
@@ -38,7 +38,7 @@ public class UpstashRedisOptions : MemoryCacheOptions
 
     /// <summary>
     /// Read regions for the database (Only works if region='global' and primary_region is set).
-    /// Can be any combination of [us-east-1, us-west-1, us-west-2, eu-central-1, eu-west-1, sa-east-1, ap-southeast-1, ap-southeast-2], 
+    /// Can be any combination of [us-east-1, us-west-1, us-west-2, eu-central-1, eu-west-1, sa-east-1, ap-southeast-1, ap-southeast-2],
     /// excluding the one given as primary.
     /// </summary>
     public string[]? ReadRegions { get; set; }

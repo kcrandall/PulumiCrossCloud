@@ -52,7 +52,13 @@ public class CloudflareDnsFactory
     /// <returns>An IDnsZone instance.</returns>
     public IDnsZone LookupZone(string name, string domainName)
     {
-        return CloudflareDnsZone.LookupByDomainName(name, domainName, _defaultAccountId, apiToken: null, provider: _provider);
+        return CloudflareDnsZone.LookupByDomainName(
+            name,
+            domainName,
+            _defaultAccountId,
+            apiToken: null,
+            provider: _provider
+        );
     }
 
     /// <summary>

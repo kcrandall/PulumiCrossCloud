@@ -54,14 +54,20 @@ public class GcpCloudResourceFactory : CloudResourceFactory
     )
     {
         if (serviceType is null)
-        {
             serviceType = ComputeServiceType.CloudRun;
-        }
+
         return serviceType switch
         {
-            ComputeServiceType.CloudRun
-                => new GcpCloudRunCompute(name, registry, imageName, imageTag, containerImage, null, _gcpProvider),
-            _ => throw new ArgumentException($"Unsupported GCP service type: {serviceType}")
+            ComputeServiceType.CloudRun => new GcpCloudRunCompute(
+                name,
+                registry,
+                imageName,
+                imageTag,
+                containerImage,
+                null,
+                _gcpProvider
+            ),
+            _ => throw new ArgumentException($"Unsupported GCP service type: {serviceType}"),
         };
     }
 
@@ -81,7 +87,15 @@ public class GcpCloudResourceFactory : CloudResourceFactory
         string? indexDocument = null
     )
     {
-        return new GcpBucket(name, isPublic, cdn, versioningEnabled, corsRules, indexDocument, _gcpProvider);
+        return new GcpBucket(
+            name,
+            isPublic,
+            cdn,
+            versioningEnabled,
+            corsRules,
+            indexDocument,
+            _gcpProvider
+        );
     }
 
     public override IDnsZone CreateDnsZone(string name, string domainName)

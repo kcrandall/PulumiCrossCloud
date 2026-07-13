@@ -1,8 +1,8 @@
 using Pulumi;
 using Pulumi.Cloudflare;
 using PulumiCrossCloud.Core;
-using CoreDnsRecord = PulumiCrossCloud.Core.DnsRecord;
 using CfDnsRecord = Pulumi.Cloudflare.DnsRecord;
+using CoreDnsRecord = PulumiCrossCloud.Core.DnsRecord;
 
 namespace PulumiCrossCloud.Cloudflare;
 
@@ -35,7 +35,9 @@ public class CloudflareDnsRegistration : IDnsRegistration
             record.Type is DnsRecordType.A or DnsRecordType.AAAA or DnsRecordType.CNAME;
         var actualProxied = proxied && canBeProxied;
 
-        var options = provider is not null ? new CustomResourceOptions { Provider = provider } : null;
+        var options = provider is not null
+            ? new CustomResourceOptions { Provider = provider }
+            : null;
 
         // Handle provider-specific field requirements
         var typeStr = MapRecordType(record.Type);
@@ -48,13 +50,22 @@ public class CloudflareDnsRegistration : IDnsRegistration
             // Split into priority and hostname for Cloudflare
             priority = content.Apply(v =>
             {
-                var parts = (v ?? string.Empty).Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length >= 1 && int.TryParse(parts[0], out var p)) return (double)p;
+                var parts = (v ?? string.Empty).Split(
+                    ' ',
+                    2,
+                    StringSplitOptions.RemoveEmptyEntries
+                );
+                if (parts.Length >= 1 && int.TryParse(parts[0], out var p))
+                    return (double)p;
                 return 10.0; // reasonable default if not provided
             });
             content = content.Apply(v =>
             {
-                var parts = (v ?? string.Empty).Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+                var parts = (v ?? string.Empty).Split(
+                    ' ',
+                    2,
+                    StringSplitOptions.RemoveEmptyEntries
+                );
                 return parts.Length == 2 ? parts[1] : (v ?? string.Empty);
             });
         }
@@ -69,7 +80,7 @@ public class CloudflareDnsRegistration : IDnsRegistration
                 Type = typeStr,
                 Ttl = actualProxied ? 1 : (ttl ?? 300), // TTL must be 1 for proxied records
                 Proxied = actualProxied,
-                Priority = priority
+                Priority = priority,
             },
             options
         );
@@ -96,6 +107,6 @@ public class CloudflareDnsRegistration : IDnsRegistration
             DnsRecordType.NS => "NS",
             DnsRecordType.CAA => "CAA",
             DnsRecordType.PTR => "PTR",
-            _ => throw new ArgumentException($"Unsupported DNS record type: {type}")
+            _ => throw new ArgumentException($"Unsupported DNS record type: {type}"),
         };
 }

@@ -7,6 +7,7 @@ public interface IPolicyStatement
     string Effect { get; }
     IEnumerable<string> Actions { get; }
     IEnumerable<Output<string>> Resources { get; }
+
     /// <summary>
     /// Optional stable names for the resources, used for deterministic Pulumi resource naming.
     /// </summary>

@@ -47,11 +47,12 @@ public class GcpCloudRunCompute : ICompute
 
     // Add public property to access the service URL
     public Output<string> ServiceUrl { get; private set; } = Output.Create(string.Empty);
-    
+
     /// <summary>
     /// Gets the service account email for this Cloud Run service.
     /// </summary>
-    public Output<string> ServiceAccountEmail => _serviceAccountResource?.Email ?? Output.Create(string.Empty);
+    public Output<string> ServiceAccountEmail =>
+        _serviceAccountResource?.Email ?? Output.Create(string.Empty);
 
     /// <summary>
     /// Gets the custom domains that were registered for this service.
@@ -91,7 +92,7 @@ public class GcpCloudRunCompute : ICompute
     public IList<PortForwardingConfiguration> PortForwardings { get; set; } =
         new List<PortForwardingConfiguration>
         {
-            new PortForwardingConfiguration { ContainerPort = 8080 }
+            new PortForwardingConfiguration { ContainerPort = 8080 },
         };
 
     private readonly string _imageName = string.Empty; // Will be set in constructor
@@ -118,19 +119,13 @@ public class GcpCloudRunCompute : ICompute
 
         // Set _imageName based on parameters
         if (imageName is not null)
-        {
             _imageName = imageName;
-        }
         else if (containerImage is not null)
-        {
             _imageName = containerImage.Name;
-        }
         else
-        {
             throw new ArgumentException(
                 "Either imageName or containerImage must be provided for GCP Cloud Run compute resource."
             );
-        }
 
         var projectId = GcpProjectConfig.ProjectId;
         // Ensure required APIs are enabled for this project
@@ -150,20 +145,18 @@ public class GcpCloudRunCompute : ICompute
                 new Pulumi.Gcp.ServiceAccount.AccountArgs
                 {
                     AccountId = $"cr-sa-{name}",
-                    Project = projectId
+                    Project = projectId,
                 },
                 new CustomResourceOptions { DependsOn = new[] { iamApi }, Provider = provider }
             );
         }
         else
-        {
             _serviceAccountResource = Pulumi.Gcp.ServiceAccount.Account.Get(
                 $"cloudrun-sa-imported-{name}",
                 serviceAccountEmail,
                 null,
                 new CustomResourceOptions { Provider = provider }
             );
-        }
     }
 
     public void AddRequiredSecret(ISecret secret, string? environmentVariableName = null)
@@ -190,38 +183,32 @@ public class GcpCloudRunCompute : ICompute
 
         // Warn if more than one port forwarding is configured (Cloud Run only supports one port)
         if (PortForwardings.Count > 1)
-        {
             Log.Warn(
                 $"Warning: Cloud Run only supports one port. Found {PortForwardings.Count} port forwardings. Only the first port ({PortForwardings[0].ContainerPort}) will be used."
             );
-        }
 
         // Build environment variables list
         var envs = new List<ServiceTemplateContainerEnvArgs>();
 
         // Add regular environment variables
         foreach (var kvp in EnvironmentVariables)
-        {
             envs.Add(
                 new Pulumi.Gcp.CloudRunV2.Inputs.ServiceTemplateContainerEnvArgs
                 {
                     Name = kvp.Key,
-                    Value = kvp.Value
+                    Value = kvp.Value,
                 }
             );
-        }
 
         // Add output environment variables
         foreach (var kvp in _environmentVariablesOutput)
-        {
             envs.Add(
                 new Pulumi.Gcp.CloudRunV2.Inputs.ServiceTemplateContainerEnvArgs
                 {
                     Name = kvp.Key,
-                    Value = kvp.Value
+                    Value = kvp.Value,
                 }
             );
-        }
 
         // Add secret environment variables
         foreach (
@@ -241,9 +228,9 @@ public class GcpCloudRunCompute : ICompute
                         SecretKeyRef = new ServiceTemplateContainerEnvValueSourceSecretKeyRefArgs
                         {
                             Secret = gcpSecret.Name,
-                            Version = "latest"
-                        }
-                    }
+                            Version = "latest",
+                        },
+                    },
                 }
             );
         }
@@ -265,7 +252,7 @@ public class GcpCloudRunCompute : ICompute
                 HttpGet = new ServiceTemplateContainerStartupProbeHttpGetArgs
                 {
                     Path = HealthCheckConfiguration.Path ?? "/",
-                    Port = hcPort
+                    Port = hcPort,
                 },
                 TimeoutSeconds =
                     HealthCheckConfiguration.StartupTimeoutSeconds
@@ -276,7 +263,7 @@ public class GcpCloudRunCompute : ICompute
                 FailureThreshold =
                     HealthCheckConfiguration.StartupUnhealthyThreshold
                     ?? HealthCheckConfiguration.UnhealthyThreshold,
-                InitialDelaySeconds = 0
+                InitialDelaySeconds = 0,
             };
 
             live = new ServiceTemplateContainerLivenessProbeArgs
@@ -284,11 +271,11 @@ public class GcpCloudRunCompute : ICompute
                 HttpGet = new ServiceTemplateContainerLivenessProbeHttpGetArgs
                 {
                     Path = HealthCheckConfiguration.Path ?? "/",
-                    Port = hcPort
+                    Port = hcPort,
                 },
                 TimeoutSeconds = HealthCheckConfiguration.TimeoutSeconds,
                 PeriodSeconds = HealthCheckConfiguration.IntervalSeconds,
-                FailureThreshold = HealthCheckConfiguration.UnhealthyThreshold
+                FailureThreshold = HealthCheckConfiguration.UnhealthyThreshold,
             };
         }
 
@@ -304,9 +291,9 @@ public class GcpCloudRunCompute : ICompute
                 Limits = new InputMap<string>
                 {
                     { "memory", MemoryLimit ?? "1Gi" },
-                    { "cpu", CpuLimit ?? "1" }
-                }
-            }
+                    { "cpu", CpuLimit ?? "1" },
+                },
+            },
         };
         var serviceAccountEmail = _serviceAccountResource?.Email;
 
@@ -317,9 +304,9 @@ public class GcpCloudRunCompute : ICompute
             Scaling = new ServiceTemplateScalingArgs
             {
                 MinInstanceCount = MinCount,
-                MaxInstanceCount = MaxCount
+                MaxInstanceCount = MaxCount,
             },
-            MaxInstanceRequestConcurrency = ContainerConcurrency
+            MaxInstanceRequestConcurrency = ContainerConcurrency,
         };
 
         var serviceArgs = new Pulumi.Gcp.CloudRunV2.ServiceArgs
@@ -330,26 +317,20 @@ public class GcpCloudRunCompute : ICompute
             Ingress = IngressSetting, // v2 top-level field
             Template = template,
             // Service-level scaling (separate from template scaling) - set explicitly to prevent drift
-            Scaling = new ServiceScalingArgs
-            {
-                MinInstanceCount = MinCount,
-            },
+            Scaling = new ServiceScalingArgs { MinInstanceCount = MinCount },
             Traffics =
             {
                 new ServiceTrafficArgs
                 {
                     Type = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST",
-                    Percent = 100
-                }
+                    Percent = 100,
+                },
             },
-            DeletionProtection = false
+            DeletionProtection = false,
         };
 
         // Build dependsOn list
-        var dependsOn = new List<Resource>
-        {
-            _cloudRunApiEnabled[projectId]
-        };
+        var dependsOn = new List<Resource> { _cloudRunApiEnabled[projectId] };
 
         if (
             ContainerRegistry is GcpContainerRegistry readyRegistry
@@ -379,7 +360,7 @@ public class GcpCloudRunCompute : ICompute
                     Location = region,
                     Repository = gcpContainerRegistry.RepositoryId,
                     Role = "roles/artifactregistry.reader",
-                    Member = Output.Format($"serviceAccount:{serviceAccountEmail}")
+                    Member = Output.Format($"serviceAccount:{serviceAccountEmail}"),
                 },
                 new CustomResourceOptions { Provider = _provider }
             );
@@ -388,16 +369,11 @@ public class GcpCloudRunCompute : ICompute
 
         // // Add secret resources to dependsOn so they are created before Cloud Run
         foreach (var secret in _requiredSecrets)
-        {
             if (secret.secret is GcpSecret gcpSecret)
-            {
                 dependsOn.Add(gcpSecret.Resource);
-            }
-        }
 
         // // IAM bindings for secrets
         foreach (var secret in _requiredSecrets)
-        {
             if (secret.secret is GcpSecret gcpSecret && serviceAccountEmail is not null)
             {
                 var secretIam = new SecretIamMember(
@@ -407,18 +383,20 @@ public class GcpCloudRunCompute : ICompute
                         Project = projectId,
                         SecretId = gcpSecret.Name,
                         Role = "roles/secretmanager.secretAccessor",
-                        Member = Output.Format($"serviceAccount:{serviceAccountEmail}")
+                        Member = Output.Format($"serviceAccount:{serviceAccountEmail}"),
                     },
-                    new CustomResourceOptions { DependsOn = new[] { gcpSecret.Resource }, Provider = _provider }
+                    new CustomResourceOptions
+                    {
+                        DependsOn = new[] { gcpSecret.Resource },
+                        Provider = _provider,
+                    }
                 );
                 _secretIamMembers.Add(secretIam);
                 dependsOn.Add(secretIam);
             }
-        }
 
         // Process custom policy statements using the GcpPolicyManager
         foreach (var statement in _customPolicyStatements.OfType<GcpPolicyStatement>())
-        {
             GcpPolicyManager.ApplyPolicy(
                 $"iam-{Name}",
                 statement,
@@ -427,7 +405,6 @@ public class GcpCloudRunCompute : ICompute
                 _provider,
                 dependsOn
             );
-        }
 
         _service = new Pulumi.Gcp.CloudRunV2.Service(
             Name,
@@ -451,7 +428,6 @@ public class GcpCloudRunCompute : ICompute
         );
 
         foreach (var allowed in _allowedServiceAccounts)
-        {
             _ = new Pulumi.Gcp.CloudRunV2.ServiceIamMember(
                 $"cloudrun-allow-invoke-{Name}-{allowed.Replace(':', '-').Replace('@', '-')}",
                 new Pulumi.Gcp.CloudRunV2.ServiceIamMemberArgs
@@ -460,15 +436,13 @@ public class GcpCloudRunCompute : ICompute
                     Location = region,
                     Name = Name,
                     Role = "roles/run.invoker",
-                    Member = $"serviceAccount:{allowed}"
+                    Member = $"serviceAccount:{allowed}",
                 },
                 new CustomResourceOptions { DependsOn = new[] { _service }, Provider = _provider }
             );
-        }
 
         // Create domain mappings for custom domains if specified
         if (_customDomains.Any())
-        {
             foreach (var domain in _customDomains)
             {
                 var domainMapping = new DomainMapping(
@@ -480,18 +454,18 @@ public class GcpCloudRunCompute : ICompute
                         Name = domain,
                         Metadata = new Pulumi.Gcp.CloudRun.Inputs.DomainMappingMetadataArgs
                         {
-                            Namespace = projectId
+                            Namespace = projectId,
                         },
                         Spec = new Pulumi.Gcp.CloudRun.Inputs.DomainMappingSpecArgs
                         {
-                            RouteName = _service.Name
-                        }
+                            RouteName = _service.Name,
+                        },
                     },
                     new CustomResourceOptions
                     {
                         DependsOn = new List<Resource> { _service, _publicAccessIamMember! },
                         DeleteBeforeReplace = true,
-                        Provider = _provider
+                        Provider = _provider,
                     }
                 );
 
@@ -499,7 +473,6 @@ public class GcpCloudRunCompute : ICompute
 
                 Log.Info($"Created domain mapping for {domain} -> Cloud Run service {Name}");
             }
-        }
     }
 
     public void AddEnvironmentVariable(string name, string value)
@@ -515,16 +488,13 @@ public class GcpCloudRunCompute : ICompute
     public void AddEnvironmentVariables(IDictionary<string, string> variables)
     {
         foreach (var kvp in variables)
-        {
             _environmentVariables[kvp.Key] = kvp.Value;
-        }
     }
 
     public IEnumerable<IPolicyStatement> GetPolicy(params ComputePermissions[] permissions)
     {
         var statements = new List<IPolicyStatement>();
         foreach (var permission in permissions)
-        {
             switch (permission)
             {
                 case ComputePermissions.GetStatus:
@@ -533,7 +503,7 @@ public class GcpCloudRunCompute : ICompute
                         {
                             Effect = "Allow",
                             Actions = new[] { "roles/run.viewer" },
-                            Resources = new[] { Arn }
+                            Resources = new[] { Arn },
                         }
                     );
                     break;
@@ -543,7 +513,7 @@ public class GcpCloudRunCompute : ICompute
                         {
                             Effect = "Allow",
                             Actions = new[] { "roles/run.developer" },
-                            Resources = new[] { Arn }
+                            Resources = new[] { Arn },
                         }
                     );
                     break;
@@ -553,21 +523,19 @@ public class GcpCloudRunCompute : ICompute
                         {
                             Effect = "Allow",
                             Actions = new[] { "roles/logging.viewer" },
-                            Resources = new[] { Output.Create("*") }
+                            Resources = new[] { Output.Create("*") },
                         }
                     );
                     break;
             }
-        }
+
         return statements;
     }
 
     public void AllowCloudRunServiceAccess(string serviceAccountEmail)
     {
         if (!_allowedServiceAccounts.Contains(serviceAccountEmail))
-        {
             _allowedServiceAccounts.Add(serviceAccountEmail);
-        }
     }
 
     /// <summary>
@@ -580,15 +548,11 @@ public class GcpCloudRunCompute : ICompute
 
         // Add the service itself as a dependency (if it exists)
         if (_service is not null)
-        {
             dependencies.Add(_service);
-        }
 
         // Add public access IAM member if it exists
         if (_publicAccessIamMember is not null)
-        {
             dependencies.Add(_publicAccessIamMember);
-        }
 
         return dependencies;
     }
@@ -600,7 +564,9 @@ public class GcpCloudRunCompute : ICompute
         // - Apex domains: A records to Google front-end anycast IPs
         // Here we assume subdomains (typical for app/api), and emit CNAME -> ghs.googlehosted.com
         var target = Output.Create("ghs.googlehosted.com");
-        return names.Select(name => new DnsRecord(DnsRecordType.CNAME, name, target, $"{name}-cname")).ToList();
+        return names
+            .Select(name => new DnsRecord(DnsRecordType.CNAME, name, target, $"{name}-cname"))
+            .ToList();
     }
 
     /// <summary>
@@ -616,9 +582,7 @@ public class GcpCloudRunCompute : ICompute
     )
     {
         foreach (var domain in customDomains)
-        {
             _customDomains.Add(domain);
-        }
 
         // Emit required DNS for Cloud Run domain mapping: CNAME -> ghs.googlehosted.com
         return GetRequiredDnsRecords(customDomains);
@@ -634,9 +598,11 @@ public class GcpCloudRunCompute : ICompute
         var response = new ComputeConfigurationResponse
         {
             EnvironmentVariables = new Dictionary<string, string>(_environmentVariables),
-            EnvironmentVariablesOutput = new Dictionary<string, Output<string>>(_environmentVariablesOutput),
+            EnvironmentVariablesOutput = new Dictionary<string, Output<string>>(
+                _environmentVariablesOutput
+            ),
             RequiredSecrets = _requiredSecrets.Select(x => x.secret).ToList(),
-            SecretMappings = _requiredSecrets.ToDictionary(x => x.secret.Name, x => x.envVarName)
+            SecretMappings = _requiredSecrets.ToDictionary(x => x.secret.Name, x => x.envVarName),
         };
 
         return response;
@@ -660,9 +626,8 @@ public class GcpCloudRunCompute : ICompute
                     {
                         healthy = true;
                         foreach (var action in _onHealthyActions)
-                        {
                             await action(this);
-                        }
+
                         break;
                     }
                 }
@@ -673,11 +638,9 @@ public class GcpCloudRunCompute : ICompute
                 await Task.Delay(5000);
             }
             if (!healthy)
-            {
                 Log.Error(
                     $"Cloud Run health check failed for {Name} at {healthUrl} after 5 minutes."
                 );
-            }
         });
     }
 
@@ -689,9 +652,7 @@ public class GcpCloudRunCompute : ICompute
         {
             // Fire all registered actions after service is deployed and URL is available
             foreach (var action in _onReadyActions)
-            {
                 await action(this);
-            }
         });
     }
 }

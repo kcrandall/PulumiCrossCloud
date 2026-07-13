@@ -22,9 +22,7 @@ public class GcpContainerImage : IContainerImage
         Registry = registry ?? throw new ArgumentNullException(nameof(registry));
 
         if (registry.Provider != CloudProvider.GCP)
-        {
             throw new ArgumentException("Registry must be a GCP registry", nameof(registry));
-        }
 
         // Initialize properties to satisfy compiler warnings
         Resource = null!; // Will be set by PushImage method
@@ -50,9 +48,7 @@ public class GcpContainerImage : IContainerImage
     {
         // Delegate to the registry for proper authentication
         if (Registry is GcpContainerRegistry gcpRegistry)
-        {
             return gcpRegistry.GetDockerBuildRegistryConfig();
-        }
 
         // Fallback to empty list if not a GCP registry
         return new InputList<RegistryArgs>();

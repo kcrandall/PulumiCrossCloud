@@ -20,7 +20,7 @@ public enum MessagingPermissions
     /// <summary>
     /// Full administrative permissions.
     /// </summary>
-    Admin
+    Admin,
 }
 
 /// <summary>

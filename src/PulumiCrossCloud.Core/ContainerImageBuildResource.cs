@@ -13,7 +13,7 @@ public class ContainerImageBuildResource : ComponentResource
     public Output<Image> ResourceOutput { get; }
     public Output<string> ImageUrl { get; }
     public Output<string> ImageTag { get; }
-    
+
     // Shared provider instance to ensure stable provider reference across runs
     private static Pulumi.DockerBuild.Provider? _defaultProvider;
 
@@ -54,7 +54,7 @@ public class ContainerImageBuildResource : ComponentResource
 
                 Platforms = [Platform.Linux_amd64],
                 Push = true,
-                Registries = registry.GetDockerBuildRegistryConfig()
+                Registries = registry.GetDockerBuildRegistryConfig(),
             };
 
         // Create stable provider once to prevent drift from implicit provider recreation
@@ -69,7 +69,7 @@ public class ContainerImageBuildResource : ComponentResource
             new CustomResourceOptions
             {
                 DependsOn = [registry.Resource],
-                Provider = _defaultProvider
+                Provider = _defaultProvider,
             }
         );
 
@@ -119,14 +119,13 @@ public class ContainerImageBuildResource : ComponentResource
         var dockerIgnorePath = Path.Combine(contextPath, ".dockerignore");
         var patterns = new List<string>();
         if (File.Exists(dockerIgnorePath))
-        {
             foreach (var line in File.ReadAllLines(dockerIgnorePath))
             {
                 var trimmed = line.Trim();
                 if (!string.IsNullOrEmpty(trimmed) && !trimmed.StartsWith("#"))
                     patterns.Add(trimmed);
             }
-        }
+
         return patterns;
     }
 
@@ -134,10 +133,9 @@ public class ContainerImageBuildResource : ComponentResource
     {
         var relativePath = Path.GetRelativePath(contextPath, filePath).Replace('\\', '/');
         foreach (var pattern in patterns)
-        {
             if (MatchesPattern(relativePath, pattern))
                 return true;
-        }
+
         return false;
     }
 

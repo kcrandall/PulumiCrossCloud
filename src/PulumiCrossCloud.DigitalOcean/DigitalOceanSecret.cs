@@ -16,25 +16,25 @@ public sealed class DigitalOceanSecret : ComponentResource, ISecret
         _secretValue = Output.CreateSecret(value);
         IgnoreChangesAfterCreate = ignoreChangesAfterCreate;
 
-        RegisterOutputs(new Dictionary<string, object?>
-        {
-            ["name"] = Name,
-            ["value"] = _secretValue
-        });
+        RegisterOutputs(
+            new Dictionary<string, object?> { ["name"] = Name, ["value"] = _secretValue }
+        );
     }
 
-    public DigitalOceanSecret(string name, Output<string> value, bool ignoreChangesAfterCreate = false)
+    public DigitalOceanSecret(
+        string name,
+        Output<string> value,
+        bool ignoreChangesAfterCreate = false
+    )
         : base("crosscloud:digitalocean:Secret", name)
     {
         Name = name;
         _secretValue = Output.CreateSecret(value);
         IgnoreChangesAfterCreate = ignoreChangesAfterCreate;
 
-        RegisterOutputs(new Dictionary<string, object?>
-        {
-            ["name"] = Name,
-            ["value"] = _secretValue
-        });
+        RegisterOutputs(
+            new Dictionary<string, object?> { ["name"] = Name, ["value"] = _secretValue }
+        );
     }
 
     public string Name { get; }

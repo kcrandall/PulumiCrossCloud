@@ -21,9 +21,7 @@ public sealed class FlySecret : ISecret
         IgnoreChangesAfterCreate = ignoreChangesAfterCreate;
         var options = new CustomResourceOptions { Provider = provider };
         if (ignoreChangesAfterCreate)
-        {
             options.IgnoreChanges = ["value"];
-        }
 
         _secret = new global::Pulumi.Fly.Secret(
             name,
@@ -31,7 +29,7 @@ public sealed class FlySecret : ISecret
             {
                 App = appName,
                 Key = name,
-                Value = value
+                Value = value,
             },
             options
         );

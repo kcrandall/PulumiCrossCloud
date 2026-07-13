@@ -5,5 +5,5 @@ public enum SearchDatabaseType
     OpenSearch,
     Elasticsearch,
     MilliSearch,
-    Typesense
+    Typesense,
 }

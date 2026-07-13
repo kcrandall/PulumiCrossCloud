@@ -12,21 +12,22 @@ public static class PathUtils
     /// </summary>
     public static string GetRepoRoot([CallerFilePath] string? sourceFilePath = null)
     {
-        if (_cachedRepoRoot != null) return _cachedRepoRoot;
+        if (_cachedRepoRoot != null)
+            return _cachedRepoRoot;
 
         if (string.IsNullOrEmpty(sourceFilePath))
-        {
             return Directory.GetCurrentDirectory();
-        }
 
         var directory = Path.GetDirectoryName(sourceFilePath);
-        
+
         while (directory != null)
         {
             // Look for common root markers
-            if (Directory.Exists(Path.Combine(directory, ".git")) || 
-                Directory.GetFiles(directory, "*.slnx").Any() ||
-                Directory.GetFiles(directory, "*.sln").Any())
+            if (
+                Directory.Exists(Path.Combine(directory, ".git"))
+                || Directory.GetFiles(directory, "*.slnx").Any()
+                || Directory.GetFiles(directory, "*.sln").Any()
+            )
             {
                 _cachedRepoRoot = directory;
                 return directory;
@@ -44,7 +45,10 @@ public static class PathUtils
     /// </summary>
     /// <param name="relativePath">The path relative to the root (e.g., "backend/Dockerfile").</param>
     /// <param name="sourceFilePath">Automatically populated caller path.</param>
-    public static string ResolvePath(string relativePath, [CallerFilePath] string? sourceFilePath = null)
+    public static string ResolvePath(
+        string relativePath,
+        [CallerFilePath] string? sourceFilePath = null
+    )
     {
         return Path.GetFullPath(Path.Combine(GetRepoRoot(sourceFilePath), relativePath));
     }
@@ -54,9 +58,11 @@ public static class PathUtils
     /// </summary>
     public static string GetLatestMigrationId(string migrationsPath)
     {
-        if (!Directory.Exists(migrationsPath)) return "none";
+        if (!Directory.Exists(migrationsPath))
+            return "none";
 
-        var latestFile = Directory.GetFiles(migrationsPath, "*.cs")
+        var latestFile = Directory
+            .GetFiles(migrationsPath, "*.cs")
             .Select(Path.GetFileName)
             .Where(f => f != null && char.IsDigit(f[0])) // Starts with timestamp
             .OrderByDescending(f => f)

@@ -15,16 +15,12 @@ public static class AwsProjectConfig
         get
         {
             if (!string.IsNullOrEmpty(_region))
-            {
                 return _region;
-            }
 
             var config = new Config("aws");
             var configRegion = config.Get("region");
             if (!string.IsNullOrEmpty(configRegion))
-            {
                 return configRegion;
-            }
 
             return "us-east-1";
         }

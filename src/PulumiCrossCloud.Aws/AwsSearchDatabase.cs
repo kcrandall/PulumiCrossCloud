@@ -18,9 +18,9 @@ public class AwsSearchDatabase : ISearchDatabase
     )
     {
         if (type != SearchDatabaseType.OpenSearch)
-        {
-            throw new ArgumentException($"AWS provider currently only supports OpenSearch for ISearchDatabase. Requested: {type}");
-        }
+            throw new ArgumentException(
+                $"AWS provider currently only supports OpenSearch for ISearchDatabase. Requested: {type}"
+            );
 
         Name = name;
         Type = type;
@@ -50,19 +50,13 @@ public class AwsSearchDatabase : ISearchDatabase
         };
 
         if (!string.IsNullOrWhiteSpace(awsOptions.Description))
-        {
             groupArgs.Description = awsOptions.Description;
-        }
 
         if (!string.IsNullOrWhiteSpace(awsOptions.Region))
-        {
             groupArgs.Region = awsOptions.Region;
-        }
 
         if (awsOptions.Tags is not null)
-        {
             groupArgs.Tags = CreateTags(awsOptions.Tags);
-        }
 
         _collectionGroup = new ServerlessCollectionGroup(
             $"{name}-group",
@@ -72,13 +66,9 @@ public class AwsSearchDatabase : ISearchDatabase
 
         var encryptionConfig = new ServerlessCollectionEncryptionConfigArgs();
         if (awsOptions.KmsKeyArn is null)
-        {
             encryptionConfig.AwsOwnedKey = awsOptions.AwsOwnedKey;
-        }
         else
-        {
             encryptionConfig.KmsKeyArn = awsOptions.KmsKeyArn;
-        }
 
         var collectionArgs = new ServerlessCollectionArgs
         {
@@ -91,24 +81,16 @@ public class AwsSearchDatabase : ISearchDatabase
 
         var vectorOptions = CreateVectorOptions(awsOptions);
         if (vectorOptions is not null)
-        {
             collectionArgs.VectorOptions = vectorOptions;
-        }
 
         if (!string.IsNullOrWhiteSpace(awsOptions.Description))
-        {
             collectionArgs.Description = awsOptions.Description;
-        }
 
         if (!string.IsNullOrWhiteSpace(awsOptions.Region))
-        {
             collectionArgs.Region = awsOptions.Region;
-        }
 
         if (awsOptions.Tags is not null)
-        {
             collectionArgs.Tags = CreateTags(awsOptions.Tags);
-        }
 
         _collection = new ServerlessCollection(name, collectionArgs, customResourceOptions);
     }
@@ -134,39 +116,45 @@ public class AwsSearchDatabase : ISearchDatabase
             var actions = permission switch
             {
                 SearchDatabasePermissions.Admin => new[] { "aoss:*" },
-                _ => new[] { "aoss:APIAccessAll" }
+                _ => new[] { "aoss:APIAccessAll" },
             };
 
-            statements.Add(new AwsPolicyStatement
-            {
-                Effect = "Allow",
-                Actions = actions,
-                Resources = [Arn],
-                ResourceNames = [Name]
-            });
+            statements.Add(
+                new AwsPolicyStatement
+                {
+                    Effect = "Allow",
+                    Actions = actions,
+                    Resources = [Arn],
+                    ResourceNames = [Name],
+                }
+            );
         }
 
         return statements;
     }
 
-    private static List<ServerlessCollectionVectorOptionArgs>? CreateVectorOptions(AwsSearchDatabaseOptions options)
+    private static List<ServerlessCollectionVectorOptionArgs>? CreateVectorOptions(
+        AwsSearchDatabaseOptions options
+    )
     {
-        if (!string.Equals(options.CollectionType, "VECTORSEARCH", StringComparison.OrdinalIgnoreCase))
-        {
+        if (
+            !string.Equals(
+                options.CollectionType,
+                "VECTORSEARCH",
+                StringComparison.OrdinalIgnoreCase
+            )
+        )
             return null;
-        }
 
         if (string.IsNullOrWhiteSpace(options.ServerlessVectorAcceleration))
-        {
             return null;
-        }
 
         return
         [
             new ServerlessCollectionVectorOptionArgs
             {
-                ServerlessVectorAcceleration = options.ServerlessVectorAcceleration
-            }
+                ServerlessVectorAcceleration = options.ServerlessVectorAcceleration,
+            },
         ];
     }
 
@@ -174,34 +162,40 @@ public class AwsSearchDatabase : ISearchDatabase
     {
         if (
             string.Equals(options.Generation, "NEXTGEN", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(options.StandbyReplicas, "ENABLED", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(
+                options.StandbyReplicas,
+                "ENABLED",
+                StringComparison.OrdinalIgnoreCase
+            )
         )
-        {
-            throw new ArgumentException("OpenSearch Serverless NEXTGEN collection groups require StandbyReplicas to be ENABLED.");
-        }
+            throw new ArgumentException(
+                "OpenSearch Serverless NEXTGEN collection groups require StandbyReplicas to be ENABLED."
+            );
 
         if (
             string.Equals(options.Generation, "NEXTGEN", StringComparison.OrdinalIgnoreCase)
             && !string.Equals(options.CollectionType, "SEARCH", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(options.CollectionType, "VECTORSEARCH", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(
+                options.CollectionType,
+                "VECTORSEARCH",
+                StringComparison.OrdinalIgnoreCase
+            )
         )
-        {
-            throw new ArgumentException("OpenSearch Serverless NEXTGEN collections support SEARCH and VECTORSEARCH collection types.");
-        }
+            throw new ArgumentException(
+                "OpenSearch Serverless NEXTGEN collections support SEARCH and VECTORSEARCH collection types."
+            );
 
         if (options.KmsKeyArn is null && !options.AwsOwnedKey)
-        {
-            throw new ArgumentException("OpenSearch Serverless encryption requires either KmsKeyArn or AwsOwnedKey.");
-        }
+            throw new ArgumentException(
+                "OpenSearch Serverless encryption requires either KmsKeyArn or AwsOwnedKey."
+            );
     }
 
     private static InputMap<string> CreateTags(IDictionary<string, string> tags)
     {
         var inputMap = new InputMap<string>();
         foreach (var tag in tags)
-        {
             inputMap.Add(tag.Key, tag.Value);
-        }
 
         return inputMap;
     }
@@ -209,9 +203,7 @@ public class AwsSearchDatabase : ISearchDatabase
     private static string GetHost(string endpoint)
     {
         if (Uri.TryCreate(endpoint, UriKind.Absolute, out var uri))
-        {
             return uri.Host;
-        }
 
         return endpoint
             .Replace("https://", string.Empty, StringComparison.OrdinalIgnoreCase)

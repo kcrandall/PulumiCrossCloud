@@ -13,7 +13,13 @@ public abstract class BucketDeploymentResource : ComponentResource
     public Output<string> ContentHash { get; }
     public Resource? BuildResource { get; }
 
-    protected BucketDeploymentResource(string type, string name, string localPath, BucketSyncOptions? options = null, ComponentResourceOptions? resourceOptions = null)
+    protected BucketDeploymentResource(
+        string type,
+        string name,
+        string localPath,
+        BucketSyncOptions? options = null,
+        ComponentResourceOptions? resourceOptions = null
+    )
         : base(type, name, resourceOptions)
     {
         // Hash the source directory (inputs) or the output directory
@@ -32,14 +38,18 @@ public abstract class BucketDeploymentResource : ComponentResource
             }
 
             var cmd = options.BuildCommand;
-            var build = new Command($"{name}-build", new CommandArgs
-            {
-                Create = cmd,
-                Update = cmd,
-                Dir = buildCwd,
-                Triggers = new InputList<string> { (Input<string>)ContentHash }
-            }, new CustomResourceOptions { Parent = this });
-            
+            var build = new Command(
+                $"{name}-build",
+                new CommandArgs
+                {
+                    Create = cmd,
+                    Update = cmd,
+                    Dir = buildCwd,
+                    Triggers = new InputList<string> { (Input<string>)ContentHash },
+                },
+                new CustomResourceOptions { Parent = this }
+            );
+
             BuildResource = build;
         }
     }
@@ -47,11 +57,10 @@ public abstract class BucketDeploymentResource : ComponentResource
     private static string GenerateDirectoryHash(string path)
     {
         if (!Directory.Exists(path))
-        {
             throw new DirectoryNotFoundException($"Directory not found: {path}");
-        }
 
-        var files = Directory.GetFiles(path, "*", SearchOption.AllDirectories)
+        var files = Directory
+            .GetFiles(path, "*", SearchOption.AllDirectories)
             .OrderBy(f => f, StringComparer.Ordinal)
             .ToList();
 

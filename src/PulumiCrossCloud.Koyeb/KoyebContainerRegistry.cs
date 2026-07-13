@@ -23,5 +23,7 @@ public sealed class KoyebContainerRegistry : ComponentResource, IContainerRegist
 
     public InputList<RegistryArgs> GetDockerBuildRegistryConfig() => [];
 
-    public IEnumerable<IPolicyStatement> GetPolicy(params ContainerRegistryPermissions[] permissions) => [];
+    public IEnumerable<IPolicyStatement> GetPolicy(
+        params ContainerRegistryPermissions[] permissions
+    ) => [];
 }

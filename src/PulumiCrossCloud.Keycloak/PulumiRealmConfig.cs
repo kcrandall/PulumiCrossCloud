@@ -211,7 +211,7 @@ internal static class PulumiRealmDeployer
             new CustomResourceOptions
             {
                 Provider = provider,
-                DependsOn = dependsOn?.ToArray() ?? []
+                DependsOn = dependsOn?.ToArray() ?? [],
             }
         );
 
@@ -229,7 +229,7 @@ internal static class PulumiRealmDeployer
                 new CustomResourceOptions
                 {
                     Provider = provider,
-                    DependsOn = new Resource[] { realm }
+                    DependsOn = new Resource[] { realm },
                 }
             );
             created.Add(userProfile);
@@ -253,7 +253,7 @@ internal static class PulumiRealmDeployer
                             ? new Resource[] { realm }
                             : new Resource[] { realm }
                                 .Concat(dependsOn)
-                                .ToArray()
+                                .ToArray(),
                     }
                 );
                 created.Add(client);
@@ -342,7 +342,7 @@ internal static class PulumiRealmDeployer
                                 ValidRedirectUris = redirectUrisArr?.ToList() ?? new List<string>(),
                                 WebOrigins = webOriginsArr?.ToList() ?? new List<string>(),
                                 AccessType = accessType,
-                                RequiresClientAuthentication = accessType == "CONFIDENTIAL"
+                                RequiresClientAuthentication = accessType == "CONFIDENTIAL",
                             };
                         });
 
@@ -370,7 +370,7 @@ internal static class PulumiRealmDeployer
                             ? new Resource[] { realm }
                             : new Resource[] { realm }
                                 .Concat(dependsOn)
-                                .ToArray()
+                                .ToArray(),
                     }
                 );
                 created.Add(idp);
@@ -381,7 +381,7 @@ internal static class PulumiRealmDeployer
         {
             Realm = realm,
             CreatedResources = created,
-            ClientResults = clientResults
+            ClientResults = clientResults,
         };
     }
 }

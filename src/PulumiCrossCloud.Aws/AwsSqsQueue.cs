@@ -9,7 +9,11 @@ public class AwsSqsQueue : IQueueEndpoint
     private readonly Queue _queue;
     private readonly Pulumi.Aws.Sns.TopicSubscription? _snsSubscription;
 
-    public AwsSqsQueue(string name, PulumiCrossCloud.Core.QueueArgs? args = null, Pulumi.Aws.Provider? provider = null)
+    public AwsSqsQueue(
+        string name,
+        PulumiCrossCloud.Core.QueueArgs? args = null,
+        Pulumi.Aws.Provider? provider = null
+    )
     {
         Name = name;
         var customResourceOptions = new CustomResourceOptions { Provider = provider };
@@ -20,9 +24,9 @@ public class AwsSqsQueue : IQueueEndpoint
         };
 
         if (args?.DeadLetterTargetArn != null)
-        {
-            queueArgs.RedrivePolicy = Output.Format($"{{\"deadLetterTargetArn\":\"{args.DeadLetterTargetArn}\",\"maxReceiveCount\":{args.MaxDeliveryAttempts ?? 5}}}");
-        }
+            queueArgs.RedrivePolicy = Output.Format(
+                $"{{\"deadLetterTargetArn\":\"{args.DeadLetterTargetArn}\",\"maxReceiveCount\":{args.MaxDeliveryAttempts ?? 5}}}"
+            );
 
         var resourceName = args?.Fifo == true && !name.EndsWith(".fifo") ? $"{name}.fifo" : name;
         _queue = new Queue(resourceName, queueArgs, customResourceOptions);
@@ -30,39 +34,54 @@ public class AwsSqsQueue : IQueueEndpoint
         if (args?.SubscribeTo != null)
         {
             // 1. Link SNS to SQS
-            _snsSubscription = new Pulumi.Aws.Sns.TopicSubscription($"{name}-subscription", new Pulumi.Aws.Sns.TopicSubscriptionArgs
-            {
-                Topic = args.SubscribeTo.SendEndpoint,
-                Protocol = "sqs",
-                Endpoint = _queue.Arn
-            }, customResourceOptions);
+            _snsSubscription = new Pulumi.Aws.Sns.TopicSubscription(
+                $"{name}-subscription",
+                new Pulumi.Aws.Sns.TopicSubscriptionArgs
+                {
+                    Topic = args.SubscribeTo.SendEndpoint,
+                    Protocol = "sqs",
+                    Endpoint = _queue.Arn,
+                },
+                customResourceOptions
+            );
 
             // 2. Add Queue Policy to allow SNS to send messages to this SQS queue
             // This is required for SNS -> SQS cross-service communication
-            new Pulumi.Aws.Sqs.QueuePolicy($"{name}-policy", new Pulumi.Aws.Sqs.QueuePolicyArgs
-            {
-                QueueUrl = _queue.Url,
-                Policy = Output.All(_queue.Arn, args.SubscribeTo.Arn).Apply(values => 
+            new Pulumi.Aws.Sqs.QueuePolicy(
+                $"{name}-policy",
+                new Pulumi.Aws.Sqs.QueuePolicyArgs
                 {
-                    var queueArn = values[0];
-                    var topicArn = values[1];
-                    return System.Text.Json.JsonSerializer.Serialize(new
-                    {
-                        Version = "2012-10-17",
-                        Statement = new[]
+                    QueueUrl = _queue.Url,
+                    Policy = Output
+                        .All(_queue.Arn, args.SubscribeTo.Arn)
+                        .Apply(values =>
                         {
-                            new
-                            {
-                                Effect = "Allow",
-                                Principal = new { Service = "sns.amazonaws.com" },
-                                Action = "sqs:SendMessage",
-                                Resource = queueArn,
-                                Condition = new { ArnEquals = new { aws_SourceArn = topicArn } }
-                            }
-                        }
-                    });
-                })
-            }, customResourceOptions);
+                            var queueArn = values[0];
+                            var topicArn = values[1];
+                            return System.Text.Json.JsonSerializer.Serialize(
+                                new
+                                {
+                                    Version = "2012-10-17",
+                                    Statement = new[]
+                                    {
+                                        new
+                                        {
+                                            Effect = "Allow",
+                                            Principal = new { Service = "sns.amazonaws.com" },
+                                            Action = "sqs:SendMessage",
+                                            Resource = queueArn,
+                                            Condition = new
+                                            {
+                                                ArnEquals = new { aws_SourceArn = topicArn },
+                                            },
+                                        },
+                                    },
+                                }
+                            );
+                        }),
+                },
+                customResourceOptions
+            );
         }
     }
 
@@ -81,35 +100,45 @@ public class AwsSqsQueue : IQueueEndpoint
     {
         var statements = new List<IPolicyStatement>();
         foreach (var permission in permissions)
-        {
             switch (permission)
             {
                 case MessagingPermissions.Send:
-                    statements.Add(new AwsPolicyStatement
-                    {
-                        Effect = "Allow",
-                        Actions = ["sqs:SendMessage"],
-                        Resources = [Arn]
-                    });
+                    statements.Add(
+                        new AwsPolicyStatement
+                        {
+                            Effect = "Allow",
+                            Actions = ["sqs:SendMessage"],
+                            Resources = [Arn],
+                        }
+                    );
                     break;
                 case MessagingPermissions.Receive:
-                    statements.Add(new AwsPolicyStatement
-                    {
-                        Effect = "Allow",
-                        Actions = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:ChangeMessageVisibility"],
-                        Resources = [Arn]
-                    });
+                    statements.Add(
+                        new AwsPolicyStatement
+                        {
+                            Effect = "Allow",
+                            Actions =
+                            [
+                                "sqs:ReceiveMessage",
+                                "sqs:DeleteMessage",
+                                "sqs:ChangeMessageVisibility",
+                            ],
+                            Resources = [Arn],
+                        }
+                    );
                     break;
                 case MessagingPermissions.Admin:
-                    statements.Add(new AwsPolicyStatement
-                    {
-                        Effect = "Allow",
-                        Actions = ["sqs:*"],
-                        Resources = [Arn]
-                    });
+                    statements.Add(
+                        new AwsPolicyStatement
+                        {
+                            Effect = "Allow",
+                            Actions = ["sqs:*"],
+                            Resources = [Arn],
+                        }
+                    );
                     break;
             }
-        }
+
         return statements;
     }
 }

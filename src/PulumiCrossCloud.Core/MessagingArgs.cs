@@ -8,12 +8,12 @@ public record QueueArgs
     public int? MaxDeliveryAttempts { get; init; }
     public int? VisibilityTimeoutSeconds { get; init; }
     public string? DeadLetterTargetArn { get; init; }
-    
+
     /// <summary>
     /// Optional topic to subscribe this queue to (Fan-out pattern).
     /// </summary>
     public ITopicEndpoint? SubscribeTo { get; init; }
-    
+
     /// <summary>
     /// If true, ensures first-in-first-out delivery and exactly-once processing where supported.
     /// </summary>

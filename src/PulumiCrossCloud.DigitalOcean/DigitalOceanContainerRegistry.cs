@@ -26,7 +26,7 @@ public sealed class DigitalOceanContainerRegistry : IContainerRegistry
             {
                 Name = name,
                 Region = region,
-                SubscriptionTierSlug = subscriptionTierSlug
+                SubscriptionTierSlug = subscriptionTierSlug,
             },
             new CustomResourceOptions { Provider = provider }
         );
@@ -36,7 +36,7 @@ public sealed class DigitalOceanContainerRegistry : IContainerRegistry
             new DO.ContainerRegistryDockerCredentialsArgs
             {
                 RegistryName = _registry.Name,
-                Write = true
+                Write = true,
             },
             new CustomResourceOptions { Provider = provider, DependsOn = [_registry] }
         );
@@ -49,28 +49,30 @@ public sealed class DigitalOceanContainerRegistry : IContainerRegistry
     public Output<string> RegistryUrlOutput => _registry.Endpoint;
 
     public InputList<RegistryArgs> GetDockerBuildRegistryConfig() =>
-    [
-        new RegistryArgs
-        {
-            Address = _registry.ServerUrl,
-            Username = _dockerCredentials.DockerCredentials.Apply(credentials =>
-                ParseDockerCredentials(credentials).Username
-            ),
-            Password = _dockerCredentials.DockerCredentials.Apply(credentials =>
-                ParseDockerCredentials(credentials).Password
-            )
-        }
-    ];
+        [
+            new RegistryArgs
+            {
+                Address = _registry.ServerUrl,
+                Username = _dockerCredentials.DockerCredentials.Apply(credentials =>
+                    ParseDockerCredentials(credentials).Username
+                ),
+                Password = _dockerCredentials.DockerCredentials.Apply(credentials =>
+                    ParseDockerCredentials(credentials).Password
+                ),
+            },
+        ];
 
-    public IEnumerable<IPolicyStatement> GetPolicy(params ContainerRegistryPermissions[] permissions) => [];
+    public IEnumerable<IPolicyStatement> GetPolicy(
+        params ContainerRegistryPermissions[] permissions
+    ) => [];
 
     private static DockerCredential ParseDockerCredentials(string dockerCredentials)
     {
         using var document = JsonDocument.Parse(dockerCredentials);
         if (!document.RootElement.TryGetProperty("auths", out var auths))
-        {
-            throw new InvalidOperationException("DigitalOcean Docker credentials did not include auths.");
-        }
+            throw new InvalidOperationException(
+                "DigitalOcean Docker credentials did not include auths."
+            );
 
         foreach (var auth in auths.EnumerateObject())
         {
@@ -79,22 +81,22 @@ public sealed class DigitalOceanContainerRegistry : IContainerRegistry
                 value.TryGetProperty("username", out var username)
                 && value.TryGetProperty("password", out var password)
             )
-            {
                 return new DockerCredential(username.GetString() ?? "", password.GetString() ?? "");
-            }
 
             if (value.TryGetProperty("auth", out var encodedAuth))
             {
-                var decoded = Encoding.UTF8.GetString(Convert.FromBase64String(encodedAuth.GetString() ?? ""));
+                var decoded = Encoding.UTF8.GetString(
+                    Convert.FromBase64String(encodedAuth.GetString() ?? "")
+                );
                 var separator = decoded.IndexOf(':', StringComparison.Ordinal);
                 if (separator > 0)
-                {
                     return new DockerCredential(decoded[..separator], decoded[(separator + 1)..]);
-                }
             }
         }
 
-        throw new InvalidOperationException("DigitalOcean Docker credentials did not include username/password data.");
+        throw new InvalidOperationException(
+            "DigitalOcean Docker credentials did not include username/password data."
+        );
     }
 
     private sealed record DockerCredential(string Username, string Password);

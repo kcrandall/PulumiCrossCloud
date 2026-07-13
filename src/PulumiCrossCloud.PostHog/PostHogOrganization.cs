@@ -35,14 +35,12 @@ public sealed class PostHogOrganization : ComponentResource
             {
                 ["POSTHOG_API_KEY"] = args.ApiKey,
                 ["POSTHOG_HOST"] = args.Host,
-                ["POSTHOG_ORGANIZATION_NAME"] = args.Name
-            }
+                ["POSTHOG_ORGANIZATION_NAME"] = args.Name,
+            },
         };
 
         if (args.DeleteOnDestroy)
-        {
             commandArgs.Delete = DeleteOrganizationScript;
-        }
 
         var command = new Command(
             $"{name}-organization",
@@ -54,11 +52,9 @@ public sealed class PostHogOrganization : ComponentResource
         OrganizationId = RawJson.Apply(GetJsonField("id"));
         Slug = RawJson.Apply(GetJsonField("slug"));
 
-        RegisterOutputs(new Dictionary<string, object?>
-        {
-            ["organizationId"] = OrganizationId,
-            ["slug"] = Slug
-        });
+        RegisterOutputs(
+            new Dictionary<string, object?> { ["organizationId"] = OrganizationId, ["slug"] = Slug }
+        );
     }
 
     private static Func<string, string> GetJsonField(string fieldName) =>

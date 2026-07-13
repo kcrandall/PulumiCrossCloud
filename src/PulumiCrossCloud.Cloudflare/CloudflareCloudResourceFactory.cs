@@ -27,10 +27,10 @@ public class CloudflareCloudResourceFactory : CloudResourceFactory
         _accountId = accountId;
         _rawApiToken = apiToken;
         _apiToken = apiToken;
-        _cloudflareProvider = new Provider("cloudflare-provider", new ProviderArgs
-        {
-            ApiToken = apiToken
-        });
+        _cloudflareProvider = new Provider(
+            "cloudflare-provider",
+            new ProviderArgs { ApiToken = apiToken }
+        );
     }
 
     /// <summary>
@@ -43,10 +43,10 @@ public class CloudflareCloudResourceFactory : CloudResourceFactory
     {
         _accountId = accountId;
         _apiToken = apiToken;
-        _cloudflareProvider = new Provider("cloudflare-provider", new ProviderArgs
-        {
-            ApiToken = apiToken
-        });
+        _cloudflareProvider = new Provider(
+            "cloudflare-provider",
+            new ProviderArgs { ApiToken = apiToken }
+        );
     }
 
     /// <summary>
@@ -58,10 +58,10 @@ public class CloudflareCloudResourceFactory : CloudResourceFactory
     {
         _rawApiToken = apiToken;
         _apiToken = apiToken;
-        _cloudflareProvider = new Provider("cloudflare-provider", new ProviderArgs
-        {
-            ApiToken = apiToken
-        });
+        _cloudflareProvider = new Provider(
+            "cloudflare-provider",
+            new ProviderArgs { ApiToken = apiToken }
+        );
     }
 
     /// <summary>
@@ -72,10 +72,10 @@ public class CloudflareCloudResourceFactory : CloudResourceFactory
         : base(CloudProvider.CloudFlare)
     {
         _apiToken = apiToken;
-        _cloudflareProvider = new Provider("cloudflare-provider", new ProviderArgs
-        {
-            ApiToken = apiToken
-        });
+        _cloudflareProvider = new Provider(
+            "cloudflare-provider",
+            new ProviderArgs { ApiToken = apiToken }
+        );
     }
 
     /// <summary>
@@ -126,7 +126,13 @@ public class CloudflareCloudResourceFactory : CloudResourceFactory
     /// <returns>An IDnsZone instance.</returns>
     public override IDnsZone LookupDnsZone(string name, string domainName)
     {
-        return CloudflareDnsZone.LookupByDomainName(name, domainName, _accountId, _rawApiToken, _cloudflareProvider);
+        return CloudflareDnsZone.LookupByDomainName(
+            name,
+            domainName,
+            _accountId,
+            _rawApiToken,
+            _cloudflareProvider
+        );
     }
 
     /// <summary>
@@ -154,9 +160,13 @@ public class CloudflareCloudResourceFactory : CloudResourceFactory
     {
         var accountId =
             _accountId
-            ?? (string.IsNullOrEmpty(CloudflareProjectConfig.AccountId) 
-                ? throw new InvalidOperationException("CloudFlare account ID is required to create buckets.") 
-                : CloudflareProjectConfig.AccountId);
+            ?? (
+                string.IsNullOrEmpty(CloudflareProjectConfig.AccountId)
+                    ? throw new InvalidOperationException(
+                        "CloudFlare account ID is required to create buckets."
+                    )
+                    : CloudflareProjectConfig.AccountId
+            );
 
         return new CloudflareBucket(
             name,
@@ -175,15 +185,19 @@ public class CloudflareCloudResourceFactory : CloudResourceFactory
     /// <summary>
     /// Creates or ensures a Cloudflare Advanced Certificate Pack for the provided hosts.
     /// </summary>
-    public Pulumi.Resource EnsureEdgeCertificate(string name, IDnsZone zone, IEnumerable<string> hosts)
+    public Pulumi.Resource EnsureEdgeCertificate(
+        string name,
+        IDnsZone zone,
+        IEnumerable<string> hosts
+    )
     {
-        var options = _cloudflareProvider is not null ? new CustomResourceOptions { Provider = _cloudflareProvider } : null;
+        var options = _cloudflareProvider is not null
+            ? new CustomResourceOptions { Provider = _cloudflareProvider }
+            : null;
 
         var hostInputs = new Pulumi.InputList<string>();
         foreach (var h in hosts)
-        {
             hostInputs.Add(h);
-        }
 
         var pack = new CertificatePack(
             name,
@@ -195,7 +209,7 @@ public class CloudflareCloudResourceFactory : CloudResourceFactory
                 // Required by provider: choose a CA and validation method for Advanced certs
                 CertificateAuthority = "google",
                 ValidationMethod = "txt",
-                ValidityDays = 365
+                ValidityDays = 365,
             },
             options
         );

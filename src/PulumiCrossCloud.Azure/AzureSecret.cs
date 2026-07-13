@@ -9,7 +9,7 @@
 //     public Output<string> Value { get; private set; }
 //     public Output<string> Arn { get; private set; }  // Changed to Output<string>
 //     public CloudProvider Provider => CloudProvider.Azure;
-//     
+//
 //     public AzureSecret(string name, string value)
 //     {
 //         Name = name;
@@ -18,21 +18,21 @@
 //         Arn = Output.Create($"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.KeyVault/vaults/vault/secrets/{name}");
 //         Value = Output.Create(value);
 //     }
-//     
+//
 //     public Task<string> GetValueAsync()
 //     {
 //         throw new NotImplementedException("Secret values are resolved during Pulumi deployment. Use the Value Output<string> property instead.");
 //     }
-//     
-//     public void SetValue(string value) 
-//     { 
-//         throw new NotImplementedException("Use Pulumi resource updates to change secret values"); 
+//
+//     public void SetValue(string value)
+//     {
+//         throw new NotImplementedException("Use Pulumi resource updates to change secret values");
 //     }
-//     
+//
 //     public IEnumerable<IPolicyStatement> GetPolicy(params SecretPermissions[] permissions)
 //     {
 //         var statements = new List<IPolicyStatement>();
-//         
+//
 //         foreach (var permission in permissions)
 //         {
 //             switch (permission)
@@ -84,7 +84,7 @@
 //                     break;
 //             }
 //         }
-//         
+//
 //         return statements;
 //     }
 // }

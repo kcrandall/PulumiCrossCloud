@@ -31,7 +31,9 @@ public static class IdentityProviderArgsFactory
         bool enabled = true
     )
     {
-        var clientSecretJwt = privateKey.Value.Apply(pk => AppleJwtHelper.GenerateAppleClientSecretJwt(clientId, teamId, keyId, pk ?? string.Empty));
+        var clientSecretJwt = privateKey.Value.Apply(pk =>
+            AppleJwtHelper.GenerateAppleClientSecretJwt(clientId, teamId, keyId, pk ?? string.Empty)
+        );
         return new IdentityProviderArgs
         {
             Alias = alias,
@@ -42,11 +44,7 @@ public static class IdentityProviderArgsFactory
             DefaultScopes = string.IsNullOrWhiteSpace(defaultScopes) ? "name email" : defaultScopes,
             AuthorizationUrl = "https://appleid.apple.com/auth/authorize",
             TokenUrl = "https://appleid.apple.com/auth/token",
-            ExtraConfig = new InputMap<string>
-            {
-                { "teamId", teamId },
-                { "keyId", keyId }
-            }
+            ExtraConfig = new InputMap<string> { { "teamId", teamId }, { "keyId", keyId } },
         };
     }
 
@@ -78,7 +76,7 @@ public static class IdentityProviderArgsFactory
                 ? "openid profile email"
                 : defaultScopes,
             AuthorizationUrl = "https://accounts.google.com/o/oauth2/v2/auth",
-            TokenUrl = "https://oauth2.googleapis.com/token"
+            TokenUrl = "https://oauth2.googleapis.com/token",
         };
     }
 
@@ -106,9 +104,11 @@ public static class IdentityProviderArgsFactory
             Enabled = enabled,
             ClientId = clientId,
             ClientSecret = clientSecret.Value.Apply(v => v ?? string.Empty),
-            DefaultScopes = string.IsNullOrWhiteSpace(defaultScopes) ? "openid profile email" : defaultScopes,
+            DefaultScopes = string.IsNullOrWhiteSpace(defaultScopes)
+                ? "openid profile email"
+                : defaultScopes,
             AuthorizationUrl = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
-            TokenUrl = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
+            TokenUrl = "https://login.microsoftonline.com/common/oauth2/v2.0/token",
         };
     }
 
@@ -136,9 +136,11 @@ public static class IdentityProviderArgsFactory
             Enabled = enabled,
             ClientId = clientId,
             ClientSecret = clientSecret.Value.Apply(v => v ?? string.Empty),
-            DefaultScopes = string.IsNullOrWhiteSpace(defaultScopes) ? "email public_profile" : defaultScopes,
+            DefaultScopes = string.IsNullOrWhiteSpace(defaultScopes)
+                ? "email public_profile"
+                : defaultScopes,
             AuthorizationUrl = "https://www.facebook.com/v10.0/dialog/oauth",
-            TokenUrl = "https://graph.facebook.com/v10.0/oauth/access_token"
+            TokenUrl = "https://graph.facebook.com/v10.0/oauth/access_token",
         };
     }
 
@@ -166,9 +168,11 @@ public static class IdentityProviderArgsFactory
             Enabled = enabled,
             ClientId = clientId,
             ClientSecret = clientSecret.Value.Apply(v => v ?? string.Empty),
-            DefaultScopes = string.IsNullOrWhiteSpace(defaultScopes) ? "read:user user:email" : defaultScopes,
+            DefaultScopes = string.IsNullOrWhiteSpace(defaultScopes)
+                ? "read:user user:email"
+                : defaultScopes,
             AuthorizationUrl = "https://github.com/login/oauth/authorize",
-            TokenUrl = "https://github.com/login/oauth/access_token"
+            TokenUrl = "https://github.com/login/oauth/access_token",
         };
     }
 
@@ -196,9 +200,11 @@ public static class IdentityProviderArgsFactory
             Enabled = enabled,
             ClientId = clientId,
             ClientSecret = clientSecret.Value.Apply(v => v ?? string.Empty),
-            DefaultScopes = string.IsNullOrWhiteSpace(defaultScopes) ? "r_liteprofile r_emailaddress" : defaultScopes,
+            DefaultScopes = string.IsNullOrWhiteSpace(defaultScopes)
+                ? "r_liteprofile r_emailaddress"
+                : defaultScopes,
             AuthorizationUrl = "https://www.linkedin.com/oauth/v2/authorization",
-            TokenUrl = "https://www.linkedin.com/oauth/v2/accessToken"
+            TokenUrl = "https://www.linkedin.com/oauth/v2/accessToken",
         };
     }
 }

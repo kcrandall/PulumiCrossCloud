@@ -7,7 +7,7 @@ public enum BucketPermissions
     DeleteObject,
     ListBucket,
     GetBucketMetadata,
-    ManageBucket
+    ManageBucket,
 }
 
 public enum SecretPermissions
@@ -16,7 +16,7 @@ public enum SecretPermissions
     Write,
     Delete,
     List,
-    GetMetadata
+    GetMetadata,
 }
 
 public enum ContainerRegistryPermissions
@@ -27,7 +27,7 @@ public enum ContainerRegistryPermissions
     List,
     GetMetadata,
     ManageRepository,
-    GetAuthToken
+    GetAuthToken,
 }
 
 public enum ComputePermissions
@@ -64,11 +64,11 @@ public enum ComputeServiceType
     // PaaS
     KoyebService,
     FlyMachine,
-    DigitalOceanAppPlatform
+    DigitalOceanAppPlatform,
 }
 
 public enum EmailPermissions
 {
     Send,
-    Manage
+    Manage,
 }

@@ -9,7 +9,11 @@ public class AwsContainerRegistry : IContainerRegistry
     private readonly Pulumi.Aws.Ecr.Repository _repository;
     public Resource Resource => _repository;
 
-    public AwsContainerRegistry(string name, bool createDefaultImage = true, Pulumi.Aws.Provider? provider = null)
+    public AwsContainerRegistry(
+        string name,
+        bool createDefaultImage = true,
+        Pulumi.Aws.Provider? provider = null
+    )
     {
         Name = name;
         var customResourceOptions = new CustomResourceOptions { Provider = provider };
@@ -53,7 +57,7 @@ public class AwsContainerRegistry : IContainerRegistry
     {
         // Get ECR auth token
         var authToken = Pulumi.Aws.Ecr.GetAuthorizationToken.Invoke(
-            new() { RegistryId = _repository.RegistryId, }
+            new() { RegistryId = _repository.RegistryId }
         );
 
         return new InputList<RegistryArgs>
@@ -62,8 +66,8 @@ public class AwsContainerRegistry : IContainerRegistry
             {
                 Address = RegistryUrlOutput.Apply(url => url.Split('/')[0]), // Just the registry domain
                 Username = authToken.Apply(token => token.UserName),
-                Password = authToken.Apply(token => token.Password)
-            }
+                Password = authToken.Apply(token => token.Password),
+            },
         };
     }
 
@@ -86,9 +90,9 @@ public class AwsContainerRegistry : IContainerRegistry
                             {
                                 "ecr:GetDownloadUrlForLayer",
                                 "ecr:BatchGetImage",
-                                "ecr:BatchCheckLayerAvailability"
+                                "ecr:BatchCheckLayerAvailability",
                             },
-                            Resources = new Output<string>[] { Arn } // Using Output<string>[]
+                            Resources = new Output<string>[] { Arn }, // Using Output<string>[]
                         }
                     );
                     break;
@@ -103,9 +107,9 @@ public class AwsContainerRegistry : IContainerRegistry
                                 "ecr:InitiateLayerUpload",
                                 "ecr:UploadLayerPart",
                                 "ecr:CompleteLayerUpload",
-                                "ecr:BatchCheckLayerAvailability"
+                                "ecr:BatchCheckLayerAvailability",
                             },
-                            Resources = new Output<string>[] { Arn }
+                            Resources = new Output<string>[] { Arn },
                         }
                     );
                     break;
@@ -115,7 +119,7 @@ public class AwsContainerRegistry : IContainerRegistry
                         {
                             Effect = "Allow",
                             Actions = new[] { "ecr:GetAuthorizationToken" },
-                            Resources = new Output<string>[] { Output.Create("*") } // Convert string to Output<string>
+                            Resources = new Output<string>[] { Output.Create("*") }, // Convert string to Output<string>
                         }
                     );
                     break;
@@ -125,7 +129,7 @@ public class AwsContainerRegistry : IContainerRegistry
                         {
                             Effect = "Allow",
                             Actions = new[] { "ecr:DescribeRepositories", "ecr:ListImages" },
-                            Resources = new Output<string>[] { Arn }
+                            Resources = new Output<string>[] { Arn },
                         }
                     );
                     break;
@@ -135,7 +139,7 @@ public class AwsContainerRegistry : IContainerRegistry
                         {
                             Effect = "Allow",
                             Actions = new[] { "ecr:BatchDeleteImage", "ecr:DeleteRepository" },
-                            Resources = new Output<string>[] { Arn }
+                            Resources = new Output<string>[] { Arn },
                         }
                     );
                     break;
@@ -145,7 +149,7 @@ public class AwsContainerRegistry : IContainerRegistry
                         {
                             Effect = "Allow",
                             Actions = new[] { "ecr:DescribeImages", "ecr:GetRepositoryPolicy" },
-                            Resources = new Output<string>[] { Arn }
+                            Resources = new Output<string>[] { Arn },
                         }
                     );
                     break;
@@ -159,9 +163,9 @@ public class AwsContainerRegistry : IContainerRegistry
                                 "ecr:CreateRepository",
                                 "ecr:DeleteRepository",
                                 "ecr:SetRepositoryPolicy",
-                                "ecr:DeleteRepositoryPolicy"
+                                "ecr:DeleteRepositoryPolicy",
                             },
-                            Resources = new Output<string>[] { Arn }
+                            Resources = new Output<string>[] { Arn },
                         }
                     );
                     break;

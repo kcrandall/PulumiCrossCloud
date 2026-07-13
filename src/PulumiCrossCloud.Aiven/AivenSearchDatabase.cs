@@ -7,23 +7,34 @@ public class AivenSearchDatabase : ISearchDatabase
 {
     private readonly global::Pulumi.Aiven.OpenSearch _service;
 
-    public AivenSearchDatabase(string name, Input<string> project, SearchDatabaseType type, string plan, string? cloud = null, global::Pulumi.Aiven.Provider? provider = null)
+    public AivenSearchDatabase(
+        string name,
+        Input<string> project,
+        SearchDatabaseType type,
+        string plan,
+        string? cloud = null,
+        global::Pulumi.Aiven.Provider? provider = null
+    )
     {
         Name = name;
         Type = type;
 
         if (type != SearchDatabaseType.OpenSearch)
-        {
-             throw new ArgumentException($"Aiven provider currently only supports OpenSearch for ISearchDatabase. Requested: {type}");
-        }
+            throw new ArgumentException(
+                $"Aiven provider currently only supports OpenSearch for ISearchDatabase. Requested: {type}"
+            );
 
-        _service = new global::Pulumi.Aiven.OpenSearch(name, new global::Pulumi.Aiven.OpenSearchArgs
-        {
-            Project = project,
-            CloudName = cloud ?? "aws-eu-west-1",
-            Plan = plan,
-            ServiceName = name,
-        }, new CustomResourceOptions { Provider = provider });
+        _service = new global::Pulumi.Aiven.OpenSearch(
+            name,
+            new global::Pulumi.Aiven.OpenSearchArgs
+            {
+                Project = project,
+                CloudName = cloud ?? "aws-eu-west-1",
+                Plan = plan,
+                ServiceName = name,
+            },
+            new CustomResourceOptions { Provider = provider }
+        );
     }
 
     public string Name { get; }

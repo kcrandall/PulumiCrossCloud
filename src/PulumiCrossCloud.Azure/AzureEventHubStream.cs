@@ -9,37 +9,58 @@ public class AzureEventHubStream : IStreamEndpoint
     private readonly EventHub _hub;
     private readonly Output<string> _connectionString;
 
-    public AzureEventHubStream(string name, string resourceGroupName, string namespaceName, PulumiCrossCloud.Core.StreamArgs? args = null, Pulumi.AzureNative.Provider? provider = null)
+    public AzureEventHubStream(
+        string name,
+        string resourceGroupName,
+        string namespaceName,
+        PulumiCrossCloud.Core.StreamArgs? args = null,
+        Pulumi.AzureNative.Provider? provider = null
+    )
     {
         Name = name;
         var customResourceOptions = new CustomResourceOptions { Provider = provider };
 
-        _hub = new EventHub(name, new Pulumi.AzureNative.EventHub.EventHubArgs
-        {
-            ResourceGroupName = resourceGroupName,
-            NamespaceName = namespaceName,
-            EventHubName = name,
-            MessageRetentionInDays = (args?.RetentionHours ?? 24) / 24,
-            PartitionCount = args?.ThroughputUnits ?? 2,
-        }, customResourceOptions);
-
-        var rule = new EventHubAuthorizationRule($"{name}-auth", new EventHubAuthorizationRuleArgs
-        {
-            ResourceGroupName = resourceGroupName,
-            NamespaceName = namespaceName,
-            EventHubName = _hub.Name,
-            Rights = { AccessRights.Listen, AccessRights.Send },
-        }, customResourceOptions);
-
-        var invokeOptions = new InvokeOptions { Provider = provider };
-        _connectionString = Output.Tuple<string, string, string>(namespaceName, _hub.Name, rule.Name).Apply(t => 
-            ListEventHubKeys.Invoke(new ListEventHubKeysInvokeArgs
+        _hub = new EventHub(
+            name,
+            new Pulumi.AzureNative.EventHub.EventHubArgs
             {
                 ResourceGroupName = resourceGroupName,
-                NamespaceName = t.Item1,
-                EventHubName = t.Item2,
-                AuthorizationRuleName = t.Item3
-            }, invokeOptions)).Apply(keys => keys.PrimaryConnectionString);
+                NamespaceName = namespaceName,
+                EventHubName = name,
+                MessageRetentionInDays = (args?.RetentionHours ?? 24) / 24,
+                PartitionCount = args?.ThroughputUnits ?? 2,
+            },
+            customResourceOptions
+        );
+
+        var rule = new EventHubAuthorizationRule(
+            $"{name}-auth",
+            new EventHubAuthorizationRuleArgs
+            {
+                ResourceGroupName = resourceGroupName,
+                NamespaceName = namespaceName,
+                EventHubName = _hub.Name,
+                Rights = { AccessRights.Listen, AccessRights.Send },
+            },
+            customResourceOptions
+        );
+
+        var invokeOptions = new InvokeOptions { Provider = provider };
+        _connectionString = Output
+            .Tuple<string, string, string>(namespaceName, _hub.Name, rule.Name)
+            .Apply(t =>
+                ListEventHubKeys.Invoke(
+                    new ListEventHubKeysInvokeArgs
+                    {
+                        ResourceGroupName = resourceGroupName,
+                        NamespaceName = t.Item1,
+                        EventHubName = t.Item2,
+                        AuthorizationRuleName = t.Item3,
+                    },
+                    invokeOptions
+                )
+            )
+            .Apply(keys => keys.PrimaryConnectionString);
     }
 
     public string Name { get; }

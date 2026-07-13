@@ -8,15 +8,23 @@ public class AwsSnsTopic : ITopicEndpoint
 {
     private readonly Topic _topic;
 
-    public AwsSnsTopic(string name, PulumiCrossCloud.Core.TopicArgs? args = null, Pulumi.Aws.Provider? provider = null)
+    public AwsSnsTopic(
+        string name,
+        PulumiCrossCloud.Core.TopicArgs? args = null,
+        Pulumi.Aws.Provider? provider = null
+    )
     {
         Name = name;
         var resourceName = args?.Fifo == true && !name.EndsWith(".fifo") ? $"{name}.fifo" : name;
-        _topic = new Topic(resourceName, new Pulumi.Aws.Sns.TopicArgs
-        {
-            FifoTopic = args?.Fifo ?? false,
-            ContentBasedDeduplication = args?.ContentBasedDeduplication ?? false
-        }, new CustomResourceOptions { Provider = provider });
+        _topic = new Topic(
+            resourceName,
+            new Pulumi.Aws.Sns.TopicArgs
+            {
+                FifoTopic = args?.Fifo ?? false,
+                ContentBasedDeduplication = args?.ContentBasedDeduplication ?? false,
+            },
+            new CustomResourceOptions { Provider = provider }
+        );
     }
 
     public string Name { get; }
@@ -31,35 +39,40 @@ public class AwsSnsTopic : ITopicEndpoint
     {
         var statements = new List<IPolicyStatement>();
         foreach (var permission in permissions)
-        {
             switch (permission)
             {
                 case MessagingPermissions.Send:
-                    statements.Add(new AwsPolicyStatement
-                    {
-                        Effect = "Allow",
-                        Actions = ["sns:Publish"],
-                        Resources = [Arn]
-                    });
+                    statements.Add(
+                        new AwsPolicyStatement
+                        {
+                            Effect = "Allow",
+                            Actions = ["sns:Publish"],
+                            Resources = [Arn],
+                        }
+                    );
                     break;
                 case MessagingPermissions.Receive:
-                    statements.Add(new AwsPolicyStatement
-                    {
-                        Effect = "Allow",
-                        Actions = ["sns:Subscribe", "sns:Receive"],
-                        Resources = [Arn]
-                    });
+                    statements.Add(
+                        new AwsPolicyStatement
+                        {
+                            Effect = "Allow",
+                            Actions = ["sns:Subscribe", "sns:Receive"],
+                            Resources = [Arn],
+                        }
+                    );
                     break;
                 case MessagingPermissions.Admin:
-                    statements.Add(new AwsPolicyStatement
-                    {
-                        Effect = "Allow",
-                        Actions = ["sns:*"],
-                        Resources = [Arn]
-                    });
+                    statements.Add(
+                        new AwsPolicyStatement
+                        {
+                            Effect = "Allow",
+                            Actions = ["sns:*"],
+                            Resources = [Arn],
+                        }
+                    );
                     break;
             }
-        }
+
         return statements;
     }
 }

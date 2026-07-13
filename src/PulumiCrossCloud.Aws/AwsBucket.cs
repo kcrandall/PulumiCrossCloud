@@ -48,22 +48,15 @@ public class AwsBucket : IBucket
         var customResourceOptions = new CustomResourceOptions { Provider = provider };
 
         // Create S3 bucket
-        var bucketArgs = new Pulumi.Aws.S3.BucketArgs
-        {
-            BucketName = name,
-            ForceDestroy = false,
-        };
+        var bucketArgs = new Pulumi.Aws.S3.BucketArgs { BucketName = name, ForceDestroy = false };
 
         if (IndexDocument is not null)
-        {
-            bucketArgs.Website = new Pulumi.Aws.S3.Inputs.BucketWebsiteArgs { IndexDocument = IndexDocument };
-        }
+            bucketArgs.Website = new Pulumi.Aws.S3.Inputs.BucketWebsiteArgs
+            {
+                IndexDocument = IndexDocument,
+            };
 
-        _bucket = new Pulumi.Aws.S3.Bucket(
-            name,
-            bucketArgs,
-            customResourceOptions
-        );
+        _bucket = new Pulumi.Aws.S3.Bucket(name, bucketArgs, customResourceOptions);
 
         // Configure public access block (required for public buckets)
         if (IsPublic)
@@ -76,7 +69,7 @@ public class AwsBucket : IBucket
                     BlockPublicAcls = false,
                     BlockPublicPolicy = false,
                     IgnorePublicAcls = false,
-                    RestrictPublicBuckets = false
+                    RestrictPublicBuckets = false,
                 },
                 new CustomResourceOptions { DependsOn = new[] { _bucket }, Provider = provider }
             );
@@ -100,33 +93,36 @@ public class AwsBucket : IBucket
                                         Effect = "Allow",
                                         Principal = "*",
                                         Action = "s3:GetObject",
-                                        Resource = $"{arn}/*"
-                                    }
-                                }
+                                        Resource = $"{arn}/*",
+                                    },
+                                },
                             }
                         )
-                    )
+                    ),
                 },
-                new CustomResourceOptions { DependsOn = new[] { _publicAccessBlock }, Provider = provider }
+                new CustomResourceOptions
+                {
+                    DependsOn = new[] { _publicAccessBlock },
+                    Provider = provider,
+                }
             );
         }
 
         // Configure versioning if enabled
         if (VersioningEnabled)
-        {
             _versioning = new Pulumi.Aws.S3.BucketVersioning(
                 $"{name}-versioning",
                 new Pulumi.Aws.S3.BucketVersioningArgs
                 {
                     Bucket = _bucket.Id,
-                    VersioningConfiguration = new Pulumi.Aws.S3.Inputs.BucketVersioningVersioningConfigurationArgs
-                    {
-                        Status = "Enabled"
-                    }
+                    VersioningConfiguration =
+                        new Pulumi.Aws.S3.Inputs.BucketVersioningVersioningConfigurationArgs
+                        {
+                            Status = "Enabled",
+                        },
                 },
                 new CustomResourceOptions { DependsOn = new[] { _bucket }, Provider = provider }
             );
-        }
 
         // Configure CORS if rules are provided
         if (CorsRules.Any())
@@ -138,7 +134,7 @@ public class AwsBucket : IBucket
                     AllowedMethods = rule.AllowedMethods.ToArray(),
                     AllowedOrigins = rule.AllowedOrigins.ToArray(),
                     ExposeHeaders = rule.ExposedHeaders.ToArray(),
-                    MaxAgeSeconds = rule.MaxAgeSeconds
+                    MaxAgeSeconds = rule.MaxAgeSeconds,
                 })
                 .ToArray();
 
@@ -147,7 +143,7 @@ public class AwsBucket : IBucket
                 new Pulumi.Aws.S3.BucketCorsConfigurationArgs
                 {
                     Bucket = _bucket.Id,
-                    CorsRules = awsCorsRules
+                    CorsRules = awsCorsRules,
                 },
                 new CustomResourceOptions { DependsOn = new[] { _bucket }, Provider = provider }
             );
@@ -161,7 +157,7 @@ public class AwsBucket : IBucket
                 $"{name}-oai",
                 new Pulumi.Aws.CloudFront.OriginAccessIdentityArgs
                 {
-                    Comment = $"OAI for {name} bucket"
+                    Comment = $"OAI for {name} bucket",
                 },
                 customResourceOptions
             );
@@ -190,17 +186,17 @@ public class AwsBucket : IBucket
                                             Effect = "Allow",
                                             Principal = new { AWS = oaiArn },
                                             Action = "s3:GetObject",
-                                            Resource = $"{bucketArn}/*"
-                                        }
-                                    }
+                                            Resource = $"{bucketArn}/*",
+                                        },
+                                    },
                                 }
                             );
-                        })
+                        }),
                 },
                 new CustomResourceOptions
                 {
                     DependsOn = new Resource[] { _bucket, _originAccessIdentity },
-                    Provider = provider
+                    Provider = provider,
                 }
             );
 
@@ -213,9 +209,9 @@ public class AwsBucket : IBucket
                     OriginId = $"{name}-s3-origin",
                     S3OriginConfig = new DistributionOriginS3OriginConfigArgs
                     {
-                        OriginAccessIdentity = _originAccessIdentity.CloudfrontAccessIdentityPath
-                    }
-                }
+                        OriginAccessIdentity = _originAccessIdentity.CloudfrontAccessIdentityPath,
+                    },
+                },
             };
 
             var defaultCacheBehavior = new DistributionDefaultCacheBehaviorArgs
@@ -230,7 +226,7 @@ public class AwsBucket : IBucket
                     "OPTIONS",
                     "PATCH",
                     "POST",
-                    "PUT"
+                    "PUT",
                 },
                 CachedMethods = new[] { "GET", "HEAD" },
                 ForwardedValues = new DistributionDefaultCacheBehaviorForwardedValuesArgs
@@ -238,12 +234,12 @@ public class AwsBucket : IBucket
                     QueryString = false,
                     Cookies = new DistributionDefaultCacheBehaviorForwardedValuesCookiesArgs
                     {
-                        Forward = "none"
-                    }
+                        Forward = "none",
+                    },
                 },
                 MinTtl = 0,
                 DefaultTtl = 3600,
-                MaxTtl = 86400
+                MaxTtl = 86400,
             };
 
             var distributionArgs = new Pulumi.Aws.CloudFront.DistributionArgs
@@ -256,19 +252,17 @@ public class AwsBucket : IBucket
                 {
                     GeoRestriction = new DistributionRestrictionsGeoRestrictionArgs
                     {
-                        RestrictionType = "none"
-                    }
+                        RestrictionType = "none",
+                    },
                 },
                 ViewerCertificate = new DistributionViewerCertificateArgs
                 {
-                    CloudfrontDefaultCertificate = true
-                }
+                    CloudfrontDefaultCertificate = true,
+                },
             };
 
             if (IndexDocument is not null)
-            {
                 distributionArgs.DefaultRootObject = IndexDocument;
-            }
 
             // Add custom domains if specified
             if (Cdn.Domains?.Any() == true)
@@ -288,7 +282,7 @@ public class AwsBucket : IBucket
                 new CustomResourceOptions
                 {
                     DependsOn = new Resource[] { _bucket, _originAccessIdentity, cdnBucketPolicy },
-                    Provider = provider
+                    Provider = provider,
                 }
             );
         }
@@ -305,19 +299,27 @@ public class AwsBucket : IBucket
         {
             // When CDN is enabled, point domains to CloudFront distribution
             foreach (var host in hostList)
-            {
-                cdnRecords.Add(new DnsRecord(DnsRecordType.CNAME, host, _distribution.DomainName, $"{host}-cdn-cname"));
-            }
+                cdnRecords.Add(
+                    new DnsRecord(
+                        DnsRecordType.CNAME,
+                        host,
+                        _distribution.DomainName,
+                        $"{host}-cdn-cname"
+                    )
+                );
         }
         else
         {
             // For S3, return CNAME records pointing to the S3 website endpoint or bucket endpoint
             foreach (var host in hostList)
-            {
                 bucketRecords.Add(
-                    new DnsRecord(DnsRecordType.CNAME, host, _bucket.BucketRegionalDomainName, $"{host}-bucket-cname")
+                    new DnsRecord(
+                        DnsRecordType.CNAME,
+                        host,
+                        _bucket.BucketRegionalDomainName,
+                        $"{host}-bucket-cname"
+                    )
                 );
-            }
         }
 
         return new BucketDnsRecords(cdnRecords, bucketRecords);
@@ -327,7 +329,6 @@ public class AwsBucket : IBucket
     {
         var statements = new List<IPolicyStatement>();
         foreach (var permission in permissions)
-        {
             switch (permission)
             {
                 case BucketPermissions.ReadObject:
@@ -336,7 +337,7 @@ public class AwsBucket : IBucket
                         {
                             Effect = "Allow",
                             Actions = new[] { "s3:GetObject" },
-                            Resources = new Output<string>[] { Arn.Apply(arn => $"{arn}/*") }
+                            Resources = new Output<string>[] { Arn.Apply(arn => $"{arn}/*") },
                         }
                     );
                     break;
@@ -346,7 +347,7 @@ public class AwsBucket : IBucket
                         {
                             Effect = "Allow",
                             Actions = new[] { "s3:PutObject", "s3:DeleteObject" },
-                            Resources = new Output<string>[] { Arn.Apply(arn => $"{arn}/*") }
+                            Resources = new Output<string>[] { Arn.Apply(arn => $"{arn}/*") },
                         }
                     );
                     break;
@@ -356,7 +357,7 @@ public class AwsBucket : IBucket
                         {
                             Effect = "Allow",
                             Actions = new[] { "s3:DeleteObject" },
-                            Resources = new Output<string>[] { Arn.Apply(arn => $"{arn}/*") }
+                            Resources = new Output<string>[] { Arn.Apply(arn => $"{arn}/*") },
                         }
                     );
                     break;
@@ -366,7 +367,7 @@ public class AwsBucket : IBucket
                         {
                             Effect = "Allow",
                             Actions = new[] { "s3:ListBucket" },
-                            Resources = new Output<string>[] { Arn }
+                            Resources = new Output<string>[] { Arn },
                         }
                     );
                     break;
@@ -376,7 +377,7 @@ public class AwsBucket : IBucket
                         {
                             Effect = "Allow",
                             Actions = new[] { "s3:GetBucketLocation", "s3:GetBucketVersioning" },
-                            Resources = new Output<string>[] { Arn }
+                            Resources = new Output<string>[] { Arn },
                         }
                     );
                     break;
@@ -386,18 +387,29 @@ public class AwsBucket : IBucket
                         {
                             Effect = "Allow",
                             Actions = new[] { "s3:*" },
-                            Resources = new Output<string>[] { Arn, Arn.Apply(arn => $"{arn}/*") }
+                            Resources = new Output<string>[] { Arn, Arn.Apply(arn => $"{arn}/*") },
                         }
                     );
                     break;
             }
-        }
+
         return statements;
     }
 
-    public Output<string> SyncDirectory(string localPath, string? keyPrefix = null, BucketSyncOptions? options = null)
+    public Output<string> SyncDirectory(
+        string localPath,
+        string? keyPrefix = null,
+        BucketSyncOptions? options = null
+    )
     {
-        var deployment = new AwsBucketDeployment($"{Name}-deploy", Name, localPath, keyPrefix, options, new ComponentResourceOptions { Parent = _bucket });
+        var deployment = new AwsBucketDeployment(
+            $"{Name}-deploy",
+            Name,
+            localPath,
+            keyPrefix,
+            options,
+            new ComponentResourceOptions { Parent = _bucket }
+        );
         return deployment.WebsiteUrl;
     }
 }

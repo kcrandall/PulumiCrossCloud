@@ -31,9 +31,7 @@ public sealed class DigitalOceanCloudResourceFactory : CloudResourceFactory
 
         var providerArgs = new DO.ProviderArgs();
         if (token is not null)
-        {
             providerArgs.Token = token;
-        }
 
         _digitalOceanProvider = new DO.Provider("digitalocean-provider", providerArgs);
     }
@@ -61,8 +59,10 @@ public sealed class DigitalOceanCloudResourceFactory : CloudResourceFactory
             _digitalOceanProvider
         );
 
-    public override IContainerImage CreateContainerImage(string name, IContainerRegistry registry) =>
-        new DigitalOceanContainerImage(name, registry);
+    public override IContainerImage CreateContainerImage(
+        string name,
+        IContainerRegistry registry
+    ) => new DigitalOceanContainerImage(name, registry);
 
     public override ICompute CreateCompute(
         string name,
@@ -74,11 +74,9 @@ public sealed class DigitalOceanCloudResourceFactory : CloudResourceFactory
     )
     {
         if (serviceType is not null && serviceType != ComputeServiceType.DigitalOceanAppPlatform)
-        {
             throw new NotSupportedException(
                 $"DigitalOcean supports {ComputeServiceType.DigitalOceanAppPlatform}, not {serviceType}."
             );
-        }
 
         return new DigitalOceanAppPlatformCompute(
             name,
@@ -101,9 +99,14 @@ public sealed class DigitalOceanCloudResourceFactory : CloudResourceFactory
         var digitalOceanOptions = options as DigitalOceanSearchDatabaseOptions;
         digitalOceanOptions ??= new DigitalOceanSearchDatabaseOptions
         {
-            Region = _defaultDatabaseRegion
+            Region = _defaultDatabaseRegion,
         };
 
-        return new DigitalOceanSearchDatabase(name, type, digitalOceanOptions, _digitalOceanProvider);
+        return new DigitalOceanSearchDatabase(
+            name,
+            type,
+            digitalOceanOptions,
+            _digitalOceanProvider
+        );
     }
 }

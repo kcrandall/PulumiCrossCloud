@@ -13,7 +13,8 @@ public static class AzureProjectConfig
     {
         get
         {
-            if (!string.IsNullOrEmpty(_resourceGroupName)) return _resourceGroupName;
+            if (!string.IsNullOrEmpty(_resourceGroupName))
+                return _resourceGroupName;
             var config = new Config("azure-native");
             return config.Get("resourceGroupName") ?? string.Empty;
         }
@@ -36,7 +37,8 @@ public static class AzureProjectConfig
     {
         get
         {
-            if (!string.IsNullOrEmpty(_region)) return _region;
+            if (!string.IsNullOrEmpty(_region))
+                return _region;
             var config = new Config("azure-native");
             return config.Get("location") ?? "eastus";
         }

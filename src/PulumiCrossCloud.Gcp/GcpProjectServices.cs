@@ -50,7 +50,7 @@ public static class GcpProjectServices
                         Project = projectId,
                         ServiceName = serviceName,
                         DisableDependentServices = false,
-                        DisableOnDestroy = false // Keep APIs enabled when stack is destroyed
+                        DisableOnDestroy = false, // Keep APIs enabled when stack is destroyed
                     },
                     new CustomResourceOptions { DependsOn = dependsOn.ToArray() }
                 );

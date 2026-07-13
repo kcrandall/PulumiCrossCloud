@@ -43,9 +43,9 @@ public class OpenSourceStack : Stack
                 RegistrationAllowed = true,
                 DuplicateEmailsAllowed = false,
                 ResetPasswordAllowed = true,
-                RememberMe = true
+                RememberMe = true,
             },
-            ThemeConfig = new RealmThemeConfig { LoginTheme = "tcg-app-theme", },
+            ThemeConfig = new RealmThemeConfig { LoginTheme = "tcg-app-theme" },
             Clients = new List<Pulumi.Keycloak.OpenId.ClientArgs>
             {
                 // JWT API Client (confidential client for backend services)
@@ -60,7 +60,7 @@ public class OpenSourceStack : Stack
                     DirectAccessGrantsEnabled = true,
                     ServiceAccountsEnabled = true,
                     ConsentRequired = false,
-                    FullScopeAllowed = true
+                    FullScopeAllowed = true,
                 },
                 // Web App Client (public client for frontend applications)
                 new Pulumi.Keycloak.OpenId.ClientArgs
@@ -78,14 +78,14 @@ public class OpenSourceStack : Stack
                         "http://localhost:3000/*",
                         "http://localhost:5174/*",
                         "https://app.oss-stack.com/*",
-                        "https://app.oss-stack.com/callback"
+                        "https://app.oss-stack.com/callback",
                     },
                     WebOrigins = new[] { "http://localhost:3000", "https://app.oss-stack.com" },
                     ConsentRequired = false,
                     FullScopeAllowed = true,
                     RootUrl = "https://app.oss-stack.com",
-                    AdminUrl = "https://app.oss-stack.com/admin"
-                }
+                    AdminUrl = "https://app.oss-stack.com/admin",
+                },
             },
             IdentityProviders = new List<Pulumi.Keycloak.Oidc.IdentityProviderArgs>
             {
@@ -105,7 +105,7 @@ public class OpenSourceStack : Stack
                 //         { "issuer", "https://accounts.google.com" }
                 //     }
                 // }
-            }
+            },
         };
 
         // Configure theme providers (JAR files from Keycloakify build)
@@ -115,10 +115,10 @@ public class OpenSourceStack : Stack
             [
                 // Path to the Keycloakify-generated JAR file
                 // This would typically be built from frontend/keycloaktheme/dist_keycloak/
-                "../../frontend/keycloaktheme/dist_keycloak/keycloak-theme-for-kc-22-to-25.jar"
+                "../../frontend/keycloaktheme/dist_keycloak/keycloak-theme-for-kc-22-to-25.jar",
                 // You can add multiple theme JAR files here:
                 // "path/to/another-theme.jar"
-            ]
+            ],
             // CustomThemesDirectory = "path/to/custom/themes" // Alternative to JAR files
         };
 
@@ -141,7 +141,6 @@ public class OpenSourceStack : Stack
             var hooks = new List<Output<int>>();
 
             foreach (var (_, clientResult) in dict)
-            {
                 hooks.Add(
                     clientResult.Apply(cr =>
                     {
@@ -159,7 +158,6 @@ public class OpenSourceStack : Stack
                         return 0;
                     })
                 );
-            }
 
             return Output.All(hooks.ToArray()).Apply(_ => 0);
         });

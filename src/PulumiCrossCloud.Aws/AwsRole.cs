@@ -37,7 +37,7 @@ public class AwsRole : IRole
             new Pulumi.Aws.Iam.RolePolicyArgs
             {
                 Role = _role.Name,
-                Policy = policyDocumentOutput // Now using Output<string>
+                Policy = policyDocumentOutput, // Now using Output<string>
             }
         );
     }
@@ -71,7 +71,7 @@ public class AwsRole : IRole
                         {
                             Effect = statement.Effect,
                             Action = statement.Actions.ToArray(),
-                            Resource = statementResources
+                            Resource = statementResources,
                         }
                     );
                 }
