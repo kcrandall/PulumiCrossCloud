@@ -160,6 +160,9 @@ public partial class AwsFargateCompute : ICompute
 
         switch (_options.Backend)
         {
+            case AwsFargateBackend.EcsExpress:
+                BuildEcsExpressService();
+                break;
             case AwsFargateBackend.Ecs:
                 BuildEcsService();
                 break;
@@ -182,6 +185,9 @@ public partial class AwsFargateCompute : ICompute
         {
             switch (_options.Backend)
             {
+                case AwsFargateBackend.EcsExpress:
+                    AddEcsExpressPolicy(statements, permission);
+                    break;
                 case AwsFargateBackend.Ecs:
                     AddEcsPolicy(statements, permission);
                     break;
@@ -383,6 +389,30 @@ public partial class AwsFargateCompute : ICompute
             return "/";
         return path.StartsWith('/') ? path : $"/{path}";
     }
+
+    private static string EnsureUrlScheme(string endpoint)
+    {
+        if (string.IsNullOrWhiteSpace(endpoint))
+            return string.Empty;
+        return endpoint.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+            || endpoint.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+            ? endpoint.TrimEnd('/')
+            : $"https://{endpoint.TrimEnd('/')}";
+    }
+
+    private static string GetDnsTarget(string endpoint)
+    {
+        if (string.IsNullOrWhiteSpace(endpoint))
+            return string.Empty;
+        var url = EnsureUrlScheme(endpoint);
+        return Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Host : endpoint;
+    }
+
+    partial void BuildEcsExpressService();
+    partial void AddEcsExpressPolicy(
+        List<IPolicyStatement> statements,
+        ComputePermissions permission
+    );
 
     partial void BuildEcsService();
     partial void AddEcsPolicy(List<IPolicyStatement> statements, ComputePermissions permission);

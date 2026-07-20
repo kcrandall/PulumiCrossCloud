@@ -13,6 +13,14 @@ public class AwsFargateComputeTests
     private const string EcsClusterType = "aws:ecs/cluster:Cluster";
     private const string EcsExpressGatewayServiceType =
         "aws:ecs/expressGatewayService:ExpressGatewayService";
+    private const string EcsServiceType = "aws:ecs/service:Service";
+    private const string EcsTaskDefinitionType = "aws:ecs/taskDefinition:TaskDefinition";
+    private const string LoadBalancerType = "aws:lb/loadBalancer:LoadBalancer";
+    private const string TargetGroupType = "aws:lb/targetGroup:TargetGroup";
+    private const string ListenerType = "aws:lb/listener:Listener";
+    private const string SecurityGroupType = "aws:ec2/securityGroup:SecurityGroup";
+    private const string AutoScalingTargetType = "aws:appautoscaling/target:Target";
+    private const string AutoScalingPolicyType = "aws:appautoscaling/policy:Policy";
     private const string EksFargateProfileType = "aws:eks/fargateProfile:FargateProfile";
     private const string KubernetesProviderType = "pulumi:providers:kubernetes";
     private const string KubernetesNamespaceType = "kubernetes:core/v1:Namespace";
@@ -700,6 +708,307 @@ public class AwsFargateComputeTests
         Assert.DoesNotContain("\"token\":", kubeconfig, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task StandardEcsBackend_CreatesTaskDefinitionServiceAndPublicLoadBalancer()
+    {
+        string? serviceUrl = null;
+
+        var mocks = await RunDeployment((factory, registry) =>
+        {
+            var compute = factory.CreateCompute(
+                "orders",
+                registry,
+                imageName: registry.Name,
+                providerOptions: new AwsFargateOptions { Backend = AwsFargateBackend.Ecs }
+            );
+            compute.Build();
+            compute.ServiceUrl.Apply(url => serviceUrl = url);
+        });
+
+        Assert.Single(mocks.CreatedResources(EcsClusterType));
+        Assert.Empty(mocks.CreatedResources(EcsExpressGatewayServiceType));
+
+        var service = Assert.Single(mocks.CreatedResources(EcsServiceType));
+        Assert.Equal("orders", Assert.IsType<string>(service.Inputs["name"]));
+        Assert.Equal("FARGATE", Assert.IsType<string>(service.Inputs["launchType"]));
+
+        var taskDefinition = Assert.Single(mocks.CreatedResources(EcsTaskDefinitionType));
+        Assert.Equal("awsvpc", Assert.IsType<string>(taskDefinition.Inputs["networkMode"]));
+        Assert.Equal("256", Assert.IsType<string>(taskDefinition.Inputs["cpu"]));
+        Assert.Equal("512", Assert.IsType<string>(taskDefinition.Inputs["memory"]));
+
+        Assert.Single(mocks.CreatedResources(LoadBalancerType));
+        Assert.Single(mocks.CreatedResources(TargetGroupType));
+        var listener = Assert.Single(mocks.CreatedResources(ListenerType));
+        Assert.Equal("HTTP", Assert.IsType<string>(listener.Inputs["protocol"]));
+
+        // One security group for the load balancer, one for the tasks.
+        Assert.Equal(2, mocks.CreatedResources(SecurityGroupType).Count());
+
+        Assert.NotNull(serviceUrl);
+        Assert.StartsWith("http://", serviceUrl, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task StandardEcsBackend_WithoutLoadBalancer_SkipsIngressResources()
+    {
+        string? serviceUrl = null;
+
+        var mocks = await RunDeployment((factory, registry) =>
+        {
+            var compute = factory.CreateCompute(
+                "worker",
+                registry,
+                imageName: registry.Name,
+                providerOptions: new AwsFargateOptions
+                {
+                    Backend = AwsFargateBackend.Ecs,
+                    EcsCreateLoadBalancer = false,
+                }
+            );
+            compute.Build();
+            compute.ServiceUrl.Apply(url => serviceUrl = url);
+        });
+
+        Assert.Single(mocks.CreatedResources(EcsServiceType));
+        Assert.Empty(mocks.CreatedResources(LoadBalancerType));
+        Assert.Empty(mocks.CreatedResources(TargetGroupType));
+        Assert.Empty(mocks.CreatedResources(ListenerType));
+        Assert.Single(mocks.CreatedResources(SecurityGroupType));
+        Assert.True(string.IsNullOrEmpty(serviceUrl));
+    }
+
+    [Fact]
+    public async Task StandardEcsBackend_WithCertificate_ServesHttpsAndRedirectsHttp()
+    {
+        string? serviceUrl = null;
+
+        var mocks = await RunDeployment((factory, registry) =>
+        {
+            var compute = factory.CreateCompute(
+                "orders",
+                registry,
+                imageName: registry.Name,
+                providerOptions: new AwsFargateOptions
+                {
+                    Backend = AwsFargateBackend.Ecs,
+                    EcsCertificateArn =
+                        "arn:aws:acm:us-east-1:123456789012:certificate/test-cert",
+                }
+            );
+            compute.Build();
+            compute.ServiceUrl.Apply(url => serviceUrl = url);
+        });
+
+        var listeners = mocks.CreatedResources(ListenerType).ToArray();
+        Assert.Equal(2, listeners.Length);
+
+        var https = Assert.Single(
+            listeners,
+            listener => Assert.IsType<string>(listener.Inputs["protocol"]) == "HTTPS"
+        );
+        Assert.Equal(443.0, Convert.ToDouble(https.Inputs["port"]));
+
+        var http = Assert.Single(
+            listeners,
+            listener => Assert.IsType<string>(listener.Inputs["protocol"]) == "HTTP"
+        );
+        var defaultActions = Assert.IsAssignableFrom<IEnumerable<object>>(
+            http.Inputs["defaultActions"]
+        );
+        var action = Assert.IsAssignableFrom<IDictionary<string, object>>(
+            defaultActions.Single()
+        );
+        Assert.Equal("redirect", action["type"]);
+
+        Assert.NotNull(serviceUrl);
+        Assert.StartsWith("https://", serviceUrl, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task StandardEcsBackend_LoadBalancerRequiresTwoSubnets()
+    {
+        await RunDeployment((factory, registry) =>
+        {
+            var compute = factory.CreateCompute(
+                "web",
+                registry,
+                imageName: registry.Name,
+                providerOptions: new AwsFargateOptions
+                {
+                    Backend = AwsFargateBackend.Ecs,
+                    SubnetIds = ["subnet-a"],
+                }
+            );
+
+            var exception = Assert.Throws<ArgumentException>(compute.Build);
+            Assert.Equal("SubnetIds", exception.ParamName);
+        });
+    }
+
+    [Fact]
+    public async Task StandardEcsBackend_ContainerDefinitionsCarryEnvironmentAndSecrets()
+    {
+        var mocks = await RunDeployment((factory, registry) =>
+        {
+            var secret = factory.CreateSecret("database-password", "test-value");
+            var compute = factory.CreateCompute(
+                "orders",
+                registry,
+                imageName: registry.Name,
+                providerOptions: new AwsFargateOptions { Backend = AwsFargateBackend.Ecs }
+            );
+            compute.AddEnvironmentVariable("STAGE", "production");
+            compute.AddRequiredSecret(secret, "DATABASE_PASSWORD");
+            compute.Build();
+        });
+
+        var taskDefinition = Assert.Single(mocks.CreatedResources(EcsTaskDefinitionType));
+        using var document = JsonDocument.Parse(
+            Assert.IsType<string>(taskDefinition.Inputs["containerDefinitions"])
+        );
+
+        var container = Assert.Single(document.RootElement.EnumerateArray().ToArray());
+        Assert.Equal("orders", container.GetProperty("name").GetString());
+        Assert.True(container.GetProperty("essential").GetBoolean());
+
+        var environment = container.GetProperty("environment").EnumerateArray().ToArray();
+        var stage = Assert.Single(
+            environment,
+            entry => entry.GetProperty("name").GetString() == "STAGE"
+        );
+        Assert.Equal("production", stage.GetProperty("value").GetString());
+
+        var secrets = container.GetProperty("secrets").EnumerateArray().ToArray();
+        var databasePassword = Assert.Single(secrets);
+        Assert.Equal("DATABASE_PASSWORD", databasePassword.GetProperty("name").GetString());
+        Assert.StartsWith(
+            "arn:aws:secretsmanager:",
+            databasePassword.GetProperty("valueFrom").GetString(),
+            StringComparison.Ordinal
+        );
+
+        var logOptions = container.GetProperty("logConfiguration").GetProperty("options");
+        Assert.Equal("us-east-1", logOptions.GetProperty("awslogs-region").GetString());
+        Assert.Equal("orders", logOptions.GetProperty("awslogs-stream-prefix").GetString());
+
+        var portMapping = Assert.Single(
+            container.GetProperty("portMappings").EnumerateArray().ToArray()
+        );
+        Assert.Equal(8080, portMapping.GetProperty("containerPort").GetInt32());
+        Assert.Equal("tcp", portMapping.GetProperty("protocol").GetString());
+    }
+
+    [Fact]
+    public async Task StandardEcsBackend_AutoscalesWhenMaxCountExceedsMinCount()
+    {
+        var mocks = await RunDeployment((factory, registry) =>
+        {
+            var compute = factory.CreateCompute(
+                "orders",
+                registry,
+                imageName: registry.Name,
+                providerOptions: new AwsFargateOptions { Backend = AwsFargateBackend.Ecs }
+            );
+            compute.MinCount = 2;
+            compute.MaxCount = 8;
+            compute.Build();
+        });
+
+        var target = Assert.Single(mocks.CreatedResources(AutoScalingTargetType));
+        Assert.Equal(2.0, Convert.ToDouble(target.Inputs["minCapacity"]));
+        Assert.Equal(8.0, Convert.ToDouble(target.Inputs["maxCapacity"]));
+        Assert.Equal(
+            "ecs:service:DesiredCount",
+            Assert.IsType<string>(target.Inputs["scalableDimension"])
+        );
+        Assert.Single(mocks.CreatedResources(AutoScalingPolicyType));
+    }
+
+    [Fact]
+    public async Task StandardEcsBackend_DoesNotAutoscaleWhenCountsMatch()
+    {
+        var mocks = await RunDeployment((factory, registry) =>
+        {
+            var compute = factory.CreateCompute(
+                "orders",
+                registry,
+                imageName: registry.Name,
+                providerOptions: new AwsFargateOptions { Backend = AwsFargateBackend.Ecs }
+            );
+            compute.MinCount = 2;
+            compute.MaxCount = 2;
+            compute.Build();
+        });
+
+        Assert.Empty(mocks.CreatedResources(AutoScalingTargetType));
+        Assert.Empty(mocks.CreatedResources(AutoScalingPolicyType));
+    }
+
+    [Fact]
+    public async Task StandardEcsBackend_PolicyUsesStandardServiceActions()
+    {
+        string[] actions = [];
+
+        await RunDeployment((factory, registry) =>
+        {
+            var compute = factory.CreateCompute(
+                "orders",
+                registry,
+                imageName: registry.Name,
+                providerOptions: new AwsFargateOptions { Backend = AwsFargateBackend.Ecs }
+            );
+            compute.Build();
+
+            actions = compute
+                .GetPolicy(Enum.GetValues<ComputePermissions>())
+                .SelectMany(statement => statement.Actions)
+                .ToArray();
+        });
+
+        Assert.Contains("ecs:DescribeServices", actions);
+        Assert.Contains("ecs:UpdateService", actions);
+        Assert.Contains("ecs:DeleteService", actions);
+        Assert.Contains("ecs:ExecuteCommand", actions);
+        Assert.Contains("logs:GetLogEvents", actions);
+        Assert.DoesNotContain(
+            actions,
+            action => action.Contains("ExpressGateway", StringComparison.Ordinal)
+        );
+    }
+
+    [Fact]
+    public async Task StandardEcsBackend_ExecuteCommandGrantsTheAgentItsChannels()
+    {
+        var mocks = await RunDeployment((factory, registry) =>
+        {
+            var compute = factory.CreateCompute(
+                "orders",
+                registry,
+                imageName: registry.Name,
+                providerOptions: new AwsFargateOptions
+                {
+                    Backend = AwsFargateBackend.Ecs,
+                    EcsEnableExecuteCommand = true,
+                }
+            );
+            compute.Build();
+        });
+
+        var service = Assert.Single(mocks.CreatedResources(EcsServiceType));
+        Assert.True(Assert.IsType<bool>(service.Inputs["enableExecuteCommand"]));
+
+        var taskPolicy = Assert.Single(
+            mocks.CreatedResources("aws:iam/rolePolicy:RolePolicy"),
+            policy => policy.Name == "orders-task-policy"
+        );
+        Assert.Contains(
+            "ssmmessages:OpenDataChannel",
+            Assert.IsType<string>(taskPolicy.Inputs["policy"]),
+            StringComparison.Ordinal
+        );
+    }
+
     private static async Task<RecordingMocks> RunDeployment(
         Action<AwsCloudResourceFactory, IContainerRegistry> test
     )
@@ -831,6 +1140,29 @@ public class AwsFargateComputeTests
                         },
                     };
                     break;
+                case EcsServiceType:
+                    state["arn"] =
+                        $"arn:aws:ecs:us-east-1:123456789012:service/{resourceName}";
+                    state["name"] = args.Inputs.TryGetValue("name", out var serviceName)
+                        ? serviceName
+                        : resourceName;
+                    break;
+                case EcsTaskDefinitionType:
+                    state["arn"] =
+                        $"arn:aws:ecs:us-east-1:123456789012:task-definition/{resourceName}:1";
+                    break;
+                case LoadBalancerType:
+                    state["arn"] =
+                        $"arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/{resourceName}/abc";
+                    state["dnsName"] = $"{resourceName}-1234.us-east-1.elb.amazonaws.com";
+                    break;
+                case TargetGroupType:
+                    state["arn"] =
+                        $"arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/{resourceName}/abc";
+                    break;
+                case SecurityGroupType:
+                    state["id"] = $"sg-{resourceName}";
+                    break;
                 case EksFargateProfileType:
                     state["arn"] =
                         $"arn:aws:eks:us-east-1:123456789012:fargateprofile/shared-eks/{resourceName}";
@@ -895,6 +1227,27 @@ public class AwsFargateComputeTests
             {
                 return Task.FromResult<object>(
                     new Dictionary<string, object> { ["region"] = "us-east-1" }
+                );
+            }
+            if (token.Contains("ec2/getVpc", StringComparison.Ordinal))
+            {
+                return Task.FromResult<object>(
+                    new Dictionary<string, object> { ["id"] = "vpc-default" }
+                );
+            }
+            if (token.Contains("ec2/getSubnets", StringComparison.Ordinal))
+            {
+                return Task.FromResult<object>(
+                    new Dictionary<string, object>
+                    {
+                        ["ids"] = new object[] { "subnet-default-a", "subnet-default-b" },
+                    }
+                );
+            }
+            if (token.Contains("ec2/getSubnet", StringComparison.Ordinal))
+            {
+                return Task.FromResult<object>(
+                    new Dictionary<string, object> { ["vpcId"] = "vpc-supplied" }
                 );
             }
             return Task.FromResult<object>(args.Args);

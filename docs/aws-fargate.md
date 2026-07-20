@@ -1,6 +1,14 @@
 # AWS Fargate compute
 
-`AwsCloudResourceFactory.CreateCompute` creates AWS Fargate services through the common `ICompute` API. Amazon ECS Express Mode is the default backend. Amazon EKS is available for existing, Fargate-ready clusters.
+`AwsCloudResourceFactory.CreateCompute` creates AWS Fargate services through the common `ICompute` API. Three backends are available through `AwsFargateOptions.Backend`:
+
+| Backend | When to use |
+| --- | --- |
+| `AwsFargateBackend.EcsExpress` (default) | Least configuration. Express Mode manages ingress, scaling, and networking from a single service resource. |
+| `AwsFargateBackend.Ecs` | Standard ECS. Builds the task definition, security groups, Application Load Balancer, service, and autoscaling explicitly, so configuration Express does not expose is reachable. |
+| `AwsFargateBackend.Eks` | An existing, Fargate-ready EKS cluster. |
+
+> **Migration note.** `AwsFargateBackend.Ecs` previously selected Express Mode. It now selects the standard ECS backend, and Express Mode is `AwsFargateBackend.EcsExpress`. Code that never set `Backend` is unaffected — Express Mode is still the default. Code that set `Backend = AwsFargateBackend.Ecs` explicitly must change to `AwsFargateBackend.EcsExpress` to keep its previous behavior.
 
 `AwsCloudResourceFactory` derives from `CloudResourceFactory<AwsFargateOptions>` and implements `IComputeFactory<AwsFargateOptions>`, so the provider options type is checked at compile time. The factory signature ends with optional provider-specific options:
 
@@ -52,7 +60,7 @@ ECS Express Mode accepts Fargate `CpuLimit` values of `0.25`, `0.5`, `1`, `2`, `
 
 ## Reuse a shared ECS cluster
 
-Set `AwsFargateOptions.ClusterName` to place services in an existing ECS cluster. The named cluster is reused and is not created or owned by the compute resource.
+Set `AwsFargateOptions.ClusterName` to place services in an existing ECS cluster. The named cluster is reused and is not created or owned by the compute resource. This applies to both ECS backends.
 
 ```csharp
 var options = new AwsFargateOptions
@@ -76,6 +84,61 @@ api.Build();
 ```
 
 Omit `SubnetIds` and `SecurityGroupIds` to use ECS Express Mode's managed network defaults; this requires a default VPC with at least two suitable public subnets. Accounts without a default VPC must supply at least two subnet IDs. `WaitForSteadyState` defaults to `true` and can be disabled for deployments that should not wait for service convergence.
+
+## Standard ECS services
+
+`AwsFargateBackend.Ecs` provisions the pieces Express Mode keeps internal: an ECS task definition, a security group for the tasks, an Application Load Balancer with a target group and listener, the ECS service itself, and an Application Auto Scaling policy. Choose it when the workload needs multiple port mappings, a custom certificate, ECS Exec, an existing VPC, or any other knob Express does not expose.
+
+```csharp
+var options = new AwsFargateOptions
+{
+    Backend = AwsFargateBackend.Ecs,
+    VpcId = "vpc-0123456789abcdef0",
+    SubnetIds = ["subnet-0123456789abcdef0", "subnet-0fedcba9876543210"],
+    EcsCertificateArn = "arn:aws:acm:us-east-1:123456789012:certificate/abcd-1234",
+};
+
+var api = factory.CreateCompute(
+    name: "api",
+    registry: registry,
+    imageName: registry.Name,
+    imageTag: "latest",
+    serviceType: ComputeServiceType.Fargate,
+    providerOptions: options
+);
+
+api.CpuLimit = "0.5";
+api.MemoryLimit = "1Gi";
+api.MinCount = 2;
+api.MaxCount = 8;
+api.Build();
+```
+
+### Networking
+
+Supply `SubnetIds` to place tasks in specific subnets; the VPC is taken from `VpcId`, or resolved from the first subnet when `VpcId` is omitted. With neither, the backend selects the subnets of the account's default VPC.
+
+Tasks are given public IPs only when the backend chose the subnets itself, because default-VPC subnets are public and a task there cannot reach ECR without either a public IP or a NAT gateway. Set `EcsAssignPublicIp` explicitly to override that inference in either direction.
+
+When `SecurityGroupIds` is omitted, the backend creates a task security group that allows all egress and accepts the primary container port from the load balancer. When you do supply security groups they are used as-is: they are yours, so the backend does not add ingress rules to them, and allowing load balancer traffic is your responsibility.
+
+### Ingress
+
+`EcsCreateLoadBalancer` defaults to `true` and requires at least two subnets in different availability zones. Setting `EcsCertificateArn` moves the default action to an HTTPS listener on port 443 and turns port 80 into a redirect; `ServiceUrl` reflects the resulting scheme. `EcsInternalLoadBalancer` makes the balancer internal rather than internet-facing.
+
+Set `EcsCreateLoadBalancer = false` for internal or worker services that need no ingress. The load balancer, target group, listener, and load balancer security group are then skipped — and because there is no endpoint, `ServiceUrl` is empty, `GetRequiredDnsRecords` has no target, and `OnHealthy` callbacks have nothing to poll. `OnReady` still runs.
+
+The target group's health check is taken from `HealthCheckConfiguration` and accepts any `200-399` response. Its timeout must be shorter than its interval, which the backend validates before deploying.
+
+### Scaling, exec, and deployment safety
+
+When `EcsEnableAutoscaling` is `true` (the default) and `MaxCount` is greater than `MinCount`, the backend registers an Application Auto Scaling target and a CPU target-tracking policy at 60% utilization. Because Application Auto Scaling then owns the desired count, the service ignores subsequent `desiredCount` changes so that deployments do not reset a scaled-out service to `MinCount`.
+
+`EcsEnableExecuteCommand` turns on ECS Exec. It always creates a task role and grants it the four `ssmmessages` channel actions the exec agent needs, so `GetPolicy(ComputePermissions.Connect)` returns a usable `ecs:ExecuteCommand` grant.
+
+`EcsEnableCircuitBreaker` defaults to `true`, so a failing deployment rolls back rather than retrying indefinitely.
+
+Task sizing follows the same Fargate rules as Express Mode. Unlike Express, ECS requires a task size, so omitting both `CpuLimit` and `MemoryLimit` yields 0.25 vCPU and 512Mi.
 
 ## Use an existing EKS cluster
 

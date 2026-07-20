@@ -1,434 +1,677 @@
+using System.Collections.Immutable;
 using System.Globalization;
+using System.Text.Json;
 using Pulumi;
 using PulumiCrossCloud.Core;
 
 namespace PulumiCrossCloud.Aws;
 
+/// <summary>
+/// The standard ECS backend. Where Express Mode hides ingress and networking behind one
+/// resource, this builds the pieces explicitly — task definition, security groups, load
+/// balancer, service, and autoscaling — so callers can reach the parts Express does not expose.
+/// </summary>
 public partial class AwsFargateCompute
 {
-    private const string EcsTaskExecutionPolicyArn =
-        "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy";
-    private const string EcsExpressInfrastructurePolicyArn =
-        "arn:aws:iam::aws:policy/service-role/AmazonECSInfrastructureRoleforExpressGatewayServices";
+    private const int DefaultEcsCpuUnits = 256;
+    private const int DefaultEcsMemoryMebibytes = 512;
+    private const int EcsHealthCheckGracePeriodSeconds = 60;
 
-    private Pulumi.Aws.Ecs.Cluster? _ecsCluster;
-    private Pulumi.Aws.Ecs.ExpressGatewayService? _ecsService;
-    private Pulumi.Aws.Iam.Role? _executionRole;
-    private Pulumi.Aws.Iam.Role? _infrastructureRole;
-    private Pulumi.Aws.Iam.Role? _taskRole;
+    private Pulumi.Aws.Ecs.Service? _ecsService;
+    private Pulumi.Aws.Ecs.TaskDefinition? _ecsTaskDefinition;
+    private Pulumi.Aws.LB.LoadBalancer? _ecsLoadBalancer;
+    private Pulumi.Aws.LB.TargetGroup? _ecsTargetGroup;
+
+    /// <summary>
+    /// The VPC and subnets the service runs in. <paramref name="SubnetsDiscovered"/> records
+    /// whether the subnets were chosen by this class rather than supplied by the caller, which
+    /// decides the default for public IP assignment.
+    /// </summary>
+    private sealed record EcsNetwork(
+        Output<string> VpcId,
+        Output<ImmutableArray<string>> SubnetIds,
+        bool SubnetsDiscovered
+    );
 
     partial void BuildEcsService()
     {
-        if (_options.SubnetIds is { Length: 1 })
+        ValidateEcsConfiguration();
+
+        var (cpuUnits, memoryMebibytes) = ResolveEcsTaskSize();
+        var resourceOptions = new CustomResourceOptions { Provider = _provider };
+        var network = ResolveEcsNetwork();
+        var primaryPort = GetPrimaryPort();
+
+        var foundation = CreateEcsFoundation(
+            _options.EcsEnableExecuteCommand ? CreateEcsExecPolicyStatements() : null
+        );
+        var dependencies = new List<Resource>(foundation.Dependencies);
+
+        var taskDefinitionArgs = new Pulumi.Aws.Ecs.TaskDefinitionArgs
+        {
+            Family = Name,
+            NetworkMode = "awsvpc",
+            RequiresCompatibilities = ["FARGATE"],
+            Cpu = (cpuUnits ?? DefaultEcsCpuUnits).ToString(CultureInfo.InvariantCulture),
+            Memory = (memoryMebibytes ?? DefaultEcsMemoryMebibytes).ToString(
+                CultureInfo.InvariantCulture
+            ),
+            ExecutionRoleArn = foundation.ExecutionRole.Arn,
+            ContainerDefinitions = CreateEcsContainerDefinitions(foundation.LogGroup),
+            Tags = ToInputMap(_options.Tags),
+        };
+        if (foundation.TaskRole is { } taskRole)
+            taskDefinitionArgs.TaskRoleArn = taskRole.Arn;
+
+        _ecsTaskDefinition = new Pulumi.Aws.Ecs.TaskDefinition(
+            $"{Name}-task",
+            taskDefinitionArgs,
+            new CustomResourceOptions { Provider = _provider, DependsOn = [.. dependencies] }
+        );
+        dependencies.Add(_ecsTaskDefinition);
+
+        var loadBalancerSecurityGroup = _options.EcsCreateLoadBalancer
+            ? CreateEcsLoadBalancerSecurityGroup(network, resourceOptions)
+            : null;
+        var serviceSecurityGroups = ResolveEcsServiceSecurityGroups(
+            network,
+            loadBalancerSecurityGroup,
+            primaryPort,
+            resourceOptions,
+            dependencies
+        );
+
+        Pulumi.Aws.LB.Listener? listener = null;
+        if (_options.EcsCreateLoadBalancer && loadBalancerSecurityGroup is not null)
+        {
+            listener = CreateEcsLoadBalancer(
+                network,
+                loadBalancerSecurityGroup,
+                primaryPort,
+                resourceOptions,
+                dependencies
+            );
+        }
+
+        if (_containerImage?.Resource is { } imageResource)
+            dependencies.Add(imageResource);
+        foreach (var (secret, _) in _requiredSecrets)
+            dependencies.Add(secret.ValueResource);
+
+        var autoscales = _options.EcsEnableAutoscaling && MaxCount > MinCount;
+
+        var serviceArgs = new Pulumi.Aws.Ecs.ServiceArgs
+        {
+            Name = Name,
+            Cluster = foundation.Cluster,
+            TaskDefinition = _ecsTaskDefinition.Arn,
+            DesiredCount = MinCount,
+            LaunchType = "FARGATE",
+            EnableExecuteCommand = _options.EcsEnableExecuteCommand,
+            WaitForSteadyState = _options.WaitForSteadyState,
+            NetworkConfiguration = new Pulumi.Aws.Ecs.Inputs.ServiceNetworkConfigurationArgs
+            {
+                Subnets = network.SubnetIds,
+                SecurityGroups = serviceSecurityGroups,
+                AssignPublicIp = _options.EcsAssignPublicIp ?? network.SubnetsDiscovered,
+            },
+            Tags = ToInputMap(_options.Tags),
+        };
+
+        if (_options.EcsEnableCircuitBreaker)
+            serviceArgs.DeploymentCircuitBreaker =
+                new Pulumi.Aws.Ecs.Inputs.ServiceDeploymentCircuitBreakerArgs
+                {
+                    Enable = true,
+                    Rollback = true,
+                };
+
+        if (_ecsTargetGroup is not null)
+        {
+            serviceArgs.LoadBalancers =
+            [
+                new Pulumi.Aws.Ecs.Inputs.ServiceLoadBalancerArgs
+                {
+                    TargetGroupArn = _ecsTargetGroup.Arn,
+                    ContainerName = Name,
+                    ContainerPort = primaryPort,
+                },
+            ];
+            serviceArgs.HealthCheckGracePeriodSeconds = EcsHealthCheckGracePeriodSeconds;
+        }
+
+        var serviceOptions = new CustomResourceOptions
+        {
+            Provider = _provider,
+            DependsOn = listener is null ? [.. dependencies] : [.. dependencies, listener],
+        };
+        // Application Auto Scaling owns the desired count once a scaling policy exists, so
+        // leaving it under Pulumi's management would reset the service on every update.
+        if (autoscales)
+            serviceOptions.IgnoreChanges = ["desiredCount"];
+
+        _ecsService = new Pulumi.Aws.Ecs.Service($"{Name}-service", serviceArgs, serviceOptions);
+        dependencies.Add(_ecsService);
+
+        if (autoscales)
+            dependencies.AddRange(CreateEcsAutoscaling(foundation.ClusterName, _ecsService));
+
+        _arn = _ecsService.Arn;
+        if (_ecsLoadBalancer is not null)
+        {
+            var scheme = _options.EcsCertificateArn is null ? "http" : "https";
+            _dnsTarget = _ecsLoadBalancer.DnsName;
+            _serviceUrl = _ecsLoadBalancer.DnsName.Apply(dns =>
+                string.IsNullOrWhiteSpace(dns) ? string.Empty : $"{scheme}://{dns}"
+            );
+        }
+
+        _dependencies.AddRange(dependencies);
+    }
+
+    private void ValidateEcsConfiguration()
+    {
+        if (!_options.EcsCreateLoadBalancer)
+            return;
+
+        if (_options.SubnetIds is { Length: > 0 and < 2 })
             throw new ArgumentException(
-                "ECS Express Mode requires at least two subnet IDs when custom networking is configured.",
+                "An Application Load Balancer requires at least two subnet IDs in different availability zones. "
+                    + "Supply more subnets, or set AwsFargateOptions.EcsCreateLoadBalancer to false.",
                 nameof(_options.SubnetIds)
             );
-        if ((CpuLimit is null) != (MemoryLimit is null))
-            throw new InvalidOperationException(
-                "ECS Fargate requires CpuLimit and MemoryLimit to be set together so their task-size combination can be validated."
-            );
 
-        int? cpuUnits = CpuLimit is null ? null : ParseExpressCpu(CpuLimit);
-        int? memoryMebibytes = MemoryLimit is null ? null : ParseExpressMemory(MemoryLimit);
-        if (cpuUnits is not null && memoryMebibytes is not null)
-            ValidateExpressTaskSize(cpuUnits.Value, memoryMebibytes.Value);
-
-        var resourceOptions = new CustomResourceOptions { Provider = _provider };
-        Input<string> cluster;
-
-        if (string.IsNullOrWhiteSpace(_options.ClusterName))
-        {
-            _ecsCluster = new Pulumi.Aws.Ecs.Cluster(
-                $"{Name}-cluster",
-                new Pulumi.Aws.Ecs.ClusterArgs
-                {
-                    Name = $"{Name}-cluster",
-                    Tags = ToInputMap(_options.Tags),
-                },
-                resourceOptions
-            );
-            cluster = _ecsCluster.Arn;
-            _dependencies.Add(_ecsCluster);
-        }
-        else
-        {
-            cluster = _options.ClusterName;
-        }
-
-        var executionPolicyStatements = new List<IPolicyStatement>();
-        executionPolicyStatements.AddRange(
-            ContainerRegistry.GetPolicy(
-                ContainerRegistryPermissions.Pull,
-                ContainerRegistryPermissions.GetAuthToken
-            )
-        );
-        foreach (var secret in RequiredSecrets)
-            executionPolicyStatements.AddRange(secret.GetPolicy(SecretPermissions.Read));
-
-        _executionRole = CreateRole($"{Name}-execution-role", "ecs-tasks.amazonaws.com");
-        var executionAttachment = new Pulumi.Aws.Iam.RolePolicyAttachment(
-            $"{Name}-execution-managed-policy",
-            new Pulumi.Aws.Iam.RolePolicyAttachmentArgs
-            {
-                Role = _executionRole.Name,
-                PolicyArn = EcsTaskExecutionPolicyArn,
-            },
-            resourceOptions
-        );
-
-        Pulumi.Aws.Iam.RolePolicy? executionPolicy = null;
-        if (executionPolicyStatements.Count > 0)
-        {
-            executionPolicy = new Pulumi.Aws.Iam.RolePolicy(
-                $"{Name}-execution-policy",
-                new Pulumi.Aws.Iam.RolePolicyArgs
-                {
-                    Role = _executionRole.Name,
-                    Policy = CreatePolicyDocument(executionPolicyStatements),
-                },
-                resourceOptions
-            );
-        }
-
-        _infrastructureRole = CreateRole($"{Name}-infrastructure-role", "ecs.amazonaws.com");
-        var infrastructureAttachment = new Pulumi.Aws.Iam.RolePolicyAttachment(
-            $"{Name}-infrastructure-managed-policy",
-            new Pulumi.Aws.Iam.RolePolicyAttachmentArgs
-            {
-                Role = _infrastructureRole.Name,
-                PolicyArn = EcsExpressInfrastructurePolicyArn,
-            },
-            resourceOptions
-        );
-
-        Pulumi.Aws.Iam.RolePolicy? taskPolicy = null;
-        if (_customPolicyStatements.Count > 0)
-        {
-            _taskRole = CreateRole($"{Name}-task-role", "ecs-tasks.amazonaws.com");
-            taskPolicy = new Pulumi.Aws.Iam.RolePolicy(
-                $"{Name}-task-policy",
-                new Pulumi.Aws.Iam.RolePolicyArgs
-                {
-                    Role = _taskRole.Name,
-                    Policy = CreatePolicyDocument(_customPolicyStatements),
-                },
-                resourceOptions
-            );
-        }
-
-        var logGroup = new Pulumi.Aws.CloudWatch.LogGroup(
-            $"{Name}-logs",
-            new Pulumi.Aws.CloudWatch.LogGroupArgs
-            {
-                Name = $"/aws/ecs/{Name}",
-                RetentionInDays = 30,
-                Tags = ToInputMap(_options.Tags),
-            },
-            resourceOptions
-        );
-
-        var primaryContainer = CreateEcsPrimaryContainer(logGroup);
-        var serviceArgs = new Pulumi.Aws.Ecs.ExpressGatewayServiceArgs
-        {
-            Cluster = cluster,
-            ExecutionRoleArn = _executionRole.Arn,
-            InfrastructureRoleArn = _infrastructureRole.Arn,
-            PrimaryContainer = primaryContainer,
-            ServiceName = Name,
-            HealthCheckPath = NormalizeHealthPath(HealthCheckConfiguration?.Path),
-            ScalingTargets =
-            [
-                new Pulumi.Aws.Ecs.Inputs.ExpressGatewayServiceScalingTargetArgs
-                {
-                    AutoScalingMetric = "AVERAGE_CPU",
-                    AutoScalingTargetValue = 60,
-                    MinTaskCount = MinCount,
-                    MaxTaskCount = MaxCount,
-                },
-            ],
-            Tags = ToInputMap(_options.Tags),
-            WaitForSteadyState = _options.WaitForSteadyState,
-        };
-
-        if (_taskRole is not null)
-            serviceArgs.TaskRoleArn = _taskRole.Arn;
-        if (cpuUnits is { } resolvedCpuUnits)
-            serviceArgs.Cpu = resolvedCpuUnits.ToString(CultureInfo.InvariantCulture);
-        if (memoryMebibytes is { } resolvedMemoryMebibytes)
-            serviceArgs.Memory = resolvedMemoryMebibytes.ToString(CultureInfo.InvariantCulture);
-        if (_options.SubnetIds is { Length: > 0 } || _options.SecurityGroupIds is { Length: > 0 })
-        {
-            var networkConfiguration =
-                new Pulumi.Aws.Ecs.Inputs.ExpressGatewayServiceNetworkConfigurationArgs();
-            if (_options.SubnetIds is { Length: > 0 })
-                networkConfiguration.Subnets = _options.SubnetIds;
-            if (_options.SecurityGroupIds is { Length: > 0 })
-                networkConfiguration.SecurityGroups = _options.SecurityGroupIds;
-            serviceArgs.NetworkConfigurations = [networkConfiguration];
-        }
-
-        var serviceDependencies = new List<Resource>
-        {
-            executionAttachment,
-            infrastructureAttachment,
-            logGroup,
-        };
-        if (executionPolicy is not null)
-            serviceDependencies.Add(executionPolicy);
-        if (taskPolicy is not null)
-            serviceDependencies.Add(taskPolicy);
-        if (_containerImage?.Resource is { } imageResource)
-            serviceDependencies.Add(imageResource);
-        foreach (var (secret, _) in _requiredSecrets)
-            serviceDependencies.Add(secret.ValueResource);
-
-        _ecsService = new Pulumi.Aws.Ecs.ExpressGatewayService(
-            $"{Name}-service",
-            serviceArgs,
-            new CustomResourceOptions
-            {
-                Provider = _provider,
-                DependsOn = serviceDependencies,
-            }
-        );
-
-        _arn = _ecsService.ServiceArn;
-        var endpoint = _ecsService.IngressPaths.Apply(paths =>
-            paths.FirstOrDefault(path =>
-                    string.Equals(path.AccessType, "PUBLIC", StringComparison.OrdinalIgnoreCase)
-                )?.Endpoint
-                ?? paths.FirstOrDefault()?.Endpoint
-                ?? string.Empty
-        );
-        _serviceUrl = endpoint.Apply(EnsureUrlScheme);
-        _dnsTarget = endpoint.Apply(GetDnsTarget);
-
-        _dependencies.AddRange(serviceDependencies);
-        _dependencies.Add(_executionRole);
-        _dependencies.Add(_infrastructureRole);
-        if (_taskRole is not null)
-            _dependencies.Add(_taskRole);
-        _dependencies.Add(_ecsService);
-    }
-
-    private Pulumi.Aws.Ecs.Inputs.ExpressGatewayServicePrimaryContainerArgs CreateEcsPrimaryContainer(
-        Pulumi.Aws.CloudWatch.LogGroup logGroup
-    )
-    {
-        var containerPort = GetEcsPrimaryPort();
-        var environments = new List<
-            Pulumi.Aws.Ecs.Inputs.ExpressGatewayServicePrimaryContainerEnvironmentArgs
-        >();
-        foreach (var (name, value) in _environmentVariables)
-            environments.Add(new() { Name = name, Value = value });
-        foreach (var (name, value) in _environmentVariablesOutput)
-            environments.Add(new() { Name = name, Value = value });
-
-        var secrets = _requiredSecrets
-            .Select(item =>
-                new Pulumi.Aws.Ecs.Inputs.ExpressGatewayServicePrimaryContainerSecretArgs
-                {
-                    Name = GetSecretEnvironmentVariableName(item),
-                    ValueFrom = item.Secret.Arn,
-                }
-            )
-            .ToList();
-
-        return new Pulumi.Aws.Ecs.Inputs.ExpressGatewayServicePrimaryContainerArgs
-        {
-            Image = GetContainerImageUri(),
-            ContainerPort = containerPort,
-            Environments = environments,
-            Secrets = secrets,
-            AwsLogsConfigurations =
-            [
-                new Pulumi.Aws.Ecs.Inputs.ExpressGatewayServicePrimaryContainerAwsLogsConfigurationArgs
-                {
-                    LogGroup = logGroup.Name,
-                    LogStreamPrefix = Name,
-                },
-            ],
-        };
-    }
-
-    partial void AddEcsPolicy(List<IPolicyStatement> statements, ComputePermissions permission)
-    {
-        switch (permission)
-        {
-            case ComputePermissions.GetStatus:
-                AddEcsPolicyStatement(statements, "ecs:DescribeExpressGatewayService");
-                break;
-            case ComputePermissions.Start:
-            case ComputePermissions.Stop:
-            case ComputePermissions.Restart:
-            case ComputePermissions.Scale:
-                AddEcsPolicyStatement(statements, "ecs:UpdateExpressGatewayService");
-                break;
-            case ComputePermissions.Terminate:
-                AddEcsPolicyStatement(statements, "ecs:DeleteExpressGatewayService");
-                break;
-            case ComputePermissions.Connect:
-                // Express Gateway services do not expose ECS Exec enablement.
-                break;
-            case ComputePermissions.UpdateConfiguration:
-                AddEcsPolicyStatement(statements, "ecs:UpdateExpressGatewayService");
-                break;
-            case ComputePermissions.GetLogs:
-                statements.Add(
-                    new AwsPolicyStatement
-                    {
-                        Effect = "Allow",
-                        Actions = ["logs:GetLogEvents", "logs:DescribeLogStreams"],
-                        Resources =
-                        [
-                            Output.Create($"arn:aws:logs:*:*:log-group:/aws/ecs/{Name}:*"),
-                        ],
-                    }
-                );
-                break;
-        }
-    }
-
-    /// <summary>
-    /// Resolves the primary container port, rejecting protocols that ECS Express Mode
-    /// cannot expose. Kubernetes accepts UDP and SCTP, so this restriction is ECS-only.
-    /// </summary>
-    private int GetEcsPrimaryPort()
-    {
         var protocol = PortForwardings.FirstOrDefault().Protocol;
         if (
             !string.IsNullOrWhiteSpace(protocol)
             && !string.Equals(protocol, "TCP", StringComparison.OrdinalIgnoreCase)
         )
             throw new InvalidOperationException(
-                "ECS Express Mode supports TCP/HTTP ingress for the primary container port."
+                $"An Application Load Balancer cannot forward to the '{protocol}' primary container port. "
+                    + "Use a TCP port, or set AwsFargateOptions.EcsCreateLoadBalancer to false."
             );
 
-        return GetPrimaryPort();
+        if (
+            HealthCheckConfiguration is { } healthCheck
+            && healthCheck.TimeoutSeconds >= healthCheck.IntervalSeconds
+        )
+            throw new InvalidOperationException(
+                $"The load balancer health check timeout ({healthCheck.TimeoutSeconds}s) must be less than "
+                    + $"its interval ({healthCheck.IntervalSeconds}s)."
+            );
     }
 
-    private void AddEcsPolicyStatement(
-        List<IPolicyStatement> statements,
-        params string[] actions
-    ) =>
-        statements.Add(
+    private EcsNetwork ResolveEcsNetwork()
+    {
+        var invokeOptions = new InvokeOutputOptions { Provider = _provider };
+
+        if (_options.SubnetIds is { Length: > 0 } configuredSubnets)
+        {
+            var subnetVpcId = _options.VpcId is { } explicitVpcId
+                ? Output.Create(explicitVpcId)
+                : Pulumi
+                    .Aws.Ec2.GetSubnet.Invoke(
+                        new Pulumi.Aws.Ec2.GetSubnetInvokeArgs { Id = configuredSubnets[0] },
+                        invokeOptions
+                    )
+                    .Apply(subnet => subnet.VpcId);
+
+            return new EcsNetwork(
+                subnetVpcId,
+                Output.Create(configuredSubnets.ToImmutableArray()),
+                SubnetsDiscovered: false
+            );
+        }
+
+        var vpcId = _options.VpcId is { } configuredVpcId
+            ? Output.Create(configuredVpcId)
+            : Pulumi
+                .Aws.Ec2.GetVpc.Invoke(
+                    new Pulumi.Aws.Ec2.GetVpcInvokeArgs { Default = true },
+                    invokeOptions
+                )
+                .Apply(vpc => vpc.Id);
+
+        var subnetIds = Pulumi
+            .Aws.Ec2.GetSubnets.Invoke(
+                new Pulumi.Aws.Ec2.GetSubnetsInvokeArgs
+                {
+                    Filters =
+                    [
+                        new Pulumi.Aws.Ec2.Inputs.GetSubnetsFilterInputArgs
+                        {
+                            Name = "vpc-id",
+                            Values = new InputList<string> { vpcId },
+                        },
+                    ],
+                },
+                invokeOptions
+            )
+            .Apply(subnets => subnets.Ids);
+
+        return new EcsNetwork(vpcId, subnetIds, SubnetsDiscovered: true);
+    }
+
+    private Pulumi.Aws.Ec2.SecurityGroup CreateEcsLoadBalancerSecurityGroup(
+        EcsNetwork network,
+        CustomResourceOptions resourceOptions
+    )
+    {
+        var ingress = new List<Pulumi.Aws.Ec2.Inputs.SecurityGroupIngressArgs>
+        {
+            new()
+            {
+                Protocol = "tcp",
+                FromPort = 80,
+                ToPort = 80,
+                CidrBlocks = ["0.0.0.0/0"],
+                Description = "HTTP from the internet",
+            },
+        };
+        if (_options.EcsCertificateArn is not null)
+            ingress.Add(
+                new Pulumi.Aws.Ec2.Inputs.SecurityGroupIngressArgs
+                {
+                    Protocol = "tcp",
+                    FromPort = 443,
+                    ToPort = 443,
+                    CidrBlocks = ["0.0.0.0/0"],
+                    Description = "HTTPS from the internet",
+                }
+            );
+
+        return new Pulumi.Aws.Ec2.SecurityGroup(
+            $"{Name}-lb-sg",
+            new Pulumi.Aws.Ec2.SecurityGroupArgs
+            {
+                VpcId = network.VpcId,
+                Description = $"Load balancer ingress for {Name}",
+                Ingress = ingress,
+                Egress =
+                [
+                    new Pulumi.Aws.Ec2.Inputs.SecurityGroupEgressArgs
+                    {
+                        Protocol = "-1",
+                        FromPort = 0,
+                        ToPort = 0,
+                        CidrBlocks = ["0.0.0.0/0"],
+                        Description = "Allow all outbound",
+                    },
+                ],
+                Tags = ToInputMap(_options.Tags),
+            },
+            resourceOptions
+        );
+    }
+
+    /// <summary>
+    /// Returns the security groups attached to the service's tasks. Caller-supplied groups are
+    /// used as-is: they belong to the caller, so this does not add ingress rules to them and the
+    /// caller is responsible for allowing traffic from the load balancer.
+    /// </summary>
+    private InputList<string> ResolveEcsServiceSecurityGroups(
+        EcsNetwork network,
+        Pulumi.Aws.Ec2.SecurityGroup? loadBalancerSecurityGroup,
+        int primaryPort,
+        CustomResourceOptions resourceOptions,
+        List<Resource> dependencies
+    )
+    {
+        if (_options.SecurityGroupIds is { Length: > 0 } configuredSecurityGroups)
+            return configuredSecurityGroups;
+
+        var ingress = new List<Pulumi.Aws.Ec2.Inputs.SecurityGroupIngressArgs>();
+        if (loadBalancerSecurityGroup is not null)
+            ingress.Add(
+                new Pulumi.Aws.Ec2.Inputs.SecurityGroupIngressArgs
+                {
+                    Protocol = "tcp",
+                    FromPort = primaryPort,
+                    ToPort = primaryPort,
+                    SecurityGroups = [loadBalancerSecurityGroup.Id],
+                    Description = "Load balancer to task",
+                }
+            );
+
+        var securityGroup = new Pulumi.Aws.Ec2.SecurityGroup(
+            $"{Name}-service-sg",
+            new Pulumi.Aws.Ec2.SecurityGroupArgs
+            {
+                VpcId = network.VpcId,
+                Description = $"Task networking for {Name}",
+                Ingress = ingress,
+                Egress =
+                [
+                    new Pulumi.Aws.Ec2.Inputs.SecurityGroupEgressArgs
+                    {
+                        Protocol = "-1",
+                        FromPort = 0,
+                        ToPort = 0,
+                        CidrBlocks = ["0.0.0.0/0"],
+                        Description = "Allow all outbound",
+                    },
+                ],
+                Tags = ToInputMap(_options.Tags),
+            },
+            resourceOptions
+        );
+        dependencies.Add(securityGroup);
+
+        return new InputList<string> { securityGroup.Id };
+    }
+
+    /// <summary>
+    /// Creates the load balancer, target group, and listeners, returning the listener the
+    /// service must wait for before registering targets.
+    /// </summary>
+    private Pulumi.Aws.LB.Listener CreateEcsLoadBalancer(
+        EcsNetwork network,
+        Pulumi.Aws.Ec2.SecurityGroup loadBalancerSecurityGroup,
+        int primaryPort,
+        CustomResourceOptions resourceOptions,
+        List<Resource> dependencies
+    )
+    {
+        _ecsLoadBalancer = new Pulumi.Aws.LB.LoadBalancer(
+            $"{Name}-alb",
+            new Pulumi.Aws.LB.LoadBalancerArgs
+            {
+                LoadBalancerType = "application",
+                Internal = _options.EcsInternalLoadBalancer,
+                SecurityGroups = [loadBalancerSecurityGroup.Id],
+                Subnets = network.SubnetIds,
+                Tags = ToInputMap(_options.Tags),
+            },
+            resourceOptions
+        );
+        dependencies.Add(loadBalancerSecurityGroup);
+        dependencies.Add(_ecsLoadBalancer);
+
+        _ecsTargetGroup = new Pulumi.Aws.LB.TargetGroup(
+            $"{Name}-tg",
+            new Pulumi.Aws.LB.TargetGroupArgs
+            {
+                Port = primaryPort,
+                Protocol = "HTTP",
+                TargetType = "ip",
+                VpcId = network.VpcId,
+                HealthCheck = new Pulumi.Aws.LB.Inputs.TargetGroupHealthCheckArgs
+                {
+                    Enabled = true,
+                    Path = NormalizeHealthPath(HealthCheckConfiguration?.Path),
+                    Protocol = "HTTP",
+                    Matcher = "200-399",
+                    Interval = HealthCheckConfiguration?.IntervalSeconds ?? 30,
+                    Timeout = HealthCheckConfiguration?.TimeoutSeconds ?? 5,
+                    HealthyThreshold = HealthCheckConfiguration?.HealthyThreshold ?? 3,
+                    UnhealthyThreshold = HealthCheckConfiguration?.UnhealthyThreshold ?? 3,
+                },
+                Tags = ToInputMap(_options.Tags),
+            },
+            resourceOptions
+        );
+        dependencies.Add(_ecsTargetGroup);
+
+        var forward = new Pulumi.Aws.LB.Inputs.ListenerDefaultActionArgs
+        {
+            Type = "forward",
+            TargetGroupArn = _ecsTargetGroup.Arn,
+        };
+
+        if (_options.EcsCertificateArn is not { } certificateArn)
+        {
+            return new Pulumi.Aws.LB.Listener(
+                $"{Name}-listener",
+                new Pulumi.Aws.LB.ListenerArgs
+                {
+                    LoadBalancerArn = _ecsLoadBalancer.Arn,
+                    Port = 80,
+                    Protocol = "HTTP",
+                    DefaultActions = [forward],
+                    Tags = ToInputMap(_options.Tags),
+                },
+                resourceOptions
+            );
+        }
+
+        var httpsListener = new Pulumi.Aws.LB.Listener(
+            $"{Name}-https-listener",
+            new Pulumi.Aws.LB.ListenerArgs
+            {
+                LoadBalancerArn = _ecsLoadBalancer.Arn,
+                Port = 443,
+                Protocol = "HTTPS",
+                CertificateArn = certificateArn,
+                DefaultActions = [forward],
+                Tags = ToInputMap(_options.Tags),
+            },
+            resourceOptions
+        );
+
+        dependencies.Add(
+            new Pulumi.Aws.LB.Listener(
+                $"{Name}-listener",
+                new Pulumi.Aws.LB.ListenerArgs
+                {
+                    LoadBalancerArn = _ecsLoadBalancer.Arn,
+                    Port = 80,
+                    Protocol = "HTTP",
+                    DefaultActions =
+                    [
+                        new Pulumi.Aws.LB.Inputs.ListenerDefaultActionArgs
+                        {
+                            Type = "redirect",
+                            Redirect =
+                                new Pulumi.Aws.LB.Inputs.ListenerDefaultActionRedirectArgs
+                                {
+                                    Port = "443",
+                                    Protocol = "HTTPS",
+                                    StatusCode = "HTTP_301",
+                                },
+                        },
+                    ],
+                    Tags = ToInputMap(_options.Tags),
+                },
+                resourceOptions
+            )
+        );
+
+        return httpsListener;
+    }
+
+    private List<Resource> CreateEcsAutoscaling(
+        Output<string> clusterName,
+        Pulumi.Aws.Ecs.Service service
+    )
+    {
+        var resourceOptions = new CustomResourceOptions
+        {
+            Provider = _provider,
+            DependsOn = [service],
+        };
+
+        var target = new Pulumi.Aws.AppAutoScaling.Target(
+            $"{Name}-autoscaling-target",
+            new Pulumi.Aws.AppAutoScaling.TargetArgs
+            {
+                MinCapacity = MinCount,
+                MaxCapacity = MaxCount,
+                ResourceId = Output
+                    .Tuple(clusterName, service.Name)
+                    .Apply(names => $"service/{names.Item1}/{names.Item2}"),
+                ScalableDimension = "ecs:service:DesiredCount",
+                ServiceNamespace = "ecs",
+            },
+            resourceOptions
+        );
+
+        var policy = new Pulumi.Aws.AppAutoScaling.Policy(
+            $"{Name}-autoscaling-policy",
+            new Pulumi.Aws.AppAutoScaling.PolicyArgs
+            {
+                PolicyType = "TargetTrackingScaling",
+                ResourceId = target.ResourceId,
+                ScalableDimension = target.ScalableDimension,
+                ServiceNamespace = target.ServiceNamespace,
+                TargetTrackingScalingPolicyConfiguration =
+                    new Pulumi.Aws.AppAutoScaling.Inputs.PolicyTargetTrackingScalingPolicyConfigurationArgs
+                    {
+                        TargetValue = 60,
+                        PredefinedMetricSpecification =
+                            new Pulumi.Aws.AppAutoScaling.Inputs.PolicyTargetTrackingScalingPolicyConfigurationPredefinedMetricSpecificationArgs
+                            {
+                                PredefinedMetricType = "ECSServiceAverageCPUUtilization",
+                            },
+                    },
+            },
+            new CustomResourceOptions { Provider = _provider, DependsOn = [target] }
+        );
+
+        return [target, policy];
+    }
+
+    /// <summary>
+    /// Renders the task's container definitions. Image, log group, output-valued environment
+    /// variables, and secret ARNs are all unresolved at construction time, so they are gathered
+    /// into one <see cref="Output"/> and read back positionally once resolved.
+    /// </summary>
+    private Output<string> CreateEcsContainerDefinitions(
+        Pulumi.Aws.CloudWatch.LogGroup logGroup
+    )
+    {
+        var region = Pulumi
+            .Aws.GetRegion.Invoke(
+                new Pulumi.Aws.GetRegionInvokeArgs(),
+                new InvokeOutputOptions { Provider = _provider }
+            )
+            .Apply(result => result.Region);
+
+        var outputEnvironment = _environmentVariablesOutput.ToList();
+        var secretItems = _requiredSecrets.ToList();
+
+        var unresolved = new List<Output<string>>
+        {
+            GetContainerImageUri(),
+            logGroup.Name,
+            region,
+        };
+        unresolved.AddRange(outputEnvironment.Select(item => item.Value));
+        unresolved.AddRange(secretItems.Select(item => item.Secret.Arn));
+
+        return Output.All([.. unresolved]).Apply(resolved =>
+        {
+            var index = 0;
+            var image = resolved[index++];
+            var logGroupName = resolved[index++];
+            var regionName = resolved[index++];
+
+            var environment = new List<object>();
+            foreach (var (name, value) in _environmentVariables)
+                environment.Add(new { name, value });
+            foreach (var (name, _) in outputEnvironment)
+                environment.Add(new { name, value = resolved[index++] });
+
+            // Read eagerly: every value below is positional, so a deferred LINQ pipeline would
+            // advance the shared index out of order.
+            var secrets = new List<object>();
+            foreach (var item in secretItems)
+                secrets.Add(
+                    new
+                    {
+                        name = GetSecretEnvironmentVariableName(item),
+                        valueFrom = resolved[index++],
+                    }
+                );
+
+            var portMappings = PortForwardings
+                .Select(
+                    (port, position) =>
+                        new
+                        {
+                            name = position == 0 ? "http" : $"port-{position + 1}",
+                            containerPort = port.ContainerPort,
+                            protocol = NormalizeEcsProtocol(port.Protocol),
+                        }
+                )
+                .ToList();
+
+            var container = new Dictionary<string, object?>
+            {
+                ["name"] = Name,
+                ["image"] = image,
+                ["essential"] = true,
+                ["portMappings"] = portMappings,
+                ["environment"] = environment,
+                ["secrets"] = secrets,
+                ["logConfiguration"] = new
+                {
+                    logDriver = "awslogs",
+                    options = new Dictionary<string, string>
+                    {
+                        ["awslogs-group"] = logGroupName,
+                        ["awslogs-region"] = regionName,
+                        ["awslogs-stream-prefix"] = Name,
+                    },
+                },
+            };
+
+            return JsonSerializer.Serialize(new[] { container });
+        });
+    }
+
+    private static string NormalizeEcsProtocol(string? protocol)
+    {
+        var normalized = string.IsNullOrWhiteSpace(protocol) ? "tcp" : protocol.ToLowerInvariant();
+        if (normalized is not ("tcp" or "udp"))
+            throw new InvalidOperationException(
+                $"ECS port mappings support the tcp and udp protocols, not '{protocol}'."
+            );
+        return normalized;
+    }
+
+    /// <summary>
+    /// The channel permissions the ECS Exec agent needs on the task role. Without these the
+    /// service still runs, but every exec session fails to connect.
+    /// </summary>
+    private static List<IPolicyStatement> CreateEcsExecPolicyStatements() =>
+        [
             new AwsPolicyStatement
             {
                 Effect = "Allow",
-                Actions = actions,
-                Resources = [Arn],
-            }
-        );
+                Actions =
+                [
+                    "ssmmessages:CreateControlChannel",
+                    "ssmmessages:CreateDataChannel",
+                    "ssmmessages:OpenControlChannel",
+                    "ssmmessages:OpenDataChannel",
+                ],
+                Resources = [Output.Create("*")],
+            },
+        ];
 
-    private static string EnsureUrlScheme(string endpoint)
+    partial void AddEcsPolicy(List<IPolicyStatement> statements, ComputePermissions permission)
     {
-        if (string.IsNullOrWhiteSpace(endpoint))
-            return string.Empty;
-        return endpoint.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
-            || endpoint.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
-            ? endpoint.TrimEnd('/')
-            : $"https://{endpoint.TrimEnd('/')}";
-    }
-
-    private static string GetDnsTarget(string endpoint)
-    {
-        if (string.IsNullOrWhiteSpace(endpoint))
-            return string.Empty;
-        var url = EnsureUrlScheme(endpoint);
-        return Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Host : endpoint;
-    }
-
-    private static int ParseExpressCpu(string cpuLimit)
-    {
-        if (
-            !decimal.TryParse(
-                cpuLimit,
-                NumberStyles.Number,
-                CultureInfo.InvariantCulture,
-                out var vCpu
-            )
-        )
-            throw new InvalidOperationException($"Invalid CPU limit '{cpuLimit}'.");
-
-        var exactUnits = vCpu * 1024;
-        if (exactUnits != decimal.Truncate(exactUnits))
-            throw new InvalidOperationException(
-                $"CPU limit '{cpuLimit}' does not resolve to a whole number of CPU units."
-            );
-        var units = checked((int)exactUnits);
-        if (units is not (256 or 512 or 1024 or 2048 or 4096 or 8192 or 16384 or 32768))
-            throw new InvalidOperationException(
-                "ECS Fargate CPU must be 0.25, 0.5, 1, 2, 4, 8, 16, or 32 vCPU."
-            );
-        return units;
-    }
-
-    private static int ParseExpressMemory(string memoryLimit)
-    {
-        var value = memoryLimit.Trim();
-        decimal multiplier = 1;
-        if (value.EndsWith("Gi", StringComparison.OrdinalIgnoreCase))
+        switch (permission)
         {
-            multiplier = 1024;
-            value = value[..^2];
+            case ComputePermissions.GetStatus:
+                AddServiceArnPolicyStatement(statements, "ecs:DescribeServices");
+                break;
+            case ComputePermissions.Start:
+            case ComputePermissions.Stop:
+            case ComputePermissions.Restart:
+            case ComputePermissions.Scale:
+            case ComputePermissions.UpdateConfiguration:
+                AddServiceArnPolicyStatement(statements, "ecs:UpdateService");
+                break;
+            case ComputePermissions.Terminate:
+                AddServiceArnPolicyStatement(statements, "ecs:DeleteService");
+                break;
+            case ComputePermissions.Connect:
+                AddServiceArnPolicyStatement(statements, "ecs:ExecuteCommand");
+                break;
+            case ComputePermissions.GetLogs:
+                statements.Add(CreateEcsLogsPolicyStatement());
+                break;
         }
-        else if (value.EndsWith("Mi", StringComparison.OrdinalIgnoreCase))
-        {
-            value = value[..^2];
-        }
-        else if (value.EndsWith("GB", StringComparison.OrdinalIgnoreCase))
-        {
-            multiplier = 1024;
-            value = value[..^2];
-        }
-        else if (value.EndsWith("MB", StringComparison.OrdinalIgnoreCase))
-        {
-            value = value[..^2];
-        }
-
-        if (
-            !decimal.TryParse(
-                value,
-                NumberStyles.Number,
-                CultureInfo.InvariantCulture,
-                out var amount
-            )
-        )
-            throw new InvalidOperationException($"Invalid memory limit '{memoryLimit}'.");
-
-        var exactMebibytes = amount * multiplier;
-        if (exactMebibytes != decimal.Truncate(exactMebibytes))
-            throw new InvalidOperationException(
-                $"Memory limit '{memoryLimit}' does not resolve to a whole number of MiB."
-            );
-        var mebibytes = checked((int)exactMebibytes);
-        if (mebibytes is < 512 or > 249856)
-            throw new InvalidOperationException(
-                "ECS Fargate memory must be between 512Mi and 244Gi."
-            );
-        return mebibytes;
-    }
-
-    private static void ValidateExpressTaskSize(int cpuUnits, int memoryMebibytes)
-    {
-        var valid = cpuUnits switch
-        {
-            256 => memoryMebibytes is 512 or 1024 or 2048,
-            512 => memoryMebibytes is >= 1024 and <= 4096 && memoryMebibytes % 1024 == 0,
-            1024 => memoryMebibytes is >= 2048 and <= 8192 && memoryMebibytes % 1024 == 0,
-            2048 => memoryMebibytes is >= 4096 and <= 16384 && memoryMebibytes % 1024 == 0,
-            4096 => memoryMebibytes is >= 8192 and <= 30720 && memoryMebibytes % 1024 == 0,
-            8192 => memoryMebibytes is >= 16384 and <= 61440 && memoryMebibytes % 4096 == 0,
-            16384 => memoryMebibytes is >= 32768 and <= 122880 && memoryMebibytes % 8192 == 0,
-            32768 => memoryMebibytes is 61440 or 122880 or 249856,
-            _ => false,
-        };
-
-        if (!valid)
-            throw new InvalidOperationException(
-                $"The ECS Fargate task size {cpuUnits / 1024m:0.##} vCPU / "
-                    + $"{memoryMebibytes}Mi is not a supported CPU and memory combination."
-            );
     }
 }
