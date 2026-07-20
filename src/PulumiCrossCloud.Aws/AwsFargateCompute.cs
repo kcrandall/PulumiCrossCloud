@@ -76,6 +76,13 @@ public partial class AwsFargateCompute : ICompute
         _containerImage = containerImage;
         _options = options ?? new AwsFargateOptions();
         _provider = provider;
+
+        if (!Enum.IsDefined(_options.Backend))
+            throw new ArgumentOutOfRangeException(
+                nameof(options),
+                _options.Backend,
+                "Unsupported AWS Fargate backend."
+            );
     }
 
     public string Name { get; }
@@ -159,12 +166,6 @@ public partial class AwsFargateCompute : ICompute
             case AwsFargateBackend.Eks:
                 BuildEksService();
                 break;
-            default:
-                throw new ArgumentOutOfRangeException(
-                    nameof(_options.Backend),
-                    _options.Backend,
-                    "Unsupported AWS Fargate backend."
-                );
         }
 
         _built = true;
@@ -179,10 +180,15 @@ public partial class AwsFargateCompute : ICompute
         var statements = new List<IPolicyStatement>();
         foreach (var permission in permissions)
         {
-            if (_options.Backend == AwsFargateBackend.Eks)
-                AddEksPolicy(statements, permission);
-            else
-                AddEcsPolicy(statements, permission);
+            switch (_options.Backend)
+            {
+                case AwsFargateBackend.Ecs:
+                    AddEcsPolicy(statements, permission);
+                    break;
+                case AwsFargateBackend.Eks:
+                    AddEksPolicy(statements, permission);
+                    break;
+            }
         }
 
         return statements;
@@ -331,17 +337,7 @@ public partial class AwsFargateCompute : ICompute
     private int GetPrimaryPort()
     {
         var forwarding = PortForwardings.FirstOrDefault();
-        if (forwarding.ContainerPort == 0)
-            return 8080;
-        if (
-            !string.IsNullOrWhiteSpace(forwarding.Protocol)
-            && !string.Equals(forwarding.Protocol, "TCP", StringComparison.OrdinalIgnoreCase)
-        )
-            throw new InvalidOperationException(
-                "ECS Express Mode supports TCP/HTTP ingress for the primary container port."
-            );
-
-        return forwarding.ContainerPort;
+        return forwarding.ContainerPort == 0 ? 8080 : forwarding.ContainerPort;
     }
 
     private static string GetSecretEnvironmentVariableName(

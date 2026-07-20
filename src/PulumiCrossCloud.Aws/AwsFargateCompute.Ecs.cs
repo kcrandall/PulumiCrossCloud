@@ -216,7 +216,7 @@ public partial class AwsFargateCompute
         Pulumi.Aws.CloudWatch.LogGroup logGroup
     )
     {
-        var containerPort = GetPrimaryPort();
+        var containerPort = GetEcsPrimaryPort();
         var environments = new List<
             Pulumi.Aws.Ecs.Inputs.ExpressGatewayServicePrimaryContainerEnvironmentArgs
         >();
@@ -288,6 +288,24 @@ public partial class AwsFargateCompute
                 );
                 break;
         }
+    }
+
+    /// <summary>
+    /// Resolves the primary container port, rejecting protocols that ECS Express Mode
+    /// cannot expose. Kubernetes accepts UDP and SCTP, so this restriction is ECS-only.
+    /// </summary>
+    private int GetEcsPrimaryPort()
+    {
+        var protocol = PortForwardings.FirstOrDefault().Protocol;
+        if (
+            !string.IsNullOrWhiteSpace(protocol)
+            && !string.Equals(protocol, "TCP", StringComparison.OrdinalIgnoreCase)
+        )
+            throw new InvalidOperationException(
+                "ECS Express Mode supports TCP/HTTP ingress for the primary container port."
+            );
+
+        return GetPrimaryPort();
     }
 
     private void AddEcsPolicyStatement(
