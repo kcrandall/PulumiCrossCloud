@@ -79,7 +79,7 @@ public abstract class CloudResourceFactory
         );
 
     /// <summary>
-    /// Creates a compute resource (e.g., Cloud Run, App Runner). See implementation for details.
+    /// Creates a compute resource (e.g., Cloud Run, Fargate). See implementation for details.
     /// Default implementation throws NotSupportedException.
     /// </summary>
     /// <param name="name">The name of the compute resource.</param>
@@ -96,6 +96,20 @@ public abstract class CloudResourceFactory
         string imageTag = "latest",
         IContainerImage? containerImage = null,
         ComputeServiceType? serviceType = null
+    ) => CreateComputeCore(name, registry, imageName, imageTag, containerImage, serviceType);
+
+    /// <summary>
+    /// Creates a compute resource for factories that use the cloud-agnostic API.
+    /// Generic factory implementations override this method to bridge the cloud-agnostic API
+    /// to their strongly typed provider options overload.
+    /// </summary>
+    protected virtual ICompute CreateComputeCore(
+        string name,
+        IContainerRegistry registry,
+        string? imageName,
+        string imageTag,
+        IContainerImage? containerImage,
+        ComputeServiceType? serviceType
     ) =>
         throw new NotSupportedException(
             $"Compute resources are not supported for provider {_provider}."
@@ -229,5 +243,64 @@ public abstract class CloudResourceFactory
     ) =>
         throw new NotSupportedException(
             $"Search databases are not supported for provider {_provider}."
+        );
+}
+
+/// <summary>
+/// Abstract factory for cloud providers whose compute implementation accepts strongly typed,
+/// provider-specific options.
+/// </summary>
+/// <typeparam name="TComputeProviderOptions">
+/// The provider-specific options accepted by <see cref="CreateCompute"/>.
+/// </typeparam>
+public abstract class CloudResourceFactory<TComputeProviderOptions>
+    : CloudResourceFactory,
+        IComputeFactory<TComputeProviderOptions>
+    where TComputeProviderOptions : class, IComputeProviderOptions
+{
+    /// <summary>
+    /// Initializes the factory for a specific cloud provider.
+    /// </summary>
+    /// <param name="provider">The cloud provider.</param>
+    protected CloudResourceFactory(CloudProvider provider)
+        : base(provider) { }
+
+    /// <summary>
+    /// Creates a compute resource with optional, strongly typed provider-specific options.
+    /// </summary>
+    /// <param name="name">The name of the compute resource.</param>
+    /// <param name="registry">The container registry to use.</param>
+    /// <param name="imageName">The image name to deploy.</param>
+    /// <param name="imageTag">The image tag to deploy.</param>
+    /// <param name="containerImage">The container image resource (optional, for dependency tracking).</param>
+    /// <param name="serviceType">The compute service type (optional).</param>
+    /// <param name="providerOptions">Optional cloud-specific compute provider options.</param>
+    /// <returns>An <see cref="ICompute"/> instance.</returns>
+    public abstract ICompute CreateCompute(
+        string name,
+        IContainerRegistry registry,
+        string? imageName = null,
+        string imageTag = "latest",
+        IContainerImage? containerImage = null,
+        ComputeServiceType? serviceType = null,
+        TComputeProviderOptions? providerOptions = null
+    );
+
+    protected sealed override ICompute CreateComputeCore(
+        string name,
+        IContainerRegistry registry,
+        string? imageName,
+        string imageTag,
+        IContainerImage? containerImage,
+        ComputeServiceType? serviceType
+    ) =>
+        CreateCompute(
+            name,
+            registry,
+            imageName,
+            imageTag,
+            containerImage,
+            serviceType,
+            providerOptions: null
         );
 }

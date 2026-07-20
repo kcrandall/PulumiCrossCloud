@@ -23,16 +23,21 @@ public class ContainerImageBuildResource : ComponentResource
         string imageName,
         string dockerfilePath,
         string contextPath,
-        ImageArgs? imageArgs = null
+        ImageArgs? imageArgs = null,
+        bool appendImageNameToRegistryUrl = true
     )
         : base("crosscloud:core:ContainerImageBuildResource", name)
     {
         var contentHash = GenerateContentHash(contextPath, dockerfilePath);
         var imageTag = $"sha-{contentHash}";
 
-        var registryUrl = registry.RegistryUrlOutput; // Output<string>
-        var shaRef = registryUrl.Apply(url => $"{url}/{imageName}:{imageTag}");
-        var latestRef = registryUrl.Apply(url => $"{url}/{imageName}:latest");
+        var imageRepositoryUrl = registry.RegistryUrlOutput.Apply(url =>
+            appendImageNameToRegistryUrl
+                ? $"{url.TrimEnd('/')}/{imageName}"
+                : url.TrimEnd('/')
+        );
+        var shaRef = imageRepositoryUrl.Apply(url => $"{url}:{imageTag}");
+        var latestRef = imageRepositoryUrl.Apply(url => $"{url}:latest");
 
         var args =
             imageArgs
@@ -56,6 +61,18 @@ public class ContainerImageBuildResource : ComponentResource
                 Push = true,
                 Registries = registry.GetDockerBuildRegistryConfig(),
             };
+
+        if (imageArgs is not null)
+        {
+            // PushImage owns the source, destination tags, and destination credentials. Keep
+            // the caller's other advanced build settings, but make the reported ImageUrl a tag
+            // that this resource actually builds and pushes.
+            args.Context = new BuildContextArgs { Location = contextPath };
+            args.Dockerfile = new DockerfileArgs { Location = dockerfilePath };
+            args.Tags = [shaRef, latestRef];
+            args.Push = true;
+            args.Registries = registry.GetDockerBuildRegistryConfig();
+        }
 
         // Create stable provider once to prevent drift from implicit provider recreation
         _defaultProvider ??= new Pulumi.DockerBuild.Provider(

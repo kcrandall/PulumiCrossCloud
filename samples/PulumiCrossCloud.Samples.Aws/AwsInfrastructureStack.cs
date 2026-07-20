@@ -13,40 +13,42 @@ public class AwsInfrastructureStack : Stack
         // Create resources - these will only be created once
         var secret = factory.CreateSecret("app-secret", "my-secret-value");
         var registry = factory.CreateContainerRegistry("app-registry");
+        var image = factory.CreateContainerImage("web-app-image", registry);
 
-        // Create different compute types based on needs
-        var appRunnerService = factory.CreateCompute(
+        // Build a runnable image into ECR before the Fargate service is created.
+        var containerContext = Path.Combine(AppContext.BaseDirectory, "container");
+        image.PushImage(Path.Combine(containerContext, "Dockerfile"), containerContext);
+
+        // With no cluster name, Fargate uses its default ECS backend and creates a cluster
+        // for this service. Set aws-sample:clusterName to reuse an existing shared cluster.
+        var sharedClusterName = new Config("aws-sample").Get("clusterName");
+        AwsFargateOptions? fargateOptions = string.IsNullOrWhiteSpace(sharedClusterName)
+            ? null
+            : new AwsFargateOptions { ClusterName = sharedClusterName };
+
+        var fargateService = factory.CreateCompute(
             "web-app",
             registry,
-            "web-app-image",
-            "latest",
-            serviceType: ComputeServiceType.AppRunner
+            containerImage: image,
+            serviceType: ComputeServiceType.Fargate,
+            providerOptions: fargateOptions
         );
-
-        var role = factory.CreateRole(
-            "app-role",
-            @"{
-            ""Version"": ""2012-10-17"",
-            ""Statement"": [{
-                ""Effect"": ""Allow"",
-                ""Principal"": {
-                    ""Service"": [""apprunner.amazonaws.com"", ""ecs-tasks.amazonaws.com""]
-                },
-                ""Action"": ""sts:AssumeRole""
-            }]
-        }"
-        );
+        fargateService.PortForwardings =
+        [
+            new PortForwardingConfiguration { ContainerPort = 80 },
+        ];
 
         // Add secret dependencies
-        ((AwsAppRunnerCompute)appRunnerService).AddRequiredSecret(secret);
+        fargateService.AddRequiredSecret(secret);
+        fargateService.Build();
 
         // Export some values - using public properties and Output types
-        this.AppRunnerUrl = ((AwsAppRunnerCompute)appRunnerService).ServiceUrl;
+        this.FargateUrl = fargateService.ServiceUrl;
         this.RegistryUrl = ((AwsContainerRegistry)registry).RegistryUrlOutput;
     }
 
     [Output]
-    public Output<string> AppRunnerUrl { get; set; }
+    public Output<string> FargateUrl { get; set; }
 
     [Output]
     public Output<string> RegistryUrl { get; set; }

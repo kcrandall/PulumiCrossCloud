@@ -2,6 +2,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\PulumiCrossCloud.Core\PulumiCrossCloud.Core.csproj" />
     <ProjectReference Include="..\..\src\PulumiCrossCloud.Aws\PulumiCrossCloud.Aws.csproj" />
+    <None Update="container/Dockerfile" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <PropertyGroup>

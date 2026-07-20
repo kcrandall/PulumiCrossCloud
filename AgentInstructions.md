@@ -54,7 +54,7 @@ PulumiCrossCloud/
 - `ICloudResource` - Base for all cloud resources
 - `ISecret` - Secret management abstraction
 - `IContainerRegistry` - Container registry abstraction
-- `ICompute` - Compute service abstraction (App Runner, Fargate, Cloud Run)
+- `ICompute` - Compute service abstraction (Fargate, Cloud Run)
 - `IRole` - IAM role abstraction
 - `IPolicyStatement` - Cloud-agnostic policy representation
 
@@ -92,7 +92,7 @@ Each resource type has specific permission enums:
 ### 4. Factory Pattern
 Use factory pattern for cloud-specific resource creation:
 ```csharp
-public class AwsCloudResourceFactory : CloudResourceFactory
+public class AwsCloudResourceFactory : CloudResourceFactory<AwsFargateOptions>
 {
     public override ISecret CreateSecret(string name, string value)
     {
@@ -105,10 +105,15 @@ public class AwsCloudResourceFactory : CloudResourceFactory
 Ensure implementations work consistently across clouds:
 ```csharp
 // AWS
-var awsCompute = awsFactory.CreateCompute("app", ComputeServiceType.AppRunner, registry);
+var awsCompute = awsFactory.CreateCompute(
+    "app",
+    registry,
+    registry.Name,
+    providerOptions: new AwsFargateOptions { ClusterName = "shared-cluster" }
+);
 
 // GCP  
-var gcpCompute = gcpFactory.CreateCompute("app", ComputeServiceType.CloudRun, registry);
+var gcpCompute = gcpFactory.CreateCompute("app", registry, "app-image", serviceType: ComputeServiceType.CloudRun);
 
 // Both use the same ICompute interface
 ```
@@ -163,8 +168,7 @@ public class CloudProviderResourceType : IResourceInterface
 #### AWS IAM Actions
 - Secrets: `secretsmanager:GetSecretValue`, `secretsmanager:PutSecretValue`
 - ECR: `ecr:GetDownloadUrlForLayer`, `ecr:BatchGetImage`, `ecr:GetAuthorizationToken`
-- ECS: `ecs:DescribeServices`, `ecs:UpdateService`
-- App Runner: `apprunner:DescribeService`, `apprunner:UpdateService`
+- Fargate on ECS: `ecs:DescribeExpressGatewayService`, `ecs:UpdateExpressGatewayService`
 
 #### Azure RBAC Actions
 - Key Vault: `Microsoft.KeyVault/vaults/secrets/getSecret/action`
@@ -186,11 +190,11 @@ string arn = _resource.Arn.Apply(x => x).Result;
 
 ### ❌ Don't Access Private Fields from Outside Class
 ```csharp
-// ❌ Can't access _service from outside
-((AwsAppRunnerCompute)compute)._service.ServiceUrl;
+// ❌ Can't access _ecsService from outside
+((AwsFargateCompute)compute)._ecsService.ServiceArn;
 
 // ✅ Use public properties instead
-((AwsAppRunnerCompute)compute).ServiceUrl;
+((AwsFargateCompute)compute).ServiceUrl;
 ```
 
 ### ❌ Don't Mix Output<string> and string

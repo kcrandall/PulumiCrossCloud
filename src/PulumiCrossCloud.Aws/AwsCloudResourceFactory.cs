@@ -2,7 +2,7 @@ using PulumiCrossCloud.Core;
 
 namespace PulumiCrossCloud.Aws;
 
-public class AwsCloudResourceFactory : CloudResourceFactory
+public class AwsCloudResourceFactory : CloudResourceFactory<AwsFargateOptions>
 {
     private readonly Pulumi.Aws.Provider? _awsProvider;
 
@@ -40,20 +40,22 @@ public class AwsCloudResourceFactory : CloudResourceFactory
         string? imageName = null,
         string imageTag = "latest",
         IContainerImage? containerImage = null,
-        ComputeServiceType? serviceType = null
+        ComputeServiceType? serviceType = null,
+        AwsFargateOptions? providerOptions = null
     )
     {
         if (serviceType is null)
-            serviceType = ComputeServiceType.AppRunner;
+            serviceType = ComputeServiceType.Fargate;
 
         return serviceType switch
         {
-            ComputeServiceType.AppRunner => new AwsAppRunnerCompute(
+            ComputeServiceType.Fargate => new AwsFargateCompute(
                 name,
                 registry,
                 imageName,
                 imageTag,
                 containerImage,
+                providerOptions,
                 _awsProvider
             ),
             _ => throw new ArgumentException($"Unsupported AWS service type: {serviceType}"),

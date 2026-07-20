@@ -46,7 +46,6 @@ public enum ComputePermissions
 public enum ComputeServiceType
 {
     // AWS
-    AppRunner,
     Fargate,
     EC2,
     ECS,

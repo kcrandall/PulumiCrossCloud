@@ -13,10 +13,11 @@ public class CloudResourceFactoryTests
     }
 
     [Fact]
-    public void ComputeServiceType_AppRunner_ShouldBeValid()
+    public void ComputeServiceType_Fargate_ShouldBeValid()
     {
-        var serviceType = ComputeServiceType.AppRunner;
-        Assert.Equal(ComputeServiceType.AppRunner, serviceType);
+        var serviceType = ComputeServiceType.Fargate;
+        Assert.Equal(ComputeServiceType.Fargate, serviceType);
+        Assert.DoesNotContain("AppRunner", Enum.GetNames<ComputeServiceType>());
     }
 
     [Theory]

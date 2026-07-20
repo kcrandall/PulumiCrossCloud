@@ -49,7 +49,6 @@ public static class CloudProviderExtensions
         {
             CloudProvider.AWS => new[]
             {
-                ComputeServiceType.AppRunner,
                 ComputeServiceType.Fargate,
                 ComputeServiceType.EC2,
                 ComputeServiceType.ECS,
@@ -91,7 +90,7 @@ public static class CloudProviderExtensions
     {
         return provider switch
         {
-            CloudProvider.AWS => ComputeServiceType.AppRunner,
+            CloudProvider.AWS => ComputeServiceType.Fargate,
             CloudProvider.Azure => ComputeServiceType.ContainerApps,
             CloudProvider.GCP => ComputeServiceType.CloudRun,
             CloudProvider.Koyeb => ComputeServiceType.KoyebService,

@@ -7,6 +7,7 @@ namespace PulumiCrossCloud.Aws;
 public class AwsContainerRegistry : IContainerRegistry
 {
     private readonly Pulumi.Aws.Ecr.Repository _repository;
+    private readonly Pulumi.Aws.Provider? _provider;
     public Resource Resource => _repository;
 
     public AwsContainerRegistry(
@@ -16,6 +17,7 @@ public class AwsContainerRegistry : IContainerRegistry
     )
     {
         Name = name;
+        _provider = provider;
         var customResourceOptions = new CustomResourceOptions { Provider = provider };
         _repository = new Pulumi.Aws.Ecr.Repository(
             name,
@@ -37,27 +39,31 @@ public class AwsContainerRegistry : IContainerRegistry
     public void PushImage(
         string imageName,
         string tag
-    ) { /* Implementation */
+    )
+    { /* Implementation */
     }
 
     public void PullImage(
         string imageName,
         string tag
-    ) { /* Implementation */
+    )
+    { /* Implementation */
     }
 
     public IEnumerable<string> ListRepositories() => new List<string>();
 
     public void DeleteRepository(
         string repositoryName
-    ) { /* Implementation */
+    )
+    { /* Implementation */
     }
 
     public InputList<RegistryArgs> GetDockerBuildRegistryConfig()
     {
         // Get ECR auth token
         var authToken = Pulumi.Aws.Ecr.GetAuthorizationToken.Invoke(
-            new() { RegistryId = _repository.RegistryId }
+            new() { RegistryId = _repository.RegistryId },
+            new InvokeOutputOptions { Provider = _provider }
         );
 
         return new InputList<RegistryArgs>

@@ -36,7 +36,11 @@ public interface IContainerImage : ICloudResource
     /// <param name="dockerfilePath">Path to the Dockerfile.</param>
     /// <param name="contextPath">Path to the build context.</param>
     /// <param name="additionalFilesToHash">Additional files to include in the hash.</param>
-    /// <param name="imageArgs">Build args for different cloud's auth etc</param>
+    /// <param name="imageArgs">
+    /// Optional advanced build settings. The source paths, destination tags, push behavior, and
+    /// destination registry credentials are owned by this method so that <see cref="DeploymentResult"/>
+    /// always identifies an image that was pushed; other settings are preserved.
+    /// </param>
     /// <returns>Output containing the deployed image URL.</returns>
     Output<ImageDeploymentResult> PushImage(
         string dockerfilePath,

@@ -1,5 +1,4 @@
 using Pulumi;
-using Pulumi.Aws;
 using Pulumi.DockerBuild;
 using Pulumi.DockerBuild.Inputs;
 using PulumiCrossCloud.Core;
@@ -25,55 +24,37 @@ public class AwsContainerImage : IContainerImage
             throw new ArgumentException("Registry must be an AWS registry", nameof(registry));
     }
 
-    Output<ImageDeploymentResult> PushImage(
+    public Output<ImageDeploymentResult> PushImage(
         string dockerfilePath,
         string contextPath,
         ImageArgs? imageArgs = null
     )
     {
-        var result = ((IContainerImage)this).PushImage(dockerfilePath, contextPath, imageArgs);
-        DeploymentResult = result;
-        return result;
+        var buildResource = new ContainerImageBuildResource(
+            $"{Registry.Name}-build-{Name}",
+            Registry,
+            Name,
+            dockerfilePath,
+            contextPath,
+            imageArgs,
+            appendImageNameToRegistryUrl: false
+        );
+        Resource = buildResource.Resource;
+        ContainerImageBuildResource = buildResource;
+        DeploymentResult = Output
+            .Tuple(buildResource.ImageUrl, buildResource.ImageTag, buildResource.ResourceOutput)
+            .Apply(tuple => new ImageDeploymentResult
+            {
+                ImageUrl = tuple.Item1,
+                ImageTag = tuple.Item2,
+                Image = tuple.Item3,
+            });
+        return DeploymentResult;
     }
 
     /// <summary>
     /// AWS ECR-specific registry configuration - requires authentication credentials
     /// </summary>
-    public InputList<RegistryArgs> GetDockerBuildRegistryConfig()
-    {
-        var awsRegistry = Registry as AwsContainerRegistry;
-        var repository = awsRegistry?.Resource as Pulumi.Aws.Ecr.Repository;
-        // Get ECR auth token
-        var authToken = Pulumi.Aws.Ecr.GetAuthorizationToken.Invoke(
-            new() { RegistryId = repository!.RegistryId }
-        );
-
-        return new InputList<RegistryArgs>
-        {
-            new RegistryArgs
-            {
-                Address = awsRegistry!.RegistryUrlOutput.Apply(url => url.Split('/')[0]), // Just the registry domain
-                Username = authToken.Apply(token => token.UserName),
-                Password = authToken.Apply(token => token.Password),
-            },
-        };
-    }
-
-    private static string ExtractRegistryServer(string registryUrl)
-    {
-        try
-        {
-            // Handle URLs that may or may not have protocol
-            var urlToParse = registryUrl.StartsWith("http")
-                ? registryUrl
-                : $"https://{registryUrl}";
-            var uri = new Uri(urlToParse);
-            return uri.Host;
-        }
-        catch
-        {
-            // Fallback: assume the first part before '/' is the server
-            return registryUrl.Split('/')[0];
-        }
-    }
+    public InputList<RegistryArgs> GetDockerBuildRegistryConfig() =>
+        Registry.GetDockerBuildRegistryConfig();
 }

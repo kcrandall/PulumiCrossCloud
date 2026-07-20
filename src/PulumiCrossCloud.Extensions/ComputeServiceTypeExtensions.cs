@@ -11,7 +11,6 @@ public static class ComputeServiceTypeExtensions
     {
         return serviceType switch
         {
-            ComputeServiceType.AppRunner => "AWS App Runner",
             ComputeServiceType.Fargate => "AWS Fargate",
             ComputeServiceType.EC2 => "Amazon EC2",
             ComputeServiceType.ECS => "Amazon ECS",
@@ -35,7 +34,6 @@ public static class ComputeServiceTypeExtensions
     {
         return serviceType switch
         {
-            ComputeServiceType.AppRunner => CloudProvider.AWS,
             ComputeServiceType.Fargate => CloudProvider.AWS,
             ComputeServiceType.EC2 => CloudProvider.AWS,
             ComputeServiceType.ECS => CloudProvider.AWS,
@@ -59,7 +57,6 @@ public static class ComputeServiceTypeExtensions
     {
         return serviceType switch
         {
-            ComputeServiceType.AppRunner => true,
             ComputeServiceType.Fargate => true,
             ComputeServiceType.ContainerApps => true,
             ComputeServiceType.ContainerInstances => true,
@@ -83,7 +80,6 @@ public static class ComputeServiceTypeExtensions
     {
         return serviceType switch
         {
-            ComputeServiceType.AppRunner => true,
             ComputeServiceType.Fargate => true,
             ComputeServiceType.ECS => true,
             ComputeServiceType.ContainerApps => true,
@@ -107,12 +103,6 @@ public static class ComputeServiceTypeExtensions
     {
         return serviceType switch
         {
-            ComputeServiceType.AppRunner => new[]
-            {
-                "Web APIs",
-                "Simple containerized apps",
-                "CI/CD deployments",
-            },
             ComputeServiceType.Fargate => new[]
             {
                 "Microservices",
@@ -191,7 +181,6 @@ public static class ComputeServiceTypeExtensions
     {
         return serviceType switch
         {
-            ComputeServiceType.AppRunner => "Pay per request + provisioned capacity",
             ComputeServiceType.Fargate => "Pay per vCPU and memory per second",
             ComputeServiceType.EC2 => "Pay per instance hour",
             ComputeServiceType.ECS => "Pay for underlying EC2/Fargate resources",

@@ -49,6 +49,7 @@ public class AwsSecret : ISecret
     public Output<string?> Value => _secretVersion.SecretString;
     public bool IgnoreChangesAfterCreate { get; }
     public Pulumi.Resource Resource => _secret;
+    public Pulumi.Resource ValueResource => _secretVersion;
 
     public async Task<string> GetValueAsync()
     {
