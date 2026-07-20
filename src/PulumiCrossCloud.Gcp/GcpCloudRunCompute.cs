@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Net.Http;
 using System.Threading.Tasks;
 using Pulumi;
@@ -77,8 +78,60 @@ public class GcpCloudRunCompute : ICompute
 
     /// <summary>
     /// The maximum number of concurrent requests allowed per container instance. Default is 80. If null, uses GCP default.
+    /// Cloud Run rejects any value above 1 when <see cref="CpuLimit"/> is below 1 vCPU, so this is
+    /// forced to 1 in that case.
     /// </summary>
     public int? ContainerConcurrency { get; set; } = null;
+
+    /// <summary>
+    /// Resolves the concurrency Cloud Run will accept for the given CPU limit. Below 1 vCPU Cloud Run
+    /// requires a maximum request concurrency of exactly 1, so any other value is overridden.
+    /// </summary>
+    private int? ResolveContainerConcurrency(string cpuLimit)
+    {
+        if (ParseCpuCores(cpuLimit) is not < 1)
+            return ContainerConcurrency;
+
+        if (ContainerConcurrency is 1)
+            return ContainerConcurrency;
+
+        var configured =
+            ContainerConcurrency?.ToString(CultureInfo.InvariantCulture) ?? "the Cloud Run default";
+        Log.Warn(
+            $"Cloud Run service '{Name}' requests {cpuLimit} vCPU. Cloud Run requires a maximum "
+                + $"request concurrency of 1 below 1 vCPU, so {configured} was overridden to 1. "
+                + "Each instance will serve one request at a time."
+        );
+        return 1;
+    }
+
+    /// <summary>
+    /// Parses a Cloud Run CPU limit ("0.25", "1", "500m") into vCPU cores, or null when unrecognized.
+    /// </summary>
+    private static double? ParseCpuCores(string cpuLimit)
+    {
+        var value = cpuLimit.Trim();
+        if (value.EndsWith('m'))
+        {
+            return double.TryParse(
+                value[..^1],
+                NumberStyles.Float,
+                CultureInfo.InvariantCulture,
+                out var millicores
+            )
+                ? millicores / 1000d
+                : null;
+        }
+
+        return double.TryParse(
+            value,
+            NumberStyles.Float,
+            CultureInfo.InvariantCulture,
+            out var cores
+        )
+            ? cores
+            : null;
+    }
 
     public int MinCount { get; set; } = 0;
     public int MaxCount { get; set; } = 1;
@@ -279,6 +332,9 @@ public class GcpCloudRunCompute : ICompute
             };
         }
 
+        var cpuLimit = CpuLimit ?? "1";
+        var containerConcurrency = ResolveContainerConcurrency(cpuLimit);
+
         var container = new ServiceTemplateContainerArgs
         {
             Image = imageUri,
@@ -291,7 +347,7 @@ public class GcpCloudRunCompute : ICompute
                 Limits = new InputMap<string>
                 {
                     { "memory", MemoryLimit ?? "1Gi" },
-                    { "cpu", CpuLimit ?? "1" },
+                    { "cpu", cpuLimit },
                 },
             },
         };
@@ -306,7 +362,7 @@ public class GcpCloudRunCompute : ICompute
                 MinInstanceCount = MinCount,
                 MaxInstanceCount = MaxCount,
             },
-            MaxInstanceRequestConcurrency = ContainerConcurrency,
+            MaxInstanceRequestConcurrency = containerConcurrency,
         };
 
         var serviceArgs = new Pulumi.Gcp.CloudRunV2.ServiceArgs
