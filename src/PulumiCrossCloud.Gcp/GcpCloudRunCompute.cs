@@ -139,6 +139,19 @@ public class GcpCloudRunCompute : ICompute
     public string? MemoryLimit { get; set; }
     public string? CpuLimit { get; set; }
 
+    /// <inheritdoc />
+    public bool ImageDeployedByPipeline { get; set; }
+
+    /// <summary>
+    /// Pulumi property path to the image of the running Cloud Run container, used to hand the image
+    /// to a deployment pipeline via <see cref="CustomResourceOptions.IgnoreChanges"/>.
+    /// Pulumi resolves these paths against the provider's own input names, not the C# property names,
+    /// so this is the serialized shape of <c>ServiceArgs</c> and not <c>Template.Containers[0].Image</c>.
+    /// Cloud Run v2 allows several containers per revision but this compute only ever emits one, so
+    /// index 0 addresses it exactly.
+    /// </summary>
+    public const string ContainerImagePropertyPath = "template.containers[0].image";
+
     public IHealthCheckConfiguration? HealthCheckConfiguration { get; set; }
     public IDictionary<string, string> EnvironmentVariables => _environmentVariables;
 
@@ -462,11 +475,18 @@ public class GcpCloudRunCompute : ICompute
                 dependsOn
             );
 
-        _service = new Pulumi.Gcp.CloudRunV2.Service(
-            Name,
-            serviceArgs,
-            new CustomResourceOptions { DependsOn = dependsOn, Provider = _provider }
-        );
+        var serviceOptions = new CustomResourceOptions
+        {
+            DependsOn = dependsOn,
+            Provider = _provider,
+        };
+
+        // The first up still ships _imageTag, because Cloud Run cannot create a revision without an
+        // image; after that the pipeline's revision is left alone.
+        if (ImageDeployedByPipeline)
+            serviceOptions.IgnoreChanges = [ContainerImagePropertyPath];
+
+        _service = new Pulumi.Gcp.CloudRunV2.Service(Name, serviceArgs, serviceOptions);
         ServiceUrl = _service.Uri; // <-- v2: direct Uri output
 
         // Create public access IAM member AFTER the service

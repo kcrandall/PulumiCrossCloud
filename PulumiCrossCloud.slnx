@@ -40,6 +40,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/PulumiCrossCloud.Aws.Tests/PulumiCrossCloud.Aws.Tests.csproj" />
     <Project Path="tests/PulumiCrossCloud.Core.Tests/PulumiCrossCloud.Core.Tests.csproj" />
+    <Project Path="tests/PulumiCrossCloud.Gcp.Tests/PulumiCrossCloud.Gcp.Tests.csproj" />
     <Project Path="tests/PulumiCrossCloud.Integration.Tests/PulumiCrossCloud.Integration.Tests.csproj" />
   </Folder>
 </Solution>

@@ -157,6 +157,27 @@ public interface ICompute : ICloudResource, IPolicyProvider<ComputePermissions>
     string? CpuLimit { get; set; }
 
     /// <summary>
+    /// Hands ownership of the running container image to a deployment pipeline instead of Pulumi.
+    /// Pulumi still creates the service from the configured image the first time, because no cloud
+    /// will start a container without one, but from then on it neither diffs nor reverts whichever
+    /// image the pipeline has rolled out. Everything else about the service stays Pulumi's.
+    /// Defaults to false, which keeps Pulumi in charge of the image.
+    /// Providers that cannot express this reject the opt-in rather than silently letting the next
+    /// deployment roll the pipeline back.
+    /// </summary>
+    bool ImageDeployedByPipeline
+    {
+        get => false;
+        set
+        {
+            if (value)
+                throw new NotSupportedException(
+                    $"Pipeline-owned container images are not supported for {Provider} compute resources."
+                );
+        }
+    }
+
+    /// <summary>
     /// Registers actions to be executed after the compute resource is healthy.
     /// Each action receives the ICompute instance and is fired after health checks pass.
     /// </summary>

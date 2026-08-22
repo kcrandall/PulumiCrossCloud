@@ -57,6 +57,28 @@ If you've never used GCP before, follow these steps to set up authentication and
   pulumi up
   ```
 
+## Letting a Deployment Pipeline Own the Cloud Run Image
+
+When a CD pipeline deploys new revisions of the container, Pulumi and the pipeline both end up
+owning the running image, and whichever ran last wins — a `pulumi up` after a deploy rolls the
+service back to the tag the stack was pinned to.
+
+Set `ImageDeployedByPipeline` to hand the image to the pipeline. Pulumi still creates the service
+from `imageTag` the first time, because Cloud Run cannot start a revision without an image, but
+afterwards it neither diffs nor reverts whichever revision the pipeline rolled out. Everything else
+about the service — scaling, memory, environment, secrets, IAM, domain mappings — stays Pulumi's.
+
+```csharp
+var api = factory.CreateCompute("api", registry, "api", imageTag: "bootstrap");
+api.MinCount = 1;
+api.MemoryLimit = "1Gi";
+api.ImageDeployedByPipeline = true; // CD owns which revision runs
+api.Build();
+```
+
+The pipeline can then push and deploy a single `:<git-sha>` tag; there is no need to also push the
+tag the stack was pinned to just to keep `pulumi up` from undoing the deploy.
+
 ## Troubleshooting
 - Make sure your service account has the correct roles and the key file path is correct.
 - If you see permission errors, check IAM roles and API enablement.
