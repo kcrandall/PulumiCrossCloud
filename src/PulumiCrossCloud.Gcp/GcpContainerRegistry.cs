@@ -127,6 +127,15 @@ public class GcpContainerRegistry : IContainerRegistry
             Task.Run(async () =>
             {
                 var credential = await GoogleCredential.GetApplicationDefaultAsync();
+                // A service-account key carries no scopes of its own, so minting a token
+                // without scoping it first fails with "Invalid OAuth scope or ID token
+                // audience provided". User credentials from `gcloud auth` are already
+                // scoped and report false here.
+                if (credential.IsCreateScopedRequired)
+                    credential = credential.CreateScoped(
+                        "https://www.googleapis.com/auth/cloud-platform"
+                    );
+
                 var accessToken =
                     await credential.UnderlyingCredential.GetAccessTokenForRequestAsync();
                 return accessToken ?? throw new Exception("Failed to get access token");
