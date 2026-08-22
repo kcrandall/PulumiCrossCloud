@@ -54,8 +54,12 @@ public class UpstashRedisDatabase : IMemoryCacheDatabase
     public Output<string> Username => Output.Create(string.Empty);
     public Output<string> Password => _database.Password;
 
+    /// <summary>
+    /// Upstash only accepts TLS connections, so the scheme is always <c>rediss</c>. A
+    /// plain <c>redis://</c> URI points a client at a port that will refuse it.
+    /// </summary>
     public Output<string> ConnectionString =>
-        Output.Tuple(Host, Port, Password).Apply(t => $"redis://:{t.Item3}@{t.Item1}:{t.Item2}");
+        Output.Tuple(Host, Port, Password).Apply(t => $"rediss://:{t.Item3}@{t.Item1}:{t.Item2}");
 
     public IEnumerable<IPolicyStatement> GetPolicy(params MemoryCachePermissions[] permissions)
     {
