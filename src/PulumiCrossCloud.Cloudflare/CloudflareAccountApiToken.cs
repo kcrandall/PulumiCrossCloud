@@ -23,26 +23,29 @@ public class AccountApiToken : ComponentResource
         string[] permissionGroupIds,
         ComponentResourceOptions? options = null
     )
+        : this(
+            name,
+            accountId,
+            primaryToken,
+            permissionGroupIds,
+            new Dictionary<string, string>
+            {
+                [string.Format("com.cloudflare.api.account.{0}", accountId)] = "*",
+            },
+            options
+        ) { }
+
+    internal AccountApiToken(
+        string name,
+        string accountId,
+        Input<string> primaryToken,
+        string[] permissionGroupIds,
+        IReadOnlyDictionary<string, string> resources,
+        ComponentResourceOptions? options = null
+    )
         : base("crosscloud:cloudflare:AccountApiToken", name, options)
     {
-        var payload = new
-        {
-            name = name,
-            policies = new[]
-            {
-                new
-                {
-                    effect = "allow",
-                    resources = new Dictionary<string, string>
-                    {
-                        { string.Format("com.cloudflare.api.account.{0}", accountId), "*" },
-                    },
-                    permission_groups = permissionGroupIds.Select(id => new { id = id }).ToArray(),
-                },
-            },
-        };
-
-        var jsonPayload = JsonSerializer.Serialize(payload);
+        var jsonPayload = SerializePayload(name, permissionGroupIds, resources);
 
         // We use a local command to call the Cloudflare API via curl
         // This is an escape hatch since the Pulumi provider doesn't support Account-level tokens yet.
@@ -145,5 +148,44 @@ public class AccountApiToken : ComponentResource
 
         TokenId = result.Apply(r => r.id);
         TokenValue = result.Apply(r => r.value);
+    }
+
+    internal static string SerializePayload(
+        string name,
+        IReadOnlyCollection<string> permissionGroupIds,
+        IReadOnlyDictionary<string, string> resources
+    )
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(permissionGroupIds);
+        ArgumentNullException.ThrowIfNull(resources);
+
+        if (permissionGroupIds.Count == 0)
+            throw new ArgumentException(
+                "At least one permission group is required.",
+                nameof(permissionGroupIds)
+            );
+
+        if (resources.Count == 0)
+            throw new ArgumentException(
+                "At least one Cloudflare resource is required.",
+                nameof(resources)
+            );
+
+        var payload = new
+        {
+            name,
+            policies = new[]
+            {
+                new
+                {
+                    effect = "allow",
+                    resources,
+                    permission_groups = permissionGroupIds.Select(id => new { id }).ToArray(),
+                },
+            },
+        };
+
+        return JsonSerializer.Serialize(payload);
     }
 }

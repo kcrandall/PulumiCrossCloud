@@ -186,6 +186,7 @@ public class CloudflareBucket : IBucket
             var creds = new CloudflareR2Credentials(
                 $"{Name}-creds",
                 _accountId,
+                Name,
                 _apiToken,
                 _providerResource
             );

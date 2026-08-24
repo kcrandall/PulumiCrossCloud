@@ -4,7 +4,7 @@
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <PulumiCrossCloudVersion>0.1.1</PulumiCrossCloudVersion>
+    <PulumiCrossCloudVersion>0.1.2</PulumiCrossCloudVersion>
     <Version Condition="'$(Version)' == ''">$(PulumiCrossCloudVersion)</Version>
     <PackageVersion Condition="'$(PackageVersion)' == ''">$(Version)</PackageVersion>
 
