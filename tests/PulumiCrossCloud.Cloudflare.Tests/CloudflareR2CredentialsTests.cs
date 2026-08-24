@@ -1,4 +1,8 @@
 using System.Text.Json;
+using Pulumi;
+using Pulumi.Testing;
+
+[assembly: CollectionBehavior(DisableTestParallelization = true)]
 
 namespace PulumiCrossCloud.Cloudflare.Tests;
 
@@ -61,4 +65,67 @@ public sealed class CloudflareR2CredentialsTests
             CloudflareR2Credentials.CreateBucketPolicy(accountId, bucketName)
         );
     }
+
+    [Fact]
+    public async Task TokenCommand_DeletesTheOldTokenBeforeCreatingItsReplacement()
+    {
+        await Deployment.TestAsync<R2CredentialsStack>(
+            new R2CredentialsMocks(),
+            new TestOptions { IsPreview = false }
+        );
+
+        var options = Assert.IsType<CustomResourceOptions>(R2CredentialsStack.TokenCommandOptions);
+        Assert.True(options.DeleteBeforeReplace);
+    }
+}
+
+public sealed class R2CredentialsStack : Stack
+{
+    internal static ResourceOptions? TokenCommandOptions { get; private set; }
+
+    public R2CredentialsStack()
+        : base(new StackOptions { ResourceTransformations = [RecordTokenCommandOptions] })
+    {
+        TokenCommandOptions = null;
+        _ = new CloudflareR2Credentials(
+            "nightfall-assets-creds",
+            "0123456789abcdef0123456789abcdef",
+            "nightfall-assets",
+            "test-primary-token"
+        );
+    }
+
+    private static ResourceTransformationResult? RecordTokenCommandOptions(
+        ResourceTransformationArgs args
+    )
+    {
+        if (
+            args.Resource.GetResourceType() == "command:local:Command"
+            && args.Resource.GetResourceName() == "nightfall-assets-creds-create"
+        )
+            TokenCommandOptions = args.Options;
+
+        return null;
+    }
+}
+
+public sealed class R2CredentialsMocks : IMocks
+{
+    public Task<(string? id, object state)> NewResourceAsync(MockResourceArgs args)
+    {
+        var name = args.Name ?? "resource";
+        var state = args.Inputs.ToDictionary(pair => pair.Key, pair => pair.Value);
+
+        if (args.Type == "command:local:Command")
+        {
+            state["stdout"] =
+                "{\"success\":true,\"result\":{\"id\":\"test-access-key\",\"value\":\"test-token-value\"}}";
+            state["stderr"] = "";
+        }
+
+        return Task.FromResult<(string? id, object state)>(($"{name}-id", state));
+    }
+
+    public Task<object> CallAsync(MockCallArgs args) =>
+        Task.FromResult<object>(new Dictionary<string, object>());
 }

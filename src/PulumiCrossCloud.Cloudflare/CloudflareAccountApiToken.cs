@@ -89,10 +89,12 @@ public class AccountApiToken : ComponentResource
                 )
             );
 
+        // Delete resolves the remote token by its stable name. Create-before-delete would briefly
+        // leave both generations with that name, then the old resource's Delete would revoke both.
         var tokenResource = new Command(
             $"{name}-create",
             new CommandArgs { Create = createCommand, Delete = deleteCommand },
-            new CustomResourceOptions { Parent = this }
+            new CustomResourceOptions { Parent = this, DeleteBeforeReplace = true }
         );
 
         // Parse the JSON output from curl
