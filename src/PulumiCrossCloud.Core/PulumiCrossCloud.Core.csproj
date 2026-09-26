@@ -6,11 +6,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="OpenTelemetry.Api" Version="1.16.0" />
-    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.16.0" />
-    <PackageReference Include="Pulumi" Version="3.107.3" />
+    <PackageReference Include="OpenTelemetry.Api" Version="1.19.1" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.19.1" />
+    <PackageReference Include="Pulumi" Version="3.114.0" />
     <PackageReference Include="Pulumi.Command" Version="4.5.0" />
-    <PackageReference Include="Pulumi.Docker" Version="5.1.0" />
-    <PackageReference Include="Pulumi.DockerBuild" Version="0.1.0-alpha.1781075065" />
+    <PackageReference Include="Pulumi.Docker" Version="5.2.0" />
+    <PackageReference Include="Pulumi.DockerBuild" Version="0.1.0-alpha.1790386819" />
   </ItemGroup>
 </Project>

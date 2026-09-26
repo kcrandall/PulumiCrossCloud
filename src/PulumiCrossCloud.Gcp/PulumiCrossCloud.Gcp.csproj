@@ -4,13 +4,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Google.Apis.CloudRun.v1" Version="1.75.0.4187" />
-    <PackageReference Include="Google.Apis.Auth" Version="1.75.0" />
-    <PackageReference Include="Google.Cloud.SecretManager.V1" Version="2.7.0" />
-    <PackageReference Include="OpenTelemetry.Api" Version="1.16.0" />
-    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.16.0" />
-    <PackageReference Include="Pulumi.Gcp" Version="9.29.0" />
-    <PackageReference Include="Pulumi.Random" Version="4.21.0" />
+    <PackageReference Include="Google.Apis.CloudRun.v1" Version="1.76.0.4277" />
+    <PackageReference Include="Google.Apis.Auth" Version="1.76.0" />
+    <PackageReference Include="Google.Cloud.SecretManager.V1" Version="2.8.0" />
+    <PackageReference Include="OpenTelemetry.Api" Version="1.19.1" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.19.1" />
+    <PackageReference Include="Pulumi.Gcp" Version="9.37.0" />
+    <PackageReference Include="Pulumi.Random" Version="4.21.2" />
   </ItemGroup>
 
   <PropertyGroup>

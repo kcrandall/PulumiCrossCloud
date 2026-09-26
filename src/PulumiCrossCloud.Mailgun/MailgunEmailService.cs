@@ -42,7 +42,7 @@ public class MailgunEmailService : IEmailService
                 // We specify a DKIM selector to ensure stable DNS record names if needed,
                 // but Mailgun defaults are usually fine ("k1" or similar).
                 // However, to extract specific records reliably without knowing the selector,
-                // we rely on the SendingRecords output which contains the full Name.
+                // we rely on the SendingRecordsSets output which contains the full Name.
             },
             resourceOptions
         );
@@ -64,11 +64,11 @@ public class MailgunEmailService : IEmailService
         // 3. Tracking (CNAME)
         // 4. MX (MX) - usually 2
 
-        // BUT, `SendingRecords` output gives us the exact list.
+        // BUT, `SendingRecordsSets` output gives us the exact list.
         // If we want to expose `IEnumerable<DnsRecord>`, we must return a concrete list of objects.
         // Each object must have a `Name` (string) and `Value` (Output).
         // If the `Name` is only known at runtime (Output), we can't create a DnsRecord (which expects string Name).
-        // Mailgun `SendingRecords` contains `Name` as a property.
+        // Mailgun `SendingRecordsSets` contains `Name` as a property.
 
         // Strategy: We can't use the dynamic list from Mailgun if `DnsRecord` requires a string Name.
         // Let's check DnsRecord definition: `string Name`. It is NOT Output<string>.
@@ -87,13 +87,13 @@ public class MailgunEmailService : IEmailService
         // - DKIM: TXT on `k1._domainkey.{domainName}` (We will assume selector 'k1' or we should have set it).
         // - MX: MX on `domainName`
 
-        // Let's filter the SendingRecords Output to find these specific values.
+        // Let's filter the SendingRecordsSets Output to find these specific values.
 
         var recordList = new List<DnsRecord>();
 
         // 1. SPF (TXT on root)
-        // Extract Name and Value from the SendingRecords list
-        var spfRecord = _domain.SendingRecords.Apply(records =>
+        // Extract Name and Value from the SendingRecordsSets list
+        var spfRecord = _domain.SendingRecordsSets.Apply(records =>
             records.FirstOrDefault(r =>
                 r != null
                 && r.RecordType == "TXT"
@@ -115,7 +115,7 @@ public class MailgunEmailService : IEmailService
         );
 
         // 2. DKIM (TXT on k1._domainkey)
-        var dkimRecord = _domain.SendingRecords.Apply(records =>
+        var dkimRecord = _domain.SendingRecordsSets.Apply(records =>
             records.FirstOrDefault(r =>
                 r != null
                 && r.RecordType == "TXT"
@@ -134,7 +134,7 @@ public class MailgunEmailService : IEmailService
         );
 
         // 3. MX (MX on root)
-        var mxRecordA = _domain.SendingRecords.Apply(records =>
+        var mxRecordA = _domain.SendingRecordsSets.Apply(records =>
             records.FirstOrDefault(r =>
                 r != null && r.RecordType == "MX" && r.Value != null && r.Value.Contains("mxa")
             )
@@ -149,7 +149,7 @@ public class MailgunEmailService : IEmailService
             )
         );
 
-        var mxRecordB = _domain.SendingRecords.Apply(records =>
+        var mxRecordB = _domain.SendingRecordsSets.Apply(records =>
             records.FirstOrDefault(r =>
                 r != null && r.RecordType == "MX" && r.Value != null && r.Value.Contains("mxb")
             )
@@ -165,7 +165,7 @@ public class MailgunEmailService : IEmailService
         );
 
         // 4. CNAME (Tracking)
-        var cnameRecord = _domain.SendingRecords.Apply(records =>
+        var cnameRecord = _domain.SendingRecordsSets.Apply(records =>
             records.FirstOrDefault(r => r != null && r.RecordType == "CNAME")
         );
 
