@@ -38,7 +38,8 @@ when a run is killed.
 
 Not covered yet, because the emulator cannot host them:
 
-- **Azure.** `floci/floci-az` can't serve the `azure-native` provider yet. The provider signs in
+- **Azure.** Last checked against floci-az 0.13.0 and `nightly-09262026` (2026-09-26).
+  `floci/floci-az` can't serve the `azure-native` provider yet. The provider signs in
   through MSAL, and floci-az advertises an `http://` issuer while serving HTTPS
   ([floci-io/floci-az#255](https://github.com/floci-io/floci-az/issues/255)). Managed identity
   sign-in also fails, because the provider ignores `msiEndpoint` and calls the real instance
