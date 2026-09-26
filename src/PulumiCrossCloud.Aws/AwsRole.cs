@@ -7,10 +7,12 @@ namespace PulumiCrossCloud.Aws;
 public class AwsRole : IRole
 {
     private readonly Pulumi.Aws.Iam.Role _role;
+    private readonly Pulumi.Aws.Provider? _provider;
 
     public AwsRole(string name, string assumeRolePolicy, Pulumi.Aws.Provider? provider = null)
     {
         Name = name;
+        _provider = provider;
         var customResourceOptions = new CustomResourceOptions { Provider = provider };
         _role = new Pulumi.Aws.Iam.Role(
             name,
@@ -38,7 +40,8 @@ public class AwsRole : IRole
             {
                 Role = _role.Name,
                 Policy = policyDocumentOutput, // Now using Output<string>
-            }
+            },
+            new CustomResourceOptions { Provider = _provider }
         );
     }
 

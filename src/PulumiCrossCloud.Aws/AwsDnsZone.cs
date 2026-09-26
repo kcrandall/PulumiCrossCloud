@@ -103,7 +103,7 @@ public class AwsDnsZone : IDnsZone
     public IDnsRegistration RegisterRecord(DnsRecord record, int? ttl = null, bool proxied = false)
     {
         var recordName = $"{Name}-record-{_recordCounter++}";
-        return new AwsDnsRegistration(recordName, this, record, ttl);
+        return new AwsDnsRegistration(recordName, this, record, ttl, _provider);
     }
 
     public IEnumerable<IDnsRegistration> RegisterRecords(

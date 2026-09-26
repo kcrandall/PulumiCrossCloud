@@ -12,7 +12,13 @@ public class GcpDnsRegistration : IDnsRegistration
 {
     private readonly RecordSet _recordSet;
 
-    public GcpDnsRegistration(string name, IDnsZone zone, DnsRecord record, int? ttl = null)
+    public GcpDnsRegistration(
+        string name,
+        IDnsZone zone,
+        DnsRecord record,
+        int? ttl = null,
+        Pulumi.Gcp.Provider? provider = null
+    )
     {
         Name = name;
         Zone = zone;
@@ -32,7 +38,8 @@ public class GcpDnsRegistration : IDnsRegistration
                 Type = MapRecordType(record.Type),
                 Ttl = Ttl,
                 Rrdatas = new InputList<string> { record.Value },
-            }
+            },
+            new CustomResourceOptions { Provider = provider }
         );
     }
 

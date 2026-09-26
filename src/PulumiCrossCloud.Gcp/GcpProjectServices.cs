@@ -25,10 +25,16 @@ public static class GcpProjectServices
     /// Ensure the given API service is enabled in the current project and return the Pulumi Service resource.
     /// Automatically ensures Cloud Resource Manager API is enabled first for all other services.
     /// </summary>
-    public static Service EnsureEnabled(string serviceName)
+    /// <param name="serviceName">The API to enable, e.g. <c>secretmanager.googleapis.com</c>.</param>
+    /// <param name="provider">
+    /// The provider to enable the API through; null uses the default provider. Each provider gets
+    /// its own resource, named after the provider so two providers cannot collide.
+    /// </param>
+    public static Service EnsureEnabled(string serviceName, Pulumi.Gcp.Provider? provider = null)
     {
         var projectId = GcpProjectConfig.ProjectId;
-        var key = $"{projectId}:{serviceName}";
+        var providerSuffix = provider is null ? "" : $"-{provider.GetResourceName()}";
+        var key = $"{projectId}:{serviceName}{providerSuffix}";
 
         var enabledServicesByProjectAndName = _enabledServicesByDeployment.GetValue(
             Deployment.Instance,
@@ -48,11 +54,12 @@ public static class GcpProjectServices
                     )
                 )
                 {
-                    var crm = EnsureEnabled("cloudresourcemanager.googleapis.com");
+                    var crm = EnsureEnabled("cloudresourcemanager.googleapis.com", provider);
                     dependsOn.Add(crm);
                 }
 
-                var resourceName = $"{serviceName.Replace('.', '-')}-api-{projectId}";
+                var resourceName =
+                    $"{serviceName.Replace('.', '-')}-api-{projectId}{providerSuffix}";
                 return new Service(
                     resourceName,
                     new ServiceArgs
@@ -62,7 +69,11 @@ public static class GcpProjectServices
                         DisableDependentServices = false,
                         DisableOnDestroy = false, // Keep APIs enabled when stack is destroyed
                     },
-                    new CustomResourceOptions { DependsOn = dependsOn.ToArray() }
+                    new CustomResourceOptions
+                    {
+                        DependsOn = dependsOn.ToArray(),
+                        Provider = provider,
+                    }
                 );
             }
         );
@@ -71,11 +82,18 @@ public static class GcpProjectServices
     /// <summary>
     /// Convenience method to get dependency resources for multiple services.
     /// </summary>
-    public static Resource[] DependsOn(params string[] serviceNames)
+    public static Resource[] DependsOn(params string[] serviceNames) =>
+        DependsOn(provider: null, serviceNames);
+
+    /// <summary>
+    /// Convenience method to get dependency resources for multiple services enabled through
+    /// <paramref name="provider"/>.
+    /// </summary>
+    public static Resource[] DependsOn(Pulumi.Gcp.Provider? provider, params string[] serviceNames)
     {
         return serviceNames
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(EnsureEnabled)
+            .Select(serviceName => EnsureEnabled(serviceName, provider))
             .Cast<Resource>()
             .ToArray();
     }

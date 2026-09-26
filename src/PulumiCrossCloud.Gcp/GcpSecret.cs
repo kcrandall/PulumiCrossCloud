@@ -20,7 +20,10 @@ public class GcpSecret : ISecret
         IgnoreChangesAfterCreate = ignoreChangesAfterCreate;
         var projectId = GcpProjectConfig.ProjectId;
         // Ensure Secret Manager API is enabled for this project (via central manager)
-        var secretManagerService = GcpProjectServices.EnsureEnabled("secretmanager.googleapis.com");
+        var secretManagerService = GcpProjectServices.EnsureEnabled(
+            "secretmanager.googleapis.com",
+            provider
+        );
         var dependsOn = new[] { secretManagerService };
         _secret = new Pulumi.Gcp.SecretManager.Secret(
             name,
@@ -66,7 +69,10 @@ public class GcpSecret : ISecret
         IgnoreChangesAfterCreate = ignoreChangesAfterCreate;
         var projectId = GcpProjectConfig.ProjectId;
         // Ensure Secret Manager API is enabled for this project (via central manager)
-        var secretManagerService = GcpProjectServices.EnsureEnabled("secretmanager.googleapis.com");
+        var secretManagerService = GcpProjectServices.EnsureEnabled(
+            "secretmanager.googleapis.com",
+            provider
+        );
         var dependsOn = new[] { secretManagerService };
         _secret = new Pulumi.Gcp.SecretManager.Secret(
             name,

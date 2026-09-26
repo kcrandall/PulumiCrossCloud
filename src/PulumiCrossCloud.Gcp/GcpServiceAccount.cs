@@ -19,7 +19,7 @@ public class GcpServiceAccount : IRole
         Name = name;
         var projectId = GcpProjectConfig.ProjectId;
         // Ensure IAM API is enabled before creating service accounts
-        var iamApi = GcpProjectServices.EnsureEnabled("iam.googleapis.com");
+        var iamApi = GcpProjectServices.EnsureEnabled("iam.googleapis.com", provider);
 
         _serviceAccount = new Pulumi.Gcp.ServiceAccount.Account(
             name,

@@ -36,7 +36,8 @@ public class GcpContainerRegistry : IContainerRegistry
 
         // Ensure Artifact Registry API is enabled
         var artifactRegistryService = GcpProjectServices.EnsureEnabled(
-            "artifactregistry.googleapis.com"
+            "artifactregistry.googleapis.com",
+            provider
         );
 
         _repository = new Pulumi.Gcp.ArtifactRegistry.Repository(

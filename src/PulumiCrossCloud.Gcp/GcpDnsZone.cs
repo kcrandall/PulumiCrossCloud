@@ -133,7 +133,7 @@ public class GcpDnsZone : IDnsZone
 
         var suffix = record.Key.Replace(".", "-").ToLowerInvariant();
         var resourceName = $"{Name}-{record.Type.ToString().ToLowerInvariant()}-{suffix}";
-        return new GcpDnsRegistration(resourceName, this, record, ttl);
+        return new GcpDnsRegistration(resourceName, this, record, ttl, _provider);
     }
 
     public IEnumerable<IDnsRegistration> RegisterRecords(

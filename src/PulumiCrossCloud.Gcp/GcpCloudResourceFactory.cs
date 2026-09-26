@@ -118,16 +118,16 @@ public class GcpCloudResourceFactory : CloudResourceFactory
 
     public override IQueueEndpoint CreateQueue(string name, QueueArgs? args = null)
     {
-        return new GcpPubSubSubscription(name, args);
+        return new GcpPubSubSubscription(name, args, _gcpProvider);
     }
 
     public override ITopicEndpoint CreateTopic(string name, TopicArgs? args = null)
     {
-        return new GcpPubSubTopic(name, args);
+        return new GcpPubSubTopic(name, args, _gcpProvider);
     }
 
     public override IStreamEndpoint CreateStream(string name, StreamArgs? args = null)
     {
-        return new GcpPubSubStream(name, args);
+        return new GcpPubSubStream(name, args, _gcpProvider);
     }
 }

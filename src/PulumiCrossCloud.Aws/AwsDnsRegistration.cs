@@ -12,7 +12,13 @@ public class AwsDnsRegistration : IDnsRegistration
 {
     private readonly Record _record;
 
-    public AwsDnsRegistration(string name, IDnsZone zone, DnsRecord record, int? ttl = null)
+    public AwsDnsRegistration(
+        string name,
+        IDnsZone zone,
+        DnsRecord record,
+        int? ttl = null,
+        Pulumi.Aws.Provider? provider = null
+    )
     {
         Name = name;
         Zone = zone;
@@ -29,7 +35,8 @@ public class AwsDnsRegistration : IDnsRegistration
                 Type = MapRecordType(record.Type),
                 Ttl = Ttl,
                 Records = new InputList<string> { record.Value },
-            }
+            },
+            new CustomResourceOptions { Provider = provider }
         );
     }
 

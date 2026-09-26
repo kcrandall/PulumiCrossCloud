@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -24,10 +23,7 @@ public class GcpCloudRunCompute : ICompute
     public IEnumerable<ISecret> RequiredSecrets => _requiredSecrets.Select(x => x.secret);
     public Output<string> Arn => _service.Name;
     public CloudProvider Provider => CloudProvider.GCP;
-    private static readonly ConcurrentDictionary<
-        string,
-        Pulumi.Gcp.Projects.Service
-    > _cloudRunApiEnabled = new();
+    private readonly Pulumi.Gcp.Projects.Service _cloudRunApi;
     private Pulumi.Gcp.CloudRunV2.Service _service = null!; // Will be initialized in Deploy method
     private readonly List<(ISecret secret, string? envVarName)> _requiredSecrets = [];
     private readonly Dictionary<string, string> _environmentVariables = new();
@@ -195,17 +191,13 @@ public class GcpCloudRunCompute : ICompute
 
         var projectId = GcpProjectConfig.ProjectId;
         // Ensure required APIs are enabled for this project
-        if (!_cloudRunApiEnabled.ContainsKey(projectId))
-        {
-            var enableRun = GcpProjectServices.EnsureEnabled("run.googleapis.com");
-            _cloudRunApiEnabled[projectId] = enableRun;
-        }
+        _cloudRunApi = GcpProjectServices.EnsureEnabled("run.googleapis.com", provider);
         // Cloud Run provider sometimes queries Compute regions; ensure Compute API is enabled
-        _ = GcpProjectServices.EnsureEnabled("compute.googleapis.com");
+        _ = GcpProjectServices.EnsureEnabled("compute.googleapis.com", provider);
         // Create or use provided service account
         if (string.IsNullOrEmpty(serviceAccountEmail))
         {
-            var iamApi = GcpProjectServices.EnsureEnabled("iam.googleapis.com");
+            var iamApi = GcpProjectServices.EnsureEnabled("iam.googleapis.com", provider);
             _serviceAccountResource = new Pulumi.Gcp.ServiceAccount.Account(
                 $"cloudrun-sa-{name}",
                 new Pulumi.Gcp.ServiceAccount.AccountArgs
@@ -399,7 +391,7 @@ public class GcpCloudRunCompute : ICompute
         };
 
         // Build dependsOn list
-        var dependsOn = new List<Resource> { _cloudRunApiEnabled[projectId] };
+        var dependsOn = new List<Resource> { _cloudRunApi };
 
         if (
             ContainerRegistry is GcpContainerRegistry readyRegistry
