@@ -28,7 +28,10 @@ public class AwsSqsQueue : IQueueEndpoint
                 $"{{\"deadLetterTargetArn\":\"{args.DeadLetterTargetArn}\",\"maxReceiveCount\":{args.MaxDeliveryAttempts ?? 5}}}"
             );
 
-        var resourceName = args?.Fifo == true && !name.EndsWith(".fifo") ? $"{name}.fifo" : name;
+        // The provider appends ".fifo" itself when it autonames a FIFO resource, so a suffix
+        // in the logical name would end up mid-name and fail AWS name validation.
+        var resourceName =
+            args?.Fifo == true && name.EndsWith(".fifo") ? name[..^".fifo".Length] : name;
         _queue = new Queue(resourceName, queueArgs, customResourceOptions);
 
         if (args?.SubscribeTo != null)

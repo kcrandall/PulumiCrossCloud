@@ -90,9 +90,7 @@ public sealed class GcpCloudRunComputeTests(CloudRunDeployment deployment)
 }
 
 /// <summary>
-/// Builds every Cloud Run service the tests inspect in a single Pulumi deployment. One deployment is
-/// deliberate: <see cref="GcpProjectServices"/> caches its API-enablement resources for the life of
-/// the process, so a second deployment would depend on resources belonging to the first.
+/// Builds every Cloud Run service the tests inspect in a single Pulumi deployment.
 /// </summary>
 public sealed class CloudRunDeployment : IAsyncLifetime
 {

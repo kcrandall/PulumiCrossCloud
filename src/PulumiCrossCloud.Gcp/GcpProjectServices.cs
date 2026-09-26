@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using Pulumi;
 using Pulumi.Gcp.Projects;
 
@@ -13,8 +14,12 @@ namespace PulumiCrossCloud.Gcp;
 /// </summary>
 public static class GcpProjectServices
 {
-    private static readonly ConcurrentDictionary<string, Service> _enabledServicesByProjectAndName =
-        new();
+    // Keyed by deployment: an Automation API host runs several deployments in one process, and a
+    // resource registered by an earlier deployment does not exist in a later one.
+    private static readonly ConditionalWeakTable<
+        DeploymentInstance,
+        ConcurrentDictionary<string, Service>
+    > _enabledServicesByDeployment = new();
 
     /// <summary>
     /// Ensure the given API service is enabled in the current project and return the Pulumi Service resource.
@@ -25,7 +30,12 @@ public static class GcpProjectServices
         var projectId = GcpProjectConfig.ProjectId;
         var key = $"{projectId}:{serviceName}";
 
-        return _enabledServicesByProjectAndName.GetOrAdd(
+        var enabledServicesByProjectAndName = _enabledServicesByDeployment.GetValue(
+            Deployment.Instance,
+            _ => new ConcurrentDictionary<string, Service>()
+        );
+
+        return enabledServicesByProjectAndName.GetOrAdd(
             key,
             _ =>
             {

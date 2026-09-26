@@ -15,7 +15,10 @@ public class AwsSnsTopic : ITopicEndpoint
     )
     {
         Name = name;
-        var resourceName = args?.Fifo == true && !name.EndsWith(".fifo") ? $"{name}.fifo" : name;
+        // The provider appends ".fifo" itself when it autonames a FIFO resource, so a suffix
+        // in the logical name would end up mid-name and fail AWS name validation.
+        var resourceName =
+            args?.Fifo == true && name.EndsWith(".fifo") ? name[..^".fifo".Length] : name;
         _topic = new Topic(
             resourceName,
             new Pulumi.Aws.Sns.TopicArgs
