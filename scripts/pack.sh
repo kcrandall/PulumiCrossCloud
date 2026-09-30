@@ -78,6 +78,7 @@ dotnet build "${SOLUTION_FILE}" \
   "${MSBUILD_VERSION_ARG[@]}"
 
 if [[ "${RUN_TESTS}" == "true" ]]; then
+  python3 -m unittest discover -s "${REPO_DIR}/tests/PulumiCrossCloud.Neon.Tests" -p 'test_*.py'
   dotnet test "${SOLUTION_FILE}" \
     --configuration "${CONFIGURATION}" \
     --no-build \

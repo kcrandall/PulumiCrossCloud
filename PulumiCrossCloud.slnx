@@ -37,11 +37,15 @@
     <Project Path="src/PulumiCrossCloud.Upstash/PulumiCrossCloud.Upstash.csproj" />
     <Project Path="src/PulumiCrossCloud.Upstash/Generated/upstash/Pulumi.Upstash.csproj" />
   </Folder>
+  <Folder Name="/src/PulumiCrossCloud.Neon/" />
+  <Folder Name="/src/PulumiCrossCloud.Neon/Generated/" />
+  <Folder Name="/src/PulumiCrossCloud.Neon/Generated/neon/" />
   <Folder Name="/tests/">
     <Project Path="tests/PulumiCrossCloud.Aws.Tests/PulumiCrossCloud.Aws.Tests.csproj" />
     <Project Path="tests/PulumiCrossCloud.Cloudflare.Tests/PulumiCrossCloud.Cloudflare.Tests.csproj" />
     <Project Path="tests/PulumiCrossCloud.Core.Tests/PulumiCrossCloud.Core.Tests.csproj" />
     <Project Path="tests/PulumiCrossCloud.Gcp.Tests/PulumiCrossCloud.Gcp.Tests.csproj" />
     <Project Path="tests/PulumiCrossCloud.Integration.Tests/PulumiCrossCloud.Integration.Tests.csproj" />
+    <Project Path="tests/PulumiCrossCloud.Neon.Tests/PulumiCrossCloud.Neon.Tests.csproj" />
   </Folder>
 </Solution>

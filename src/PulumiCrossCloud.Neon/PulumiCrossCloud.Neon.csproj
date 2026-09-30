@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <EmbeddedResource Include="configure-neon-compute.py" />
     <ProjectReference Include="..\PulumiCrossCloud.Core\PulumiCrossCloud.Core.csproj" />
     <ProjectReference Include="Generated\neon\Pulumi.Neon.csproj" PrivateAssets="all" />
   </ItemGroup>

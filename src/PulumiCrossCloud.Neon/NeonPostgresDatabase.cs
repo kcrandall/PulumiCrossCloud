@@ -37,7 +37,7 @@ public class NeonPostgresDatabase : IPostgresDatabase
     {
         Name = name;
         var neonOptions = options as NeonPostgresOptions ?? new NeonPostgresOptions();
-        var customResourceOptions = new CustomResourceOptions { Provider = provider };
+        NeonComputeSettings.Validate(neonOptions);
 
         _project = new Project(
             $"{name}-project",
@@ -71,6 +71,8 @@ public class NeonPostgresDatabase : IPostgresDatabase
             }
         );
         var branchId = _project.DefaultBranchId;
+
+        ComputeSettings = NeonComputeSettings.Create(name, _project, neonOptions, provider)?.Stdout;
 
         var masterUser = options?.MasterUsername ?? "admin";
         _role = new Role(
@@ -118,6 +120,9 @@ public class NeonPostgresDatabase : IPostgresDatabase
 
     public Output<string> ProjectId => _project.Id;
     public Output<string> BranchId => _project.DefaultBranchId;
+
+    /// <summary>The confirmed default compute policy, when explicit settings are supplied.</summary>
+    public Output<string>? ComputeSettings { get; }
 
     public void EnableExtension(string extensionName)
     {

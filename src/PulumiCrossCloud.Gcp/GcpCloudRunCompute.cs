@@ -135,6 +135,13 @@ public class GcpCloudRunCompute : ICompute
     public string? MemoryLimit { get; set; }
     public string? CpuLimit { get; set; }
 
+    /// <summary>
+    /// True allocates CPU while requests are running (request-based billing); false keeps CPU
+    /// allocated between requests for background workers (instance-based billing). Null uses
+    /// the Cloud Run default. Combine false with MinCount >= 1 to keep a worker always running.
+    /// </summary>
+    public bool? CpuIdle { get; set; }
+
     /// <inheritdoc />
     public bool ImageDeployedByPipeline { get; set; }
 
@@ -349,6 +356,7 @@ public class GcpCloudRunCompute : ICompute
             LivenessProbe = live!,
             Resources = new ServiceTemplateContainerResourcesArgs
             {
+                CpuIdle = CpuIdle,
                 Limits = new InputMap<string>
                 {
                     { "memory", MemoryLimit ?? "1Gi" },

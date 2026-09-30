@@ -28,6 +28,50 @@ public sealed class GcpCloudRunComputeTests(CloudRunDeployment deployment)
         Assert.Empty(deployment.OptionsFor(CloudRunDeployment.PulumiOwnedService).IgnoreChanges);
     }
 
+    [Theory]
+    [InlineData("always-allocated-api", false, 1)]
+    [InlineData("scale-to-zero-api", true, 0)]
+    public void CpuAllocationAndMinimumInstances_ReachTheCloudRunInputs(
+        string name,
+        bool cpuIdle,
+        int minimum
+    )
+    {
+        var inputs = deployment.ServiceInputs(name);
+        Assert.True(
+            PulumiPropertyPath.TryResolve(
+                inputs,
+                "template.containers[0].resources.cpuIdle",
+                out var idle
+            )
+        );
+        Assert.Equal(cpuIdle, idle);
+        Assert.True(
+            PulumiPropertyPath.TryResolve(inputs, "scaling.minInstanceCount", out var serviceMin)
+        );
+        Assert.True(
+            PulumiPropertyPath.TryResolve(
+                inputs,
+                "template.scaling.minInstanceCount",
+                out var revisionMin
+            )
+        );
+        Assert.Equal(minimum, Convert.ToInt32(serviceMin));
+        Assert.Equal(minimum, Convert.ToInt32(revisionMin));
+    }
+
+    [Fact]
+    public void UnspecifiedCpuAllocation_PreservesTheCloudRunDefault()
+    {
+        var inputs = deployment.ServiceInputs(CloudRunDeployment.PulumiOwnedService);
+        var present = PulumiPropertyPath.TryResolve(
+            inputs,
+            "template.containers[0].resources.cpuIdle",
+            out var idle
+        );
+        Assert.True(!present || idle is null);
+    }
+
     /// <summary>
     /// The ignore path is matched by the engine against the inputs the SDK serializes, so a typo
     /// (C# casing, a renamed field, a container collection that is not a list) is a silent no-op that
@@ -158,6 +202,28 @@ public sealed class CloudRunStack : Pulumi.Stack
             CloudRunDeployment.ImageTag
         );
         pulumiOwned.Build();
+
+        new GcpCloudRunCompute(
+            "always-allocated-api",
+            registry,
+            CloudRunDeployment.ImageName,
+            CloudRunDeployment.ImageTag
+        )
+        {
+            CpuIdle = false,
+            MinCount = 1,
+            CpuLimit = "1",
+        }.Build();
+        new GcpCloudRunCompute(
+            "scale-to-zero-api",
+            registry,
+            CloudRunDeployment.ImageName,
+            CloudRunDeployment.ImageTag
+        )
+        {
+            CpuIdle = true,
+            MinCount = 0,
+        }.Build();
     }
 
     private static ResourceTransformationResult? Record(ResourceTransformationArgs args)
