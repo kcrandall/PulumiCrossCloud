@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using Pulumi;
 using Pulumi.Testing;
+using PulumiCrossCloud.Core;
 
 [assembly: CollectionBehavior(DisableTestParallelization = true)]
 
@@ -11,6 +12,58 @@ namespace PulumiCrossCloud.Gcp.Tests;
 public sealed class GcpCloudRunComputeTests(CloudRunDeployment deployment)
     : IClassFixture<CloudRunDeployment>
 {
+    [Fact]
+    public void BuiltImage_UsesThePushedImageUrl()
+    {
+        Assert.True(
+            PulumiPropertyPath.TryResolve(
+                deployment.ServiceInputs("built-image-api"),
+                GcpCloudRunCompute.ContainerImagePropertyPath,
+                out var image
+            )
+        );
+        Assert.Equal(CloudRunStack.BuiltImageUri, image);
+    }
+
+    [Fact]
+    public void RequiredSecret_WaitsForTheSecretVersion()
+    {
+        Assert.Contains(
+            CloudRunStack.RecordedDependencies["secret-api"],
+            resource => resource is Pulumi.Gcp.SecretManager.SecretVersion
+        );
+    }
+
+    [Fact]
+    public void SameSecret_CanPopulateMultipleEnvironmentVariables()
+    {
+        var inputs = deployment.ServiceInputs("secret-api");
+        Assert.True(
+            PulumiPropertyPath.TryResolve(
+                inputs,
+                "template.containers[0].envs[0].name",
+                out var first
+            )
+        );
+        Assert.True(
+            PulumiPropertyPath.TryResolve(
+                inputs,
+                "template.containers[0].envs[1].name",
+                out var second
+            )
+        );
+        Assert.Equal("API_PASSWORD", first);
+        Assert.Equal("SECOND_API_PASSWORD", second);
+        Assert.Single(
+            deployment.CreatedResources("gcp:secretmanager/secretIamMember:SecretIamMember")
+        );
+        Assert.Equal(2, CloudRunStack.SecretConfiguration.RequiredSecrets.Count());
+        Assert.Equal(
+            "SECOND_API_PASSWORD",
+            CloudRunStack.SecretConfiguration.SecretMappings["api-password"]
+        );
+    }
+
     [Fact]
     public void PipelineOwnedImage_LeavesTheContainerImageToThePipeline()
     {
@@ -173,11 +226,17 @@ public sealed class CloudRunDeployment : IAsyncLifetime
     /// </summary>
     public ImmutableDictionary<string, object> ServiceInputs(string serviceName) =>
         _mocks.Created(CloudRunServiceType).Single(resource => resource.Name == serviceName).Inputs;
+
+    public IEnumerable<MockResourceArgs> CreatedResources(string type) => _mocks.Created(type);
 }
 
 public sealed class CloudRunStack : Pulumi.Stack
 {
     public static readonly ConcurrentDictionary<string, ResourceOptions> RecordedOptions = new();
+    public static readonly ConcurrentDictionary<string, Resource[]> RecordedDependencies = new();
+    public const string BuiltImageUri =
+        "us-central1-docker.pkg.dev/unit-test-project/test-registry/api:sha-12345678";
+    public static ComputeConfigurationResponse SecretConfiguration { get; private set; } = null!;
 
     public CloudRunStack()
         : base(new StackOptions { ResourceTransformations = [Record] })
@@ -224,13 +283,55 @@ public sealed class CloudRunStack : Pulumi.Stack
             CpuIdle = true,
             MinCount = 0,
         }.Build();
+
+        var image = new TestContainerImage(registry);
+        new GcpCloudRunCompute("built-image-api", registry, containerImage: image).Build();
+
+        var secret = new GcpSecret("api-password", "test-value");
+        var secretCompute = new GcpCloudRunCompute("secret-api", registry, "api");
+        secretCompute.AddRequiredSecret(secret, "API_PASSWORD");
+        secretCompute.AddRequiredSecret(secret, "SECOND_API_PASSWORD");
+        SecretConfiguration = secretCompute.GetConfiguration();
+        secretCompute.Build();
+
+        Assert.IsType<Pulumi.Gcp.SecretManager.SecretVersion>(secret.ValueResource);
+        var outputSecret = new GcpSecret("output-password", Output.Create("test-value"));
+        Assert.IsType<Pulumi.Gcp.SecretManager.SecretVersion>(outputSecret.ValueResource);
+        var externallyManagedSecret = new GcpSecret("external-password", "");
+        Assert.Same(externallyManagedSecret.Resource, externallyManagedSecret.ValueResource);
     }
 
     private static ResourceTransformationResult? Record(ResourceTransformationArgs args)
     {
         RecordedOptions[$"{args.Resource.GetResourceType()}::{args.Resource.GetResourceName()}"] =
             args.Options;
+        if (
+            args.Resource.GetResourceType() == CloudRunDeployment.CloudRunServiceType
+            && args.Options.DependsOn is not null
+        )
+        {
+            Output<ImmutableArray<Resource>> dependencies = args.Options.DependsOn;
+            dependencies.Apply(resources =>
+            {
+                RecordedDependencies[args.Resource.GetResourceName()] = resources.ToArray();
+                return true;
+            });
+        }
         return null;
+    }
+
+    private sealed class TestContainerImage(IContainerRegistry registry) : IContainerImage
+    {
+        public string Name => "api";
+        public Output<string> Arn => Output.Create(BuiltImageUri);
+        public CloudProvider Provider => CloudProvider.GCP;
+        public Resource Resource { get; set; } = registry.Resource;
+        public Resource ContainerImageBuildResource { get; set; } = registry.Resource;
+        public Output<ImageDeploymentResult> DeploymentResult { get; } =
+            Output.Create(
+                new ImageDeploymentResult { ImageUrl = BuiltImageUri, ImageTag = "sha-12345678" }
+            );
+        public IContainerRegistry Registry => registry;
     }
 }
 

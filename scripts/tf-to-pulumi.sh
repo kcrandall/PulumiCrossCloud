@@ -119,7 +119,7 @@ pushd "$MODULE_SOURCE" > /dev/null || exit 1
 
 CONVERT_EXIT_CODE=$?
 
-popd > /dev/null
+popd > /dev/null || exit 1
 
 if [ $CONVERT_EXIT_CODE -eq 0 ]; then
     echo ""

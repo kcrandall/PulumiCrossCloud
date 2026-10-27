@@ -38,3 +38,7 @@ Pulumi.*.yaml
 
 # macOS
 .DS_Store
+
+# Python test caches
+__pycache__/
+*.py[cod]

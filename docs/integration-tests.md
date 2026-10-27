@@ -22,6 +22,12 @@ dotnet test tests/PulumiCrossCloud.Integration.Tests
 Run one cloud with `--filter Cloud=AWS` or `--filter Cloud=GCP`. Every integration test carries
 `Category=Integration`, so `dotnet test --filter Category!=Integration` runs only the unit tests.
 
+The `Build and test` GitHub Actions workflow runs the AWS and GCP emulator suites on Linux
+with Docker and a pinned Pulumi CLI. A separate job builds the complete solution, including
+samples, and runs unit tests on Linux, Windows, and macOS using .NET 10. Package release scripts
+run unit tests by default; pass `--include-integration-tests` to `scripts/pack.sh` to include
+the emulator suites locally.
+
 The Floci images are pinned in `Infrastructure/FlociEmulator.cs`. Override them with
 `FLOCI_AWS_IMAGE` or `FLOCI_GCP_IMAGE` to try a newer release.
 

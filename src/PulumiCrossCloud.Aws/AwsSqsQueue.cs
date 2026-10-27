@@ -75,7 +75,10 @@ public class AwsSqsQueue : IQueueEndpoint
                                             Resource = queueArn,
                                             Condition = new
                                             {
-                                                ArnEquals = new { aws_SourceArn = topicArn },
+                                                ArnEquals = new Dictionary<string, string>
+                                                {
+                                                    ["aws:SourceArn"] = topicArn,
+                                                },
                                             },
                                         },
                                     },

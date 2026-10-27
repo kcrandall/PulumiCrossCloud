@@ -7,25 +7,25 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="AWSSDK.ECR" Version="4.0.101.6" />
-    <PackageReference Include="AWSSDK.IdentityManagement" Version="4.0.103.6" />
-    <PackageReference Include="AWSSDK.Kinesis" Version="4.0.104" />
-    <PackageReference Include="AWSSDK.Route53" Version="4.0.100.14" />
-    <PackageReference Include="AWSSDK.S3" Version="4.0.103.4" />
-    <PackageReference Include="AWSSDK.SecretsManager" Version="4.0.100.14" />
-    <PackageReference Include="AWSSDK.SimpleNotificationService" Version="4.0.100.15" />
-    <PackageReference Include="AWSSDK.SQS" Version="4.0.100.14" />
-    <PackageReference Include="coverlet.collector" Version="10.0.1">
+    <PackageReference Include="AWSSDK.ECR" Version="4.0.102" />
+    <PackageReference Include="AWSSDK.IdentityManagement" Version="4.0.103.13" />
+    <PackageReference Include="AWSSDK.Kinesis" Version="4.0.104.7" />
+    <PackageReference Include="AWSSDK.Route53" Version="4.0.100.21" />
+    <PackageReference Include="AWSSDK.S3" Version="4.0.104.7" />
+    <PackageReference Include="AWSSDK.SecretsManager" Version="4.0.100.22" />
+    <PackageReference Include="AWSSDK.SimpleNotificationService" Version="4.0.100.22" />
+    <PackageReference Include="AWSSDK.SQS" Version="4.0.100.21" />
+    <PackageReference Include="coverlet.collector" Version="10.1.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
-    <PackageReference Include="OpenTelemetry.Api" Version="1.19.1" />
-    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.19.1" />
-    <PackageReference Include="Pulumi.Automation" Version="3.114.0" />
-    <PackageReference Include="Testcontainers" Version="4.15.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
+    <PackageReference Include="OpenTelemetry.Api" Version="1.20.1" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.20.1" />
+    <PackageReference Include="Pulumi.Automation" Version="3.116.1" />
+    <PackageReference Include="Testcontainers" Version="4.16.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0">
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>

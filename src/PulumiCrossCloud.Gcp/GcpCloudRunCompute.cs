@@ -239,10 +239,7 @@ public class GcpCloudRunCompute : ICompute
         var projectId = GcpProjectConfig.ProjectId;
         var region = GcpProjectConfig.Region;
 
-        // Simplify image URI construction to avoid complex Output.Apply chains
-        var imageUri = ContainerRegistry is GcpContainerRegistry gcpRegistry
-            ? gcpRegistry.RegistryUrlOutput.Apply(url => $"{url}/{_imageName}:{_imageTag}")
-            : Output.Create($"{region}-docker.pkg.dev/{projectId}/{Name}/{_imageName}:{_imageTag}");
+        var imageUri = GetContainerImageUri();
 
         var portConfig = PortForwardings.FirstOrDefault();
 
@@ -410,11 +407,10 @@ public class GcpCloudRunCompute : ICompute
         if (_containerImage?.Resource is not null)
             dependsOn.Add(_containerImage.Resource);
 
-        // Prefer depending on SecretVersion if you can expose it from GcpSecret;
-        // if not, at least depend on the Secret resource.
+        // A secret container can exist before its value; wait for the version as well.
         foreach (var s in _requiredSecrets)
             if (s.secret is GcpSecret gs)
-                dependsOn.Add(gs.Resource);
+                dependsOn.Add(gs.ValueResource);
 
         if (
             ContainerRegistry is GcpContainerRegistry gcpContainerRegistry
@@ -442,8 +438,13 @@ public class GcpCloudRunCompute : ICompute
                 dependsOn.Add(gcpSecret.Resource);
 
         // // IAM bindings for secrets
-        foreach (var secret in _requiredSecrets)
-            if (secret.secret is GcpSecret gcpSecret && serviceAccountEmail is not null)
+        foreach (
+            var gcpSecret in _requiredSecrets
+                .Select(secret => secret.secret)
+                .OfType<GcpSecret>()
+                .DistinctBy(secret => secret.Name)
+        )
+            if (serviceAccountEmail is not null)
             {
                 var secretIam = new SecretIamMember(
                     $"cloudrun-secret-read-{Name}-{gcpSecret.Name}",
@@ -549,6 +550,29 @@ public class GcpCloudRunCompute : ICompute
 
                 Log.Info($"Created domain mapping for {domain} -> Cloud Run service {Name}");
             }
+    }
+
+    private Output<string> GetContainerImageUri()
+    {
+        if (_containerImage is null)
+            return ContainerRegistry.RegistryUrlOutput.Apply(url =>
+                $"{url.TrimEnd('/')}/{_imageName}:{_imageTag}"
+            );
+
+        var deploymentResult = _containerImage.DeploymentResult;
+        if (deploymentResult is null)
+            throw new InvalidOperationException(
+                $"Container image '{_containerImage.Name}' must be pushed before building Cloud Run compute '{Name}'."
+            );
+
+        return deploymentResult.Apply(result =>
+        {
+            if (string.IsNullOrWhiteSpace(result.ImageUrl))
+                throw new InvalidOperationException(
+                    $"Container image '{_containerImage.Name}' did not produce an image URL."
+                );
+            return result.ImageUrl;
+        });
     }
 
     public void AddEnvironmentVariable(string name, string value)
@@ -678,7 +702,9 @@ public class GcpCloudRunCompute : ICompute
                 _environmentVariablesOutput
             ),
             RequiredSecrets = _requiredSecrets.Select(x => x.secret).ToList(),
-            SecretMappings = _requiredSecrets.ToDictionary(x => x.secret.Name, x => x.envVarName),
+            SecretMappings = _requiredSecrets
+                .GroupBy(x => x.secret.Name)
+                .ToDictionary(group => group.Key, group => group.Last().envVarName),
         };
 
         return response;

@@ -1,27 +1,27 @@
 #!/bin/bash
 
-# Script to check if Docker image digests match between remote and local
+# Script to check if Docker manifest digests match between remote and local.
+# Requires Docker with the Buildx plugin.
 # Usage: ./check-image-digest.sh <image_name> <registry_url>
 
-set -e
+set -euo pipefail
 
-IMAGE_NAME="$1"
-REGISTRY_URL="$2"
-FULL_IMAGE_NAME="${REGISTRY_URL}/${IMAGE_NAME}:latest"
-
-if [ -z "$IMAGE_NAME" ] || [ -z "$REGISTRY_URL" ]; then
+if [[ $# -ne 2 || -z "$1" || -z "$2" ]]; then
     echo "Usage: $0 <image_name> <registry_url>"
     exit 1
 fi
 
+IMAGE_NAME="$1"
+REGISTRY_URL="${2%/}"
+FULL_IMAGE_NAME="${REGISTRY_URL}/${IMAGE_NAME}:latest"
+
 echo "Checking digests for: $FULL_IMAGE_NAME"
 
-# Get remote digest
+# Inspect the manifest/index digest, rather than .config.digest (the image config
+# is a different blob and cannot be compared with a local RepoDigest).
 REMOTE_DIGEST=""
 if command -v docker &> /dev/null; then
-    if docker manifest inspect "$FULL_IMAGE_NAME" &> /dev/null; then
-        REMOTE_DIGEST=$(docker manifest inspect "$FULL_IMAGE_NAME" | jq -r '.config.digest // empty' 2>/dev/null || echo "")
-    fi
+    REMOTE_DIGEST=$(docker buildx imagetools inspect "$FULL_IMAGE_NAME" --format '{{.Manifest.Digest}}' 2>/dev/null || true)
 fi
 
 if [ -z "$REMOTE_DIGEST" ]; then
@@ -29,22 +29,21 @@ if [ -z "$REMOTE_DIGEST" ]; then
     exit 0
 fi
 
-# Get local digest
-LOCAL_DIGEST=""
-if command -v docker &> /dev/null; then
-    if docker inspect "$FULL_IMAGE_NAME" &> /dev/null; then
-        LOCAL_DIGEST=$(docker inspect "$FULL_IMAGE_NAME" --format='{{index .RepoDigests 0}}' 2>/dev/null | cut -d'@' -f2 || echo "")
-    fi
-fi
+# A local image may have several repository digests. Check all of them instead
+# of assuming the first entry belongs to the image reference being checked.
+LOCAL_REPO_DIGESTS=$(docker image inspect "$FULL_IMAGE_NAME" --format '{{range .RepoDigests}}{{println .}}{{end}}' 2>/dev/null || true)
 
-if [ -z "$LOCAL_DIGEST" ]; then
+if [ -z "$LOCAL_REPO_DIGESTS" ]; then
     echo "no-local-image"
     exit 0
 fi
 
-# Compare digests
-if [ "$REMOTE_DIGEST" = "$LOCAL_DIGEST" ]; then
-    echo "match:$REMOTE_DIGEST"
-else
-    echo "different:remote=$REMOTE_DIGEST,local=$LOCAL_DIGEST"
-fi
+while IFS= read -r REPO_DIGEST; do
+    if [[ "${REPO_DIGEST##*@}" == "$REMOTE_DIGEST" ]]; then
+        echo "match:$REMOTE_DIGEST"
+        exit 0
+    fi
+done <<< "$LOCAL_REPO_DIGESTS"
+
+LOCAL_DIGEST="${LOCAL_REPO_DIGESTS%%$'\n'*}"
+echo "different:remote=$REMOTE_DIGEST,local=${LOCAL_DIGEST##*@}"

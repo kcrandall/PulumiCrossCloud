@@ -2,7 +2,6 @@ using System;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
-using System.Text;
 using Microsoft.IdentityModel.Tokens;
 
 namespace PulumiCrossCloud.Keycloak;
@@ -30,14 +29,19 @@ public static class AppleJwtHelper
     )
     {
         var now = DateTimeOffset.UtcNow;
-        var securityKey = GetAppleSecurityKey(privateKey, keyId);
-        var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.EcdsaSha256);
+        using var ecdsa = ECDsa.Create();
+        ecdsa.ImportFromPem(privateKey);
+        var securityKey = new ECDsaSecurityKey(ecdsa) { KeyId = keyId };
+        var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.EcdsaSha256)
+        {
+            CryptoProviderFactory = new CryptoProviderFactory { CacheSignatureProviders = false },
+        };
 
         var handler = new JwtSecurityTokenHandler();
         var token = handler.CreateJwtSecurityToken(
             issuer: teamId,
             audience: "https://appleid.apple.com",
-            subject: new ClaimsIdentity(new[] { new Claim("sub", clientId) }),
+            subject: new ClaimsIdentity([new Claim("sub", clientId)]),
             notBefore: now.UtcDateTime,
             expires: now.AddMinutes(expirationMinutes).UtcDateTime,
             issuedAt: now.UtcDateTime,
@@ -45,17 +49,5 @@ public static class AppleJwtHelper
         );
         token.Header["kid"] = keyId;
         return handler.WriteToken(token);
-    }
-
-    private static ECDsaSecurityKey GetAppleSecurityKey(string privateKeyPem, string keyId)
-    {
-        // Remove PEM header/footer and decode base64
-        var keyLines = privateKeyPem.Split('\n');
-        var base64 = string.Join("", keyLines[1..^1]);
-        var keyBytes = Convert.FromBase64String(base64);
-        var ecdsa = ECDsa.Create();
-        ecdsa.ImportPkcs8PrivateKey(keyBytes, out _);
-        var securityKey = new ECDsaSecurityKey(ecdsa) { KeyId = keyId };
-        return securityKey;
     }
 }

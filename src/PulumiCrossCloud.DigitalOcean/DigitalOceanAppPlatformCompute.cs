@@ -139,7 +139,9 @@ public sealed class DigitalOceanAppPlatformCompute : ICompute
                 _environmentVariablesOutput
             ),
             RequiredSecrets = _requiredSecrets.Select(x => x.secret).ToList(),
-            SecretMappings = _requiredSecrets.ToDictionary(x => x.secret.Name, x => x.envVarName),
+            SecretMappings = _requiredSecrets
+                .GroupBy(x => x.secret.Name)
+                .ToDictionary(group => group.Key, group => group.Last().envVarName),
         };
 
     public IEnumerable<IPolicyStatement> GetPolicy(params ComputePermissions[] permissions) => [];

@@ -1,0 +1,80 @@
+name: Build and test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  compatibility:
+    name: .NET 10 on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v6.0.0
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore PulumiCrossCloud.slnx
+
+      - name: Build libraries, samples, and tests
+        run: dotnet build PulumiCrossCloud.slnx --configuration Release --no-restore -p:ContinuousIntegrationBuild=true
+
+      - name: Unit tests
+        run: dotnet test PulumiCrossCloud.slnx --configuration Release --no-build --no-restore --filter "Category!=Integration" --verbosity minimal
+
+      - name: Neon compute policy tests
+        run: python -m unittest discover -s tests/PulumiCrossCloud.Neon.Tests -p "test_*.py"
+
+      - name: Release script tests
+        if: runner.os != 'Windows'
+        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+
+      - name: Pack and verify bundled providers
+        if: runner.os == 'Linux'
+        run: |
+          bash scripts/pack.sh --skip-tests --prerelease stable
+          python3 scripts/verify-packages.py
+
+  integration:
+    name: AWS and GCP emulator integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v6.0.0
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Install Pulumi CLI
+        run: |
+          curl -fsSL https://get.pulumi.com | sh -s -- --version 3.272.0
+          echo "${HOME}/.pulumi/bin" >> "${GITHUB_PATH}"
+
+      - name: Check emulator prerequisites
+        run: |
+          pulumi version
+          docker info
+
+      - name: Integration tests
+        run: dotnet test tests/PulumiCrossCloud.Integration.Tests/PulumiCrossCloud.Integration.Tests.csproj --configuration Release --filter "Category=Integration" --verbosity normal

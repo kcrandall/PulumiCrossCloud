@@ -13,6 +13,7 @@
     <ProjectReference Include="..\PulumiCrossCloud.Azure\PulumiCrossCloud.Azure.csproj" />
     <ProjectReference Include="..\PulumiCrossCloud.Cloudflare\PulumiCrossCloud.Cloudflare.csproj" />
     <ProjectReference Include="..\PulumiCrossCloud.Core\PulumiCrossCloud.Core.csproj" />
+    <ProjectReference Include="..\PulumiCrossCloud.DigitalOcean\PulumiCrossCloud.DigitalOcean.csproj" />
     <ProjectReference Include="..\PulumiCrossCloud.EntityFramework\PulumiCrossCloud.EntityFramework.csproj" />
     <ProjectReference Include="..\PulumiCrossCloud.Extensions\PulumiCrossCloud.Extensions.csproj" />
     <ProjectReference Include="..\PulumiCrossCloud.Fly\PulumiCrossCloud.Fly.csproj" />

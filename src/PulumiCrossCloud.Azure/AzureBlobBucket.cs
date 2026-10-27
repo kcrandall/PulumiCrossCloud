@@ -30,12 +30,15 @@ public class AzureBlobBucket : IBucket
 
         var customResourceOptions = new CustomResourceOptions { Provider = provider };
 
+        var accountName = name.Replace("-", "");
+        accountName = accountName[..Math.Min(24, accountName.Length)];
+
         _storageAccount = new StorageAccount(
             name.Replace("-", ""),
             new StorageAccountArgs
             {
                 ResourceGroupName = resourceGroupName,
-                AccountName = name.Replace("-", "").Substring(0, Math.Min(24, name.Length)),
+                AccountName = accountName,
                 Kind = Kind.StorageV2,
                 Sku = new SkuArgs { Name = SkuName.Standard_LRS },
             },

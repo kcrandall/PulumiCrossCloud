@@ -4,34 +4,30 @@ namespace PulumiCrossCloud.Core;
 
 public static class PathUtils
 {
-    private static string? _cachedRepoRoot;
-
     /// <summary>
     /// Returns the absolute path to the repository root.
     /// It searches upwards from the caller's file path for a marker file (.git or .slnx).
     /// </summary>
     public static string GetRepoRoot([CallerFilePath] string? sourceFilePath = null)
     {
-        if (_cachedRepoRoot != null)
-            return _cachedRepoRoot;
-
         if (string.IsNullOrEmpty(sourceFilePath))
             return Directory.GetCurrentDirectory();
 
         var directory = Path.GetDirectoryName(sourceFilePath);
 
-        while (directory != null)
+        while (directory is not null)
         {
             // Look for common root markers
             if (
-                Directory.Exists(Path.Combine(directory, ".git"))
-                || Directory.GetFiles(directory, "*.slnx").Any()
-                || Directory.GetFiles(directory, "*.sln").Any()
+                Directory.Exists(directory)
+                && (
+                    Directory.Exists(Path.Combine(directory, ".git"))
+                    || File.Exists(Path.Combine(directory, ".git"))
+                    || Directory.EnumerateFiles(directory, "*.slnx").Any()
+                    || Directory.EnumerateFiles(directory, "*.sln").Any()
+                )
             )
-            {
-                _cachedRepoRoot = directory;
                 return directory;
-            }
 
             directory = Path.GetDirectoryName(directory);
         }
@@ -64,10 +60,16 @@ public static class PathUtils
         var latestFile = Directory
             .GetFiles(migrationsPath, "*.cs")
             .Select(Path.GetFileName)
-            .Where(f => f != null && char.IsDigit(f[0])) // Starts with timestamp
-            .OrderByDescending(f => f)
+            .Where(f =>
+                f is not null
+                && f.Length > 15
+                && f.Take(14).All(char.IsAsciiDigit)
+                && f[14] == '_'
+                && !f.EndsWith(".Designer.cs", StringComparison.OrdinalIgnoreCase)
+            )
+            .OrderByDescending(f => f, StringComparer.Ordinal)
             .FirstOrDefault();
 
-        return latestFile != null ? Path.GetFileNameWithoutExtension(latestFile) : "none";
+        return latestFile is not null ? Path.GetFileNameWithoutExtension(latestFile) : "none";
     }
 }

@@ -46,25 +46,50 @@ fi
 
 apply_prerelease_channel() {
   local version="$1"
+  local semver_pattern='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-([0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*))?(\+([0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*))?$'
+  if [[ ! "${version}" =~ ${semver_pattern} ]]; then
+    echo "Invalid SemVer version: ${version}" >&2
+    return 1
+  fi
+
+  # A prerelease belongs before build metadata; otherwise alpha would only be
+  # metadata and NuGet would treat the package as a stable release.
+  local metadata=""
+  if [[ "${version}" == *"+"* ]]; then
+    metadata="+${version#*+}"
+    version="${version%%+*}"
+  fi
+  local base="${version%%-*}"
+  local suffix=""
+  if [[ "${version}" == *"-"* ]]; then
+    suffix="${version#*-}"
+    local identifiers=()
+    local identifier
+    IFS='.' read -r -a identifiers <<< "${suffix}"
+    for identifier in "${identifiers[@]}"; do
+      if [[ "${identifier}" =~ ^0[0-9]+$ ]]; then
+        echo "Numeric SemVer prerelease identifiers cannot have leading zeroes: ${identifier}" >&2
+        return 1
+      fi
+    done
+  fi
 
   if [[ "${PRERELEASE_CHANNEL}" == "stable" ]]; then
-    echo "${version}"
+    echo "${version}${metadata}"
     return
   fi
 
-  if [[ "${version}" == *"-${PRERELEASE_CHANNEL}" || "${version}" == *".${PRERELEASE_CHANNEL}" ]]; then
-    echo "${version}"
+  if [[ "${suffix}" == "${PRERELEASE_CHANNEL}" || "${suffix}" == "${PRERELEASE_CHANNEL}."* ]]; then
+    echo "${version}${metadata}"
     return
   fi
 
-  if [[ "${version}" == *"-"* ]]; then
-    local base="${version%%-*}"
-    local suffix="${version#*-}"
-    echo "${base}-${PRERELEASE_CHANNEL}.${suffix}"
+  if [[ -n "${suffix}" ]]; then
+    echo "${base}-${PRERELEASE_CHANNEL}.${suffix}${metadata}"
     return
   fi
 
-  echo "${version}-${PRERELEASE_CHANNEL}"
+  echo "${version}-${PRERELEASE_CHANNEL}${metadata}"
 }
 
 if [[ -n "${INPUT_VERSION}" ]]; then
@@ -88,7 +113,7 @@ if [[ "${GITHUB_REF_TYPE:-}" == "tag" && "${GITHUB_REF_NAME:-}" == v* ]]; then
   exit 0
 fi
 
-if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+if [[ "${GITHUB_ACTIONS:-}" == "true" && "${PRERELEASE_CHANNEL}" != "stable" ]]; then
   CI_TIMESTAMP="$(date -u +%Y%m%d%H%M%S)"
   apply_prerelease_channel "${BASE_VERSION}-${CI_TIMESTAMP}"
   exit 0

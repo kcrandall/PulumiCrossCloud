@@ -7,6 +7,7 @@ SOLUTION_FILE="${REPO_DIR}/PulumiCrossCloud.slnx"
 OUTPUT_DIR="${REPO_DIR}/artifacts/nuget"
 CONFIGURATION="Release"
 RUN_TESTS=true
+INCLUDE_INTEGRATION_TESTS=false
 VERSION_OVERRIDE=""
 PRERELEASE_CHANNEL="alpha"
 
@@ -19,6 +20,7 @@ Options:
   --prerelease <channel>  Prerelease channel: alpha (default), beta, stable.
   --configuration <name>  Build configuration (default: Release).
   --skip-tests            Skip dotnet test before packing.
+  --include-integration-tests  Include emulator tests (requires Docker and Pulumi CLI).
   --output <path>         Output directory for .nupkg files.
 EOF
 }
@@ -39,6 +41,10 @@ while (($# > 0)); do
       ;;
     --skip-tests)
       RUN_TESTS=false
+      shift
+      ;;
+    --include-integration-tests)
+      INCLUDE_INTEGRATION_TESTS=true
       shift
       ;;
     --output)
@@ -79,11 +85,16 @@ dotnet build "${SOLUTION_FILE}" \
 
 if [[ "${RUN_TESTS}" == "true" ]]; then
   python3 -m unittest discover -s "${REPO_DIR}/tests/PulumiCrossCloud.Neon.Tests" -p 'test_*.py'
+  TEST_FILTER_ARGS=()
+  if [[ "${INCLUDE_INTEGRATION_TESTS}" != "true" ]]; then
+    TEST_FILTER_ARGS=(--filter 'Category!=Integration')
+  fi
   dotnet test "${SOLUTION_FILE}" \
     --configuration "${CONFIGURATION}" \
     --no-build \
     --nologo \
     --verbosity minimal \
+    ${TEST_FILTER_ARGS[@]+"${TEST_FILTER_ARGS[@]}"} \
     "${MSBUILD_VERSION_ARG[@]}"
 fi
 

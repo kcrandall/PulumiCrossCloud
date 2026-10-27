@@ -113,6 +113,7 @@ public class GcpSecret : ISecret
             : Output.Create(System.Threading.Tasks.Task.FromResult<string?>(null));
     public bool IgnoreChangesAfterCreate { get; }
     public Pulumi.Resource Resource => _secret;
+    public Pulumi.Resource ValueResource => (Pulumi.Resource?)_secretVersion ?? _secret;
 
     public async Task<string> GetValueAsync()
     {

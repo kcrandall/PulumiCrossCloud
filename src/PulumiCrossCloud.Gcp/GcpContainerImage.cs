@@ -30,15 +30,31 @@ public class GcpContainerImage : IContainerImage
         DeploymentResult = null!; // Will be set by PushImage method
     }
 
-    Output<ImageDeploymentResult> PushImage(
+    public Output<ImageDeploymentResult> PushImage(
         string dockerfilePath,
         string contextPath,
         ImageArgs? imageArgs = null
     )
     {
-        var result = ((IContainerImage)this).PushImage(dockerfilePath, contextPath, imageArgs);
-        DeploymentResult = result;
-        return result;
+        var buildResource = new ContainerImageBuildResource(
+            $"{Registry.Name}-build-{Name}",
+            Registry,
+            Name,
+            dockerfilePath,
+            contextPath,
+            imageArgs
+        );
+        Resource = buildResource.Resource;
+        ContainerImageBuildResource = buildResource;
+        DeploymentResult = Output
+            .Tuple(buildResource.ImageUrl, buildResource.ImageTag, buildResource.ResourceOutput)
+            .Apply(tuple => new ImageDeploymentResult
+            {
+                ImageUrl = tuple.Item1,
+                ImageTag = tuple.Item2,
+                Image = tuple.Item3,
+            });
+        return DeploymentResult;
     }
 
     /// <summary>

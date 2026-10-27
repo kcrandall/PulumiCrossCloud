@@ -44,8 +44,10 @@ jobs:
           echo "Resolved version: ${VERSION}"
 
       - name: Pack all PulumiCrossCloud packages
+        env:
+          PACKAGE_VERSION: ${{ steps.version.outputs.version }}
         run: |
-          bash ./scripts/pack.sh --version "${{ steps.version.outputs.version }}" --prerelease stable
+          bash ./scripts/pack.sh --version "${PACKAGE_VERSION}" --prerelease stable
 
       - name: Publish packages to NuGet
         env:

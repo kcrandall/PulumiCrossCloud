@@ -58,6 +58,19 @@ public class AwsBucket : IBucket
 
         _bucket = new Pulumi.Aws.S3.Bucket(name, bucketArgs, customResourceOptions);
 
+        if (Cdn is not null)
+        {
+            // Create Origin Access Identity for secure S3 access
+            _originAccessIdentity = new Pulumi.Aws.CloudFront.OriginAccessIdentity(
+                $"{name}-oai",
+                new Pulumi.Aws.CloudFront.OriginAccessIdentityArgs
+                {
+                    Comment = $"OAI for {name} bucket",
+                },
+                customResourceOptions
+            );
+        }
+
         // Configure public access block (required for public buckets)
         if (IsPublic)
         {
@@ -74,37 +87,16 @@ public class AwsBucket : IBucket
                 new CustomResourceOptions { DependsOn = new[] { _bucket }, Provider = provider }
             );
 
-            // Add public read policy
-            var publicReadPolicy = new Pulumi.Aws.S3.BucketPolicy(
+            // Keep this legacy policy resource in public+CDN stacks: deleting it would
+            // delete the shared S3 policy. Both legacy owners write the same complete grants.
+            _ = new Pulumi.Aws.S3.BucketPolicy(
                 $"{name}-public-read-policy",
                 new Pulumi.Aws.S3.BucketPolicyArgs
                 {
                     Bucket = _bucket.Id,
-                    Policy = _bucket.Arn.Apply(arn =>
-                        JsonSerializer.Serialize(
-                            new
-                            {
-                                Version = "2012-10-17",
-                                Statement = new[]
-                                {
-                                    new
-                                    {
-                                        Sid = "PublicReadGetObject",
-                                        Effect = "Allow",
-                                        Principal = "*",
-                                        Action = "s3:GetObject",
-                                        Resource = $"{arn}/*",
-                                    },
-                                },
-                            }
-                        )
-                    ),
+                    Policy = GetReadPolicy(),
                 },
-                new CustomResourceOptions
-                {
-                    DependsOn = new[] { _publicAccessBlock },
-                    Provider = provider,
-                }
+                new CustomResourceOptions { DependsOn = [_publicAccessBlock], Provider = provider }
             );
         }
 
@@ -150,52 +142,21 @@ public class AwsBucket : IBucket
         }
 
         // Configure CloudFront CDN if requested
-        if (Cdn is not null)
+        if (Cdn is not null && _originAccessIdentity is not null)
         {
-            // Create Origin Access Identity for secure S3 access
-            _originAccessIdentity = new Pulumi.Aws.CloudFront.OriginAccessIdentity(
-                $"{name}-oai",
-                new Pulumi.Aws.CloudFront.OriginAccessIdentityArgs
-                {
-                    Comment = $"OAI for {name} bucket",
-                },
-                customResourceOptions
-            );
-
             // Create bucket policy to allow CloudFront access
             var cdnBucketPolicy = new Pulumi.Aws.S3.BucketPolicy(
                 $"{name}-cdn-policy",
                 new Pulumi.Aws.S3.BucketPolicyArgs
                 {
                     Bucket = _bucket.Id,
-                    Policy = Output
-                        .All(_bucket.Arn, _originAccessIdentity.IamArn)
-                        .Apply(values =>
-                        {
-                            var bucketArn = values[0];
-                            var oaiArn = values[1];
-                            return JsonSerializer.Serialize(
-                                new
-                                {
-                                    Version = "2012-10-17",
-                                    Statement = new[]
-                                    {
-                                        new
-                                        {
-                                            Sid = "AllowCloudFrontAccess",
-                                            Effect = "Allow",
-                                            Principal = new { AWS = oaiArn },
-                                            Action = "s3:GetObject",
-                                            Resource = $"{bucketArn}/*",
-                                        },
-                                    },
-                                }
-                            );
-                        }),
+                    Policy = GetReadPolicy(),
                 },
                 new CustomResourceOptions
                 {
-                    DependsOn = new Resource[] { _bucket, _originAccessIdentity },
+                    DependsOn = _publicAccessBlock is not null
+                        ? [_bucket, _originAccessIdentity, _publicAccessBlock]
+                        : [_bucket, _originAccessIdentity],
                     Provider = provider,
                 }
             );
@@ -287,6 +248,41 @@ public class AwsBucket : IBucket
             );
         }
     }
+
+    private Output<string> GetReadPolicy() =>
+        Output
+            .All(_bucket.Arn, _originAccessIdentity?.IamArn ?? Output.Create(string.Empty))
+            .Apply(values =>
+            {
+                var bucketArn = values[0];
+                var oaiArn = values[1];
+                List<object> statements = [];
+                if (_originAccessIdentity is not null)
+                    statements.Add(
+                        new
+                        {
+                            Sid = "AllowCloudFrontAccess",
+                            Effect = "Allow",
+                            Principal = new { AWS = oaiArn },
+                            Action = "s3:GetObject",
+                            Resource = $"{bucketArn}/*",
+                        }
+                    );
+                if (IsPublic)
+                    statements.Add(
+                        new
+                        {
+                            Sid = "PublicReadGetObject",
+                            Effect = "Allow",
+                            Principal = "*",
+                            Action = "s3:GetObject",
+                            Resource = $"{bucketArn}/*",
+                        }
+                    );
+                return JsonSerializer.Serialize(
+                    new { Version = "2012-10-17", Statement = statements }
+                );
+            });
 
     public BucketDnsRecords GetRequiredDnsRecords(IEnumerable<string> hostNames)
     {

@@ -111,7 +111,12 @@ public sealed class KoyebServiceCompute : ICompute
     }
 
     public IEnumerable<DnsRecord> GetRequiredDnsRecords(IEnumerable<string> names) =>
-        names.Select(name => new DnsRecord(DnsRecordType.CNAME, name, ServiceUrl, $"{name}-cname"));
+        names.Select(name => new DnsRecord(
+            DnsRecordType.CNAME,
+            name,
+            ServiceUrl.Apply(ExtractHost),
+            $"{name}-cname"
+        ));
 
     public IEnumerable<DnsRecord> RegisterDnsMappingAndCertificates(
         IEnumerable<string> customDomains
@@ -125,7 +130,9 @@ public sealed class KoyebServiceCompute : ICompute
                 _environmentVariablesOutput
             ),
             RequiredSecrets = _requiredSecrets.Select(x => x.secret).ToList(),
-            SecretMappings = _requiredSecrets.ToDictionary(x => x.secret.Name, x => x.envVarName),
+            SecretMappings = _requiredSecrets
+                .GroupBy(x => x.secret.Name)
+                .ToDictionary(group => group.Key, group => group.Last().envVarName),
         };
 
     public IEnumerable<IPolicyStatement> GetPolicy(params ComputePermissions[] permissions) => [];
@@ -298,6 +305,17 @@ public sealed class KoyebServiceCompute : ICompute
 
     private static string ShellQuote(string value) =>
         $"'{value.Replace("'", "'\\''", StringComparison.Ordinal)}'";
+
+    private static string ExtractHost(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            return string.Empty;
+
+        var toParse = url.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+            ? url
+            : $"https://{url}";
+        return Uri.TryCreate(toParse, UriKind.Absolute, out var uri) ? uri.Host : url;
+    }
 
     private static string ToEnvironmentName(string name) =>
         name.Replace("-", "_", StringComparison.Ordinal).ToUpperInvariant();

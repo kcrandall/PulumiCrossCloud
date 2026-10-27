@@ -47,5 +47,6 @@
     <Project Path="tests/PulumiCrossCloud.Gcp.Tests/PulumiCrossCloud.Gcp.Tests.csproj" />
     <Project Path="tests/PulumiCrossCloud.Integration.Tests/PulumiCrossCloud.Integration.Tests.csproj" />
     <Project Path="tests/PulumiCrossCloud.Neon.Tests/PulumiCrossCloud.Neon.Tests.csproj" />
+    <Project Path="tests/PulumiCrossCloud.Provider.Tests/PulumiCrossCloud.Provider.Tests.csproj" />
   </Folder>
 </Solution>

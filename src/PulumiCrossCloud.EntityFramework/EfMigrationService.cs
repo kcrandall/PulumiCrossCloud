@@ -32,7 +32,9 @@ public class EfMigrationService
     // Static flags to ensure we only run setup tasks once per Pulumi process
     private static bool _hasCheckedDotnet = false;
     private static bool _hasUpdatedEf = false;
-    private static bool _hasBuilt = false;
+    private readonly HashSet<string> _builtStartupProjects = new(
+        OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal
+    );
     private static readonly object _setupLock = new object();
 
     public async Task RunMigrationsAsync(bool apply = true)
@@ -57,16 +59,22 @@ public class EfMigrationService
                 return;
             }
 
-            if (!_hasBuilt)
+            var workingDirectory = Path.GetFullPath(
+                _options.WorkingDirectory ?? Directory.GetCurrentDirectory()
+            );
+            foreach (var context in _options.Contexts)
             {
-                var startupProject = _options.Contexts[0].StartupProjectPath;
+                var startupProject = Path.GetFullPath(context.StartupProjectPath, workingDirectory);
+                if (_builtStartupProjects.Contains(startupProject))
+                    continue;
+
                 Log.Info($"Building {Path.GetFileName(startupProject)}...");
-                // Use -v q (quiet) to suppress all build output
+                // Use -v q (quiet) to suppress all build output.
                 RunQuietCommand(
                     "dotnet",
                     $"build \"{startupProject}\" -v q /nologo /p:PublishAot=false"
                 );
-                _hasBuilt = true;
+                _builtStartupProjects.Add(startupProject);
             }
         }
 
@@ -217,7 +225,7 @@ public class EfMigrationService
             $"--context \"{context.ContextName}\" --project \"{context.ProjectPath}\" --startup-project \"{context.StartupProjectPath}\" --no-build"
         );
 
-        var process = new Process
+        using var process = new Process
         {
             StartInfo = new ProcessStartInfo
             {
@@ -263,9 +271,9 @@ public class EfMigrationService
             );
     }
 
-    private string RunQuietCommand(string fileName, string arguments)
+    protected virtual string RunQuietCommand(string fileName, string arguments)
     {
-        var process = new Process
+        using var process = new Process
         {
             StartInfo = new ProcessStartInfo
             {
@@ -275,28 +283,37 @@ public class EfMigrationService
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
+                WorkingDirectory = _options.WorkingDirectory ?? Directory.GetCurrentDirectory(),
             },
         };
 
         process.StartInfo.EnvironmentVariables["IS_EF_MIGRATION"] = "true";
+        if (_options.EnvironmentVariables is not null)
+            foreach (var kvp in _options.EnvironmentVariables)
+                process.StartInfo.EnvironmentVariables[kvp.Key] = kvp.Value;
 
         process.Start();
-        var output = process.StandardOutput.ReadToEnd();
+        // Drain both pipes while the process runs; a full stderr pipe otherwise blocks
+        // the child process while this method waits for stdout or process exit.
+        var output = process.StandardOutput.ReadToEndAsync();
+        var error = process.StandardError.ReadToEndAsync();
         process.WaitForExit();
+        var outputText = output.GetAwaiter().GetResult();
+        var errorText = error.GetAwaiter().GetResult();
 
         if (process.ExitCode != 0)
-        {
-            var error = process.StandardError.ReadToEnd();
-            throw new Exception($"Command failed (exit {process.ExitCode}): {error}");
-        }
+            throw new Exception($"Command failed (exit {process.ExitCode}): {errorText}");
 
-        return output;
+        return outputText;
     }
 
-    private async Task<string> RunQuietCommandWithEnvAsync(string fileName, string arguments)
+    protected virtual async Task<string> RunQuietCommandWithEnvAsync(
+        string fileName,
+        string arguments
+    )
     {
         var outputBuffer = new StringBuilder();
-        var process = new Process
+        using var process = new Process
         {
             StartInfo = new ProcessStartInfo
             {

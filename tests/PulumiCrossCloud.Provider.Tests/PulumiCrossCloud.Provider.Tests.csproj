@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <Using Include="Xunit" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/PulumiCrossCloud.Azure/PulumiCrossCloud.Azure.csproj" />
+    <ProjectReference Include="../../src/PulumiCrossCloud.DigitalOcean/PulumiCrossCloud.DigitalOcean.csproj" />
+    <ProjectReference Include="../../src/PulumiCrossCloud.Fly/PulumiCrossCloud.Fly.csproj" />
+    <ProjectReference Include="../../src/PulumiCrossCloud.Keycloak/PulumiCrossCloud.Keycloak.csproj" />
+    <ProjectReference Include="../../src/PulumiCrossCloud.Koyeb/PulumiCrossCloud.Koyeb.csproj" />
+    <ProjectReference Include="../../src/PulumiCrossCloud.Fly/Generated/fly/Pulumi.Fly.csproj" />
+    <ProjectReference Include="../../src/PulumiCrossCloud.Koyeb/Generated/koyeb/Pulumi.Koyeb.csproj" />
+  </ItemGroup>
+</Project>

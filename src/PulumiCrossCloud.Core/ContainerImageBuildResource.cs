@@ -14,9 +14,6 @@ public class ContainerImageBuildResource : ComponentResource
     public Output<string> ImageUrl { get; }
     public Output<string> ImageTag { get; }
 
-    // Shared provider instance to ensure stable provider reference across runs
-    private static Pulumi.DockerBuild.Provider? _defaultProvider;
-
     public ContainerImageBuildResource(
         string name,
         IContainerRegistry registry,
@@ -32,9 +29,7 @@ public class ContainerImageBuildResource : ComponentResource
         var imageTag = $"sha-{contentHash}";
 
         var imageRepositoryUrl = registry.RegistryUrlOutput.Apply(url =>
-            appendImageNameToRegistryUrl
-                ? $"{url.TrimEnd('/')}/{imageName}"
-                : url.TrimEnd('/')
+            appendImageNameToRegistryUrl ? $"{url.TrimEnd('/')}/{imageName}" : url.TrimEnd('/')
         );
         var shaRef = imageRepositoryUrl.Apply(url => $"{url}:{imageTag}");
         var latestRef = imageRepositoryUrl.Apply(url => $"{url}:latest");
@@ -74,19 +69,22 @@ public class ContainerImageBuildResource : ComponentResource
             args.Registries = registry.GetDockerBuildRegistryConfig();
         }
 
-        // Create stable provider once to prevent drift from implicit provider recreation
-        _defaultProvider ??= new Pulumi.DockerBuild.Provider(
-            "default-docker-build",
-            new Pulumi.DockerBuild.ProviderArgs { }
+        // Keep providers in the deployment that owns them. A static provider can refer to
+        // a previous deployment, and per-build names allow multiple images per registry.
+        var provider = new Pulumi.DockerBuild.Provider(
+            $"{name}-docker-build",
+            new Pulumi.DockerBuild.ProviderArgs { },
+            new CustomResourceOptions { Parent = this }
         );
 
         var dockerImage = new Image(
-            $"{registry.Name}-image", // stable logical name (not "-latest")
+            $"{name}-image",
             args,
             new CustomResourceOptions
             {
+                Parent = this,
                 DependsOn = [registry.Resource],
-                Provider = _defaultProvider,
+                Provider = provider,
             }
         );
 
