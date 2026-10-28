@@ -15,6 +15,11 @@
     <Nullable>enable</Nullable>
     <DefaultItemExcludes>$(DefaultItemExcludes);Generated\**</DefaultItemExcludes>
   </PropertyGroup>
+  <ItemGroup>
+    <None Include="Generated\fly\pulumi-plugin.json" Pack="true" PackagePath="content" Visible="false" />
+    <None Include="Generated\fly\version.txt" Pack="true" PackagePath="content" Visible="false" />
+  </ItemGroup>
+
   <Target Name="IncludeGeneratedFlyProviderInPackage" BeforeTargets="_GetBuildOutputFilesWithTfm">
     <ItemGroup>
       <BuildOutputInPackage Include="$(MSBuildProjectDirectory)\Generated\fly\bin\$(Configuration)\$(TargetFramework)\Pulumi.Fly.dll">

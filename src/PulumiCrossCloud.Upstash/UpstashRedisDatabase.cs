@@ -59,7 +59,9 @@ public class UpstashRedisDatabase : IMemoryCacheDatabase
     /// plain <c>redis://</c> URI points a client at a port that will refuse it.
     /// </summary>
     public Output<string> ConnectionString =>
-        Output.Tuple(Host, Port, Password).Apply(t => $"rediss://:{t.Item3}@{t.Item1}:{t.Item2}");
+        Output
+            .Tuple(Host, Port, Password)
+            .Apply(t => $"rediss://:{Uri.EscapeDataString(t.Item3)}@{t.Item1}:{t.Item2}");
 
     public IEnumerable<IPolicyStatement> GetPolicy(params MemoryCachePermissions[] permissions)
     {

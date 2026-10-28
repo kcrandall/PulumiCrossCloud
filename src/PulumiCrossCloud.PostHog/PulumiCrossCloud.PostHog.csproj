@@ -17,6 +17,11 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);Generated\**</DefaultItemExcludes>
   </PropertyGroup>
 
+  <ItemGroup>
+    <None Include="Generated\posthog\pulumi-plugin.json" Pack="true" PackagePath="content" Visible="false" />
+    <None Include="Generated\posthog\version.txt" Pack="true" PackagePath="content" Visible="false" />
+  </ItemGroup>
+
   <Target
     Name="IncludeGeneratedPostHogProviderInPackage"
     BeforeTargets="_GetBuildOutputFilesWithTfm"

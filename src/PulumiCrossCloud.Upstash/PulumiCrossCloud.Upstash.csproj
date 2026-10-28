@@ -16,6 +16,11 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);Generated\**</DefaultItemExcludes>
   </PropertyGroup>
 
+  <ItemGroup>
+    <None Include="Generated\upstash\pulumi-plugin.json" Pack="true" PackagePath="content" Visible="false" />
+    <None Include="Generated\upstash\version.txt" Pack="true" PackagePath="content" Visible="false" />
+  </ItemGroup>
+
   <Target
     Name="IncludeGeneratedUpstashProviderInPackage"
     BeforeTargets="_GetBuildOutputFilesWithTfm"

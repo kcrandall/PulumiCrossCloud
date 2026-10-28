@@ -1009,6 +1009,51 @@ public class AwsFargateComputeTests
         );
     }
 
+    [Theory]
+    [InlineData(null, "orders-cluster")]
+    [InlineData("shared-cluster", "shared-cluster")]
+    [InlineData("arn:aws:ecs:us-east-1:123456789012:cluster/shared-cluster", "shared-cluster")]
+    public async Task StandardEcsBackend_ConnectPolicyTargetsClusterAndTasksInItsContainer(
+        string? cluster,
+        string expectedCluster
+    )
+    {
+        string[] resources = [];
+        IDictionary<string, object>? conditions = null;
+        await RunDeployment(
+            (factory, registry) =>
+            {
+                var compute = factory.CreateCompute(
+                    "orders",
+                    registry,
+                    registry.Name,
+                    providerOptions: new AwsFargateOptions
+                    {
+                        Backend = AwsFargateBackend.Ecs,
+                        ClusterName = cluster,
+                    }
+                );
+                compute.Build();
+                var statement = Assert.Single(compute.GetPolicy(ComputePermissions.Connect));
+                conditions = statement.Conditions;
+                Output.All(statement.Resources).Apply(values => resources = values.ToArray());
+            }
+        );
+
+        Assert.Equal(
+            [
+                $"arn:aws:ecs:us-east-1:123456789012:cluster/{expectedCluster}",
+                $"arn:aws:ecs:us-east-1:123456789012:task/{expectedCluster}/*",
+            ],
+            resources
+        );
+        Assert.NotNull(conditions);
+        var equals = Assert.IsAssignableFrom<IDictionary<string, string>>(
+            conditions["StringEquals"]
+        );
+        Assert.Equal("orders", equals["ecs:container-name"]);
+    }
+
     private static async Task<RecordingMocks> RunDeployment(
         Action<AwsCloudResourceFactory, IContainerRegistry> test
     )

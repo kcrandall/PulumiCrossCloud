@@ -37,6 +37,7 @@ public class GcpCloudRunCompute : ICompute
     private readonly List<string> _allowedServiceAccounts = [];
     private readonly List<Func<ICompute, Task>> _onHealthyActions = [];
     private readonly List<Func<ICompute, Task>> _onReadyActions = [];
+    private bool _built;
 
     // Domain mapping and certificate resources
     private readonly ISet<string> _customDomains = new HashSet<string>();
@@ -236,6 +237,9 @@ public class GcpCloudRunCompute : ICompute
 
     public void Build()
     {
+        if (_built)
+            return;
+
         var projectId = GcpProjectConfig.ProjectId;
         var region = GcpProjectConfig.Region;
 
@@ -550,6 +554,12 @@ public class GcpCloudRunCompute : ICompute
 
                 Log.Info($"Created domain mapping for {domain} -> Cloud Run service {Name}");
             }
+
+        _built = true;
+        foreach (var action in _onReadyActions)
+            ScheduleReadyAction(action);
+        foreach (var action in _onHealthyActions)
+            ScheduleHealthyAction(action);
     }
 
     private Output<string> GetContainerImageUri()
@@ -713,48 +723,51 @@ public class GcpCloudRunCompute : ICompute
     public void OnHealthy(params Func<ICompute, Task>[] actions)
     {
         _onHealthyActions.AddRange(actions);
+        if (_built)
+            foreach (var action in actions)
+                ScheduleHealthyAction(action);
+    }
+
+    private void ScheduleHealthyAction(Func<ICompute, Task> action) =>
         ServiceUrl.Apply(async url =>
         {
+            if (string.IsNullOrWhiteSpace(url))
+                return;
+
             var healthPath = HealthCheckConfiguration?.Path ?? string.Empty;
             var healthUrl = $"{url}{(healthPath.StartsWith("/") ? healthPath : "/" + healthPath)}";
             using var http = new HttpClient();
-            var healthy = false;
             for (int i = 0; i < 60; i++)
             {
+                var healthy = false;
                 try
                 {
-                    var response = await http.GetAsync(healthUrl);
-                    if (response.IsSuccessStatusCode)
-                    {
-                        healthy = true;
-                        foreach (var action in _onHealthyActions)
-                            await action(this);
-
-                        break;
-                    }
+                    using var response = await http.GetAsync(healthUrl);
+                    healthy = response.IsSuccessStatusCode;
                 }
-                catch
+                catch (Exception exception)
+                    when (exception is HttpRequestException or TaskCanceledException)
                 {
                     // ignore connection failures, retry
                 }
+                if (healthy)
+                {
+                    await action(this);
+                    return;
+                }
                 await Task.Delay(5000);
             }
-            if (!healthy)
-                Log.Error(
-                    $"Cloud Run health check failed for {Name} at {healthUrl} after 5 minutes."
-                );
+            Log.Error($"Cloud Run health check failed for {Name} at {healthUrl} after 5 minutes.");
         });
-    }
 
     public void OnReady(params Func<ICompute, Task>[] actions)
     {
         _onReadyActions.AddRange(actions);
-        // Register ready logic to run after deployment
-        ServiceUrl.Apply(async url =>
-        {
-            // Fire all registered actions after service is deployed and URL is available
-            foreach (var action in _onReadyActions)
-                await action(this);
-        });
+        if (_built)
+            foreach (var action in actions)
+                ScheduleReadyAction(action);
     }
+
+    private void ScheduleReadyAction(Func<ICompute, Task> action) =>
+        ServiceUrl.Apply(async _ => await action(this));
 }

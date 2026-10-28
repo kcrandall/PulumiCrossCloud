@@ -17,6 +17,11 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);Generated\**</DefaultItemExcludes>
   </PropertyGroup>
 
+  <ItemGroup>
+    <None Include="Generated\neon\pulumi-plugin.json" Pack="true" PackagePath="content" Visible="false" />
+    <None Include="Generated\neon\version.txt" Pack="true" PackagePath="content" Visible="false" />
+  </ItemGroup>
+
   <Target Name="IncludeGeneratedNeonProviderInPackage" BeforeTargets="_GetBuildOutputFilesWithTfm">
     <ItemGroup>
       <BuildOutputInPackage Include="$(MSBuildProjectDirectory)\Generated\neon\bin\$(Configuration)\$(TargetFramework)\Pulumi.Neon.dll">

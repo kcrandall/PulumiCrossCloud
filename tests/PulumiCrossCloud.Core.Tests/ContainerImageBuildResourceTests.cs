@@ -66,7 +66,122 @@ public sealed class ContainerImageBuildResourceTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task SourceTagFramesFileNamesAndContents()
+    {
+        var firstPath = Path.Combine(_contextPath, "a");
+        File.WriteAllText(firstPath, "bc");
+        var first = await BuildImageAsync();
+        File.Delete(firstPath);
+        File.WriteAllText(Path.Combine(_contextPath, "ab"), "c");
+        var second = await BuildImageAsync();
+        Assert.NotEqual(first.Tag, second.Tag);
+    }
+
+    [Fact]
+    public async Task BucketContentHashFramesFileNamesAndContents()
+    {
+        string? hash = null;
+        async Task<string> BuildBucketAsync()
+        {
+            await Deployment.TestAsync(
+                new ImageBuildMocks(),
+                new TestOptions { IsPreview = false },
+                () =>
+                    new Dictionary<string, object?>
+                    {
+                        ["hash"] = new TestBucketDeployment(_contextPath).ContentHash.Apply(value =>
+                            hash = value
+                        ),
+                    }
+            );
+            return Assert.IsType<string>(hash);
+        }
+        var firstPath = Path.Combine(_contextPath, "a");
+        File.WriteAllText(firstPath, "bc");
+        var first = await BuildBucketAsync();
+        File.Delete(firstPath);
+        File.WriteAllText(Path.Combine(_contextPath, "ab"), "c");
+        Assert.NotEqual(first, await BuildBucketAsync());
+    }
+
+    [Theory]
+    [InlineData("*.txt\n!keep.txt\n", "keep.txt", true)]
+    [InlineData("*.txt\n!keep.txt\nkeep.txt\n", "keep.txt", false)]
+    [InlineData("*.txt\n", "sub/keep.txt", true)]
+    [InlineData("**/*.txt\n", "sub/keep.txt", false)]
+    [InlineData("**/*.txt\n", "keep.txt", false)]
+    [InlineData("/sub/\n!sub/keep.txt\n", "sub/keep.txt", true)]
+    public async Task SourceTagFollowsDockerIgnoreRules(
+        string patterns,
+        string relativePath,
+        bool included
+    )
+    {
+        File.WriteAllText(Path.Combine(_contextPath, ".dockerignore"), patterns);
+        var file = Path.Combine(_contextPath, relativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllText(file, "before");
+        var before = await BuildImageAsync();
+        File.WriteAllText(file, "after");
+        var after = await BuildImageAsync();
+        Assert.Equal(included, before.Tag != after.Tag);
+    }
+
+    [Fact]
+    public async Task DockerfileSpecificIgnoreOverridesContextIgnore()
+    {
+        File.WriteAllText(Path.Combine(_contextPath, ".dockerignore"), "*.txt\n");
+        File.WriteAllText(Path.Combine(_contextPath, "Dockerfile.dockerignore"), "!keep.txt\n");
+        var file = Path.Combine(_contextPath, "keep.txt");
+        File.WriteAllText(file, "before");
+        var before = await BuildImageAsync();
+        File.WriteAllText(file, "after");
+        var after = await BuildImageAsync();
+        Assert.NotEqual(before.Tag, after.Tag);
+    }
+
+    [Fact]
+    public async Task ImageUrlTracksExportedDigestEvenWhenSourceTagIsUnchanged()
+    {
+        var first = await BuildImageAsync("sha256:first");
+        var second = await BuildImageAsync("sha256:second");
+        Assert.Equal(first.Tag, second.Tag);
+        Assert.EndsWith("@sha256:first", first.Url);
+        Assert.EndsWith("@sha256:second", second.Url);
+        Assert.NotEqual(first.Url, second.Url);
+    }
+
+    private async Task<(string Tag, string Url)> BuildImageAsync(string digest = "")
+    {
+        string? tag = null;
+        string? url = null;
+        await Deployment.TestAsync(
+            new ImageBuildMocks(digest),
+            new TestOptions { IsPreview = false },
+            () =>
+            {
+                var image = new ContainerImageBuildResource(
+                    "image-build",
+                    new TestRegistry(),
+                    "app",
+                    Path.Combine(_contextPath, "Dockerfile"),
+                    _contextPath
+                );
+                return new Dictionary<string, object?>
+                {
+                    ["tag"] = image.ImageTag.Apply(value => tag = value),
+                    ["url"] = image.ImageUrl.Apply(value => url = value),
+                };
+            }
+        );
+        return (Assert.IsType<string>(tag), Assert.IsType<string>(url));
+    }
+
     public void Dispose() => Directory.Delete(_contextPath, recursive: true);
+
+    private sealed class TestBucketDeployment(string path)
+        : BucketDeploymentResource("test:index:BucketDeployment", "bucket-deployment", path);
 
     private sealed class TestRegistry : IContainerRegistry
     {
@@ -84,16 +199,17 @@ public sealed class ContainerImageBuildResourceTests : IDisposable
         ) => [];
     }
 
-    private sealed class ImageBuildMocks : IMocks
+    private sealed class ImageBuildMocks(string digest = "") : IMocks
     {
         public ConcurrentQueue<MockResourceArgs> Resources { get; } = new();
 
         public Task<(string? id, object state)> NewResourceAsync(MockResourceArgs args)
         {
             Resources.Enqueue(args);
-            return Task.FromResult<(string? id, object state)>(
-                ($"{args.Name}-id", args.Inputs.ToDictionary(pair => pair.Key, pair => pair.Value))
-            );
+            var state = args.Inputs.ToDictionary(pair => pair.Key, pair => pair.Value);
+            if (args.Type == "docker-build:index:Image" && digest.Length > 0)
+                state["digest"] = digest;
+            return Task.FromResult<(string? id, object state)>(($"{args.Name}-id", state));
         }
 
         public Task<object> CallAsync(MockCallArgs args) =>

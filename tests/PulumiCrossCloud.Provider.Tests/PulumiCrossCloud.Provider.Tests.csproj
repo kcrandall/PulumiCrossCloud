@@ -12,10 +12,14 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/PulumiCrossCloud.Azure/PulumiCrossCloud.Azure.csproj" />
+    <ProjectReference Include="../../src/PulumiCrossCloud.Mailgun/PulumiCrossCloud.Mailgun.csproj" />
+    <ProjectReference Include="../../src/PulumiCrossCloud.PostHog/PulumiCrossCloud.PostHog.csproj" />
     <ProjectReference Include="../../src/PulumiCrossCloud.DigitalOcean/PulumiCrossCloud.DigitalOcean.csproj" />
     <ProjectReference Include="../../src/PulumiCrossCloud.Fly/PulumiCrossCloud.Fly.csproj" />
     <ProjectReference Include="../../src/PulumiCrossCloud.Keycloak/PulumiCrossCloud.Keycloak.csproj" />
     <ProjectReference Include="../../src/PulumiCrossCloud.Koyeb/PulumiCrossCloud.Koyeb.csproj" />
+    <ProjectReference Include="../../src/PulumiCrossCloud.Upstash/PulumiCrossCloud.Upstash.csproj" />
+    <ProjectReference Include="../../src/PulumiCrossCloud.Upstash/Generated/upstash/Pulumi.Upstash.csproj" />
     <ProjectReference Include="../../src/PulumiCrossCloud.Fly/Generated/fly/Pulumi.Fly.csproj" />
     <ProjectReference Include="../../src/PulumiCrossCloud.Koyeb/Generated/koyeb/Pulumi.Koyeb.csproj" />
   </ItemGroup>

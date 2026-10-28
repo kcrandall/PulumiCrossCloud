@@ -70,10 +70,10 @@ public abstract class BucketDeploymentResource : ComponentResource
         {
             var rel = Path.GetRelativePath(path, file).Replace('\\', '/');
             var relBytes = Encoding.UTF8.GetBytes(rel);
-            sha256.TransformBlock(relBytes, 0, relBytes.Length, null, 0);
+            ContentHashBuilder.AppendBlock(sha256, relBytes);
 
             var bytes = File.ReadAllBytes(file);
-            sha256.TransformBlock(bytes, 0, bytes.Length, null, 0);
+            ContentHashBuilder.AppendBlock(sha256, bytes);
         }
 
         sha256.TransformFinalBlock(Array.Empty<byte>(), 0, 0);

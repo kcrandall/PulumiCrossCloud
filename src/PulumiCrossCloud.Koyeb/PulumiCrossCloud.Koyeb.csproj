@@ -15,6 +15,11 @@
     <Nullable>enable</Nullable>
     <DefaultItemExcludes>$(DefaultItemExcludes);Generated\**</DefaultItemExcludes>
   </PropertyGroup>
+  <ItemGroup>
+    <None Include="Generated\koyeb\pulumi-plugin.json" Pack="true" PackagePath="content" Visible="false" />
+    <None Include="Generated\koyeb\version.txt" Pack="true" PackagePath="content" Visible="false" />
+  </ItemGroup>
+
   <Target Name="IncludeGeneratedKoyebProviderInPackage" BeforeTargets="_GetBuildOutputFilesWithTfm">
     <ItemGroup>
       <BuildOutputInPackage Include="$(MSBuildProjectDirectory)\Generated\koyeb\bin\$(Configuration)\$(TargetFramework)\Pulumi.Koyeb.dll">

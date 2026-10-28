@@ -140,7 +140,7 @@ public sealed class PostHogHostedService : ComponentResource
             redis.Password.Value.Apply(password =>
                 string.IsNullOrWhiteSpace(password)
                     ? url
-                    : $"redis://:{password}@{redis.Host}:{redis.Port}/{redis.Database}"
+                    : $"redis://:{Uri.EscapeDataString(password)}@{redis.Host}:{redis.Port}/{redis.Database}"
             )
         );
     }

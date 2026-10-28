@@ -16,6 +16,11 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);Generated\**</DefaultItemExcludes>
   </PropertyGroup>
 
+  <ItemGroup>
+    <None Include="Generated\sentry\pulumi-plugin.json" Pack="true" PackagePath="content" Visible="false" />
+    <None Include="Generated\sentry\version.txt" Pack="true" PackagePath="content" Visible="false" />
+  </ItemGroup>
+
   <Target
     Name="IncludeGeneratedSentryProviderInPackage"
     BeforeTargets="_GetBuildOutputFilesWithTfm"

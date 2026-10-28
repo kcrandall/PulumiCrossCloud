@@ -98,7 +98,9 @@ public class AzurePostgresDatabase : IPostgresDatabase
     public Output<string> DatabaseName => _database.Name;
 
     public Output<string> ConnectionString =>
-        Output.Format($"postgresql://{Username}:{Password}@{Host}:{Port}/{DatabaseName}");
+        Output.Format(
+            $"postgresql://{Username.Apply(Uri.EscapeDataString)}:{Password.Apply(Uri.EscapeDataString)}@{Host}:{Port}/{DatabaseName.Apply(Uri.EscapeDataString)}"
+        );
 
     public void EnableExtension(string extensionName)
     {

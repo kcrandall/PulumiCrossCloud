@@ -169,7 +169,24 @@ public class AwsPostgresDatabase : IPostgresDatabase
     public Output<string> DatabaseName => _databaseName;
 
     public Output<string> ConnectionString =>
-        Output.Format($"postgresql://{Username}:{Password}@{Host}:{Port}/{DatabaseName}");
+        Output.Format(
+            $"postgresql://{Username.Apply(Uri.EscapeDataString)}:{Password.Apply(Uri.EscapeDataString)}@{Host}:{Port}/{DatabaseName.Apply(Uri.EscapeDataString)}"
+        );
+
+    private Output<string> DatabaseUserArn =>
+        Output
+            .Tuple(
+                Arn,
+                _mainResource is Cluster cluster
+                    ? cluster.ClusterResourceId
+                    : ((Instance)_mainResource).ResourceId,
+                Username
+            )
+            .Apply(values =>
+            {
+                var arnParts = values.Item1.Split(':', 6);
+                return $"{arnParts[0]}:{arnParts[1]}:rds-db:{arnParts[3]}:{arnParts[4]}:dbuser:{values.Item2}/{values.Item3}";
+            });
 
     public void EnableExtension(string extensionName)
     {
@@ -188,7 +205,7 @@ public class AwsPostgresDatabase : IPostgresDatabase
                         {
                             Effect = "Allow",
                             Actions = ["rds-db:connect"],
-                            Resources = [Arn],
+                            Resources = [DatabaseUserArn],
                         }
                     );
                     break;

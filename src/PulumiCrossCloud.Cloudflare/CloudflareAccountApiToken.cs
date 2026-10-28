@@ -45,111 +45,121 @@ public class AccountApiToken : ComponentResource
     )
         : base("crosscloud:cloudflare:AccountApiToken", name, options)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(accountId);
         var jsonPayload = SerializePayload(name, permissionGroupIds, resources);
 
-        // We use a local command to call the Cloudflare API via curl
-        // This is an escape hatch since the Pulumi provider doesn't support Account-level tokens yet.
-        var escapedPayload = jsonPayload.Replace("\"", "\\\"");
-        // Be explicit about curl behavior:
-        // -sS: silent but show errors; --fail-with-body: non-2xx exits non-zero and keeps body for diagnostics
-        // Accept header helps ensure JSON payloads
-        var createCommand = Output
-            .Tuple<string, string>(primaryToken, escapedPayload)
-            .Apply(token =>
-                string.Format(
-                    "curl -sS --fail-with-body -X POST \"https://api.cloudflare.com/client/v4/accounts/{0}/tokens\" "
-                        + "-H \"Authorization: Bearer {1}\" "
-                        + "-H \"Content-Type: application/json\" "
-                        + "-H \"Accept: application/json\" "
-                        + "--data \"{2}\"",
-                    accountId,
-                    token.Item1,
-                    token.Item2
-                )
-            );
+        var commands = GetCommandScripts(OperatingSystem.IsWindows());
 
-        var deleteCommand = Output
-            .Tuple<string, string>(primaryToken, name)
-            .Apply(token =>
-                string.Format(
-                    "curl -sS --fail-with-body -X GET \"https://api.cloudflare.com/client/v4/accounts/{0}/tokens\" "
-                        + "-H \"Authorization: Bearer {1}\" "
-                        + "-H \"Content-Type: application/json\" | "
-                        + "jq -r '.result[] | select(.name == \"{2}\") | .id' | "
-                        + "while read id; do "
-                        + "  if [ ! -z \"$id\" ]; then "
-                        + "    curl -sS --fail-with-body -X DELETE \"https://api.cloudflare.com/client/v4/accounts/{0}/tokens/$id\" "
-                        + "    -H \"Authorization: Bearer {1}\" "
-                        + "    -H \"Content-Type: application/json\"; "
-                        + "  fi; "
-                        + "done",
-                    accountId,
-                    token.Item1,
-                    token.Item2
-                )
-            );
-
-        // Delete resolves the remote token by its stable name. Create-before-delete would briefly
-        // leave both generations with that name, then the old resource's Delete would revoke both.
         var tokenResource = new Command(
             $"{name}-create",
-            new CommandArgs { Create = createCommand, Delete = deleteCommand },
-            new CustomResourceOptions { Parent = this, DeleteBeforeReplace = true }
+            new CommandArgs
+            {
+                Create = commands.Create,
+                Delete = commands.Delete,
+                Interpreter = commands.Interpreter,
+                Environment =
+                {
+                    ["CLOUDFLARE_ACCOUNT_ID"] = accountId,
+                    ["CLOUDFLARE_PRIMARY_TOKEN"] = Output.CreateSecret(
+                        (Output<string>)primaryToken
+                    ),
+                    ["CLOUDFLARE_TOKEN_PAYLOAD"] = jsonPayload,
+                },
+                AddPreviousOutputInEnv = true,
+                Logging = Logging.None,
+            },
+            new CustomResourceOptions
+            {
+                Parent = this,
+                DeleteBeforeReplace = true,
+                AdditionalSecretOutputs = ["stdout", "stderr"],
+            }
         );
 
-        // Parse the JSON output from curl
-        // Capture both stdout and stderr so we can surface useful diagnostics
-        var result = Output
-            .Tuple(tokenResource.Stdout, tokenResource.Stderr)
-            .Apply(outputs =>
+        var result = tokenResource.Stdout.Apply(stdout =>
+        {
+            try
             {
-                var stdout = outputs.Item1 ?? string.Empty;
-                var stderr = outputs.Item2 ?? string.Empty;
-                try
-                {
-                    if (string.IsNullOrWhiteSpace(stdout))
-                    {
-                        var hint = string.IsNullOrWhiteSpace(stderr)
-                            ? ""
-                            : string.Format(" Stderr: {0}", stderr.Trim());
-                        throw new Exception(
-                            string.Format("Empty response from Cloudflare API.{0}", hint)
-                        );
-                    }
-
-                    var doc = JsonDocument.Parse(stdout);
-                    var root = doc.RootElement;
-                    if (!root.TryGetProperty("success", out var success) || !success.GetBoolean())
-                    {
-                        var message = stdout;
-                        if (!string.IsNullOrWhiteSpace(stderr))
-                            message += string.Format("\nStderr: {0}", stderr.Trim());
-                        throw new Exception(string.Format("Cloudflare API error: {0}", message));
-                    }
-                    var res = root.GetProperty("result");
-                    return new
-                    {
-                        id = res.GetProperty("id").GetString()!,
-                        value = res.GetProperty("value").GetString()!,
-                    };
-                }
-                catch (Exception ex)
-                {
-                    var message = stdout;
-                    if (!string.IsNullOrWhiteSpace(stderr))
-                        message += string.Format("\nStderr: {0}", stderr.Trim());
-                    throw new Exception(
-                        string.Format(
-                            "Failed to parse Cloudflare token response: {0}. Output was: {1}",
-                            ex.Message,
-                            message
-                        )
+                using var document = JsonDocument.Parse(stdout);
+                var root = document.RootElement;
+                if (!root.GetProperty("success").GetBoolean())
+                    throw new InvalidOperationException(
+                        "Cloudflare token creation was unsuccessful."
                     );
-                }
-            });
 
-        TokenId = result.Apply(r => r.id);
-        TokenValue = result.Apply(r => r.value);
+                var token = root.GetProperty("result");
+                var id = token.GetProperty("id").GetString();
+                var value = token.GetProperty("value").GetString();
+                if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(value))
+                    throw new InvalidOperationException("Cloudflare returned an empty token.");
+
+                return (Id: id, Value: value);
+            }
+            catch (Exception exception)
+                when (exception
+                        is JsonException
+                            or InvalidOperationException
+                            or KeyNotFoundException
+                )
+            {
+                // The response includes the newly created bearer token. Never copy it into
+                // exception messages, which Pulumi may render as unencrypted diagnostics.
+                throw new InvalidOperationException(
+                    "Cloudflare did not return a valid successful token response."
+                );
+            }
+        });
+
+        TokenId = result.Apply(token => token.Id);
+        TokenValue = Output.CreateSecret(result.Apply(token => token.Value));
+    }
+
+    internal static (string Create, string Delete, string[] Interpreter) GetCommandScripts(
+        bool windows
+    )
+    {
+        // Both shells receive payloads and credentials as environment data. PowerShell 5's
+        // native argument quoting cannot preserve arbitrary JSON, so send UTF-8 JSON on stdin.
+        if (windows)
+            return (
+                """
+                $ErrorActionPreference = 'Stop'
+                $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+                $env:CLOUDFLARE_TOKEN_PAYLOAD | & curl.exe -sS --fail-with-body -X POST "https://api.cloudflare.com/client/v4/accounts/$env:CLOUDFLARE_ACCOUNT_ID/tokens" -H "Authorization: Bearer $env:CLOUDFLARE_PRIMARY_TOKEN" -H 'Content-Type: application/json' -H 'Accept: application/json' --data-binary '@-'
+                if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+                """,
+                """
+                $ErrorActionPreference = 'Stop'
+                $token = $env:PULUMI_COMMAND_STDOUT | ConvertFrom-Json
+                $id = $token.result.id
+                if ($id -isnot [string] -or [string]::IsNullOrWhiteSpace($id)) { throw 'Previous token response has no token ID.' }
+                $id = [uri]::EscapeDataString($id)
+                & curl.exe -sS --fail-with-body -X DELETE "https://api.cloudflare.com/client/v4/accounts/$env:CLOUDFLARE_ACCOUNT_ID/tokens/$id" -H "Authorization: Bearer $env:CLOUDFLARE_PRIMARY_TOKEN" -H 'Content-Type: application/json'
+                if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+                """,
+                ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command"]
+            );
+
+        var createCommand = """
+            set -eu
+            curl -sS --fail-with-body -X POST "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/tokens" \
+                -H "Authorization: Bearer $CLOUDFLARE_PRIMARY_TOKEN" \
+                -H "Content-Type: application/json" \
+                -H "Accept: application/json" \
+                --data "$CLOUDFLARE_TOKEN_PAYLOAD"
+            """;
+
+        // Delete exactly the token returned by the previous create. Looking up by name can
+        // revoke unrelated tokens with the same name and can hide list failures in a pipeline.
+        var deleteCommand = """
+            set -eu
+            id=$(printf '%s' "${PULUMI_COMMAND_STDOUT:-}" | jq -er '.result.id | select(type == "string" and length > 0)')
+            curl -sS --fail-with-body -X DELETE "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/tokens/$id" \
+                -H "Authorization: Bearer $CLOUDFLARE_PRIMARY_TOKEN" \
+                -H "Content-Type: application/json"
+            """;
+
+        return (createCommand, deleteCommand, ["/bin/sh", "-c"]);
     }
 
     internal static string SerializePayload(

@@ -48,7 +48,11 @@ public class MailgunEmailService : IEmailService
         );
 
         // Use the generated password
-        Password = new MailgunSecret($"{name}-password", smtpPassword.Result);
+        Password = new MailgunSecret(
+            $"{name}-password",
+            Output.Tuple(smtpPassword.Result, _domain.Id).Apply(values => values.Item1),
+            _domain
+        );
 
         SmtpEndpoint = Output.Create("smtp.mailgun.org");
         SmtpPort = Output.Create(587);
@@ -222,18 +226,18 @@ public class MailgunEmailService : IEmailService
     {
         private readonly Output<string> _value;
 
-        public MailgunSecret(string name, Output<string> value)
+        public MailgunSecret(string name, Output<string> value, Resource resource)
         {
             Name = name;
-            _value = value;
-            Resource = null!; // No underlying cloud resource for this virtual secret
+            _value = Output.CreateSecret(value);
+            Resource = resource;
         }
 
         public Output<string?> Value => _value.Apply(v => (string?)v);
 
         public bool IgnoreChangesAfterCreate => false;
 
-        public Resource Resource { get; } // Null as it's virtual
+        public Resource Resource { get; }
 
         public string Name { get; }
 

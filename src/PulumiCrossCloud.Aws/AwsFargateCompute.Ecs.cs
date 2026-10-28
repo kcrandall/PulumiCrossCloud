@@ -667,7 +667,32 @@ public partial class AwsFargateCompute
                 AddServiceArnPolicyStatement(statements, "ecs:DeleteService");
                 break;
             case ComputePermissions.Connect:
-                AddServiceArnPolicyStatement(statements, "ecs:ExecuteCommand");
+                // ECS Exec authorizes the task and cluster, rather than the service.
+                var prefix = Arn.Apply(arn => string.Join(':', arn.Split(':').Take(5)));
+                var clusterName =
+                    _ecsCluster?.Name
+                    ?? Output.Create(
+                        GetClusterShortName(_options.ClusterName ?? $"{Name}-cluster")
+                    );
+                statements.Add(
+                    new AwsPolicyStatement
+                    {
+                        Effect = "Allow",
+                        Actions = ["ecs:ExecuteCommand"],
+                        Resources =
+                        [
+                            Output.Format($"{prefix}:cluster/{clusterName}"),
+                            Output.Format($"{prefix}:task/{clusterName}/*"),
+                        ],
+                        Conditions = new Dictionary<string, object>
+                        {
+                            ["StringEquals"] = new Dictionary<string, string>
+                            {
+                                ["ecs:container-name"] = Name,
+                            },
+                        },
+                    }
+                );
                 break;
             case ComputePermissions.GetLogs:
                 statements.Add(CreateEcsLogsPolicyStatement());

@@ -89,14 +89,20 @@ public class ContainerImageBuildResource : ComponentResource
         );
 
         Resource = dockerImage;
-        ImageUrl = shaRef;
+        // Build settings and base images can change the image without changing
+        // its source tag. Pin consumers to the exported image digest.
+        ImageUrl = Output
+            .Tuple(shaRef, dockerImage.Digest)
+            .Apply(result =>
+                string.IsNullOrEmpty(result.Item2) ? result.Item1 : $"{result.Item1}@{result.Item2}"
+            );
         ImageTag = Output.Create(imageTag);
         ResourceOutput = Output.Create(dockerImage);
     }
 
     private string GenerateContentHash(string contextPath, string dockerfilePath)
     {
-        var dockerIgnorePatterns = LoadDockerIgnorePatterns(contextPath);
+        var dockerIgnorePatterns = LoadDockerIgnorePatterns(contextPath, dockerfilePath);
 
         var files = Directory
             .GetFiles(contextPath, "*", SearchOption.AllDirectories)
@@ -110,7 +116,7 @@ public class ContainerImageBuildResource : ComponentResource
         if (File.Exists(dockerfilePath))
         {
             var dockerfileBytes = File.ReadAllBytes(dockerfilePath);
-            sha256.TransformBlock(dockerfileBytes, 0, dockerfileBytes.Length, null, 0);
+            ContentHashBuilder.AppendBlock(sha256, dockerfileBytes);
         }
 
         // Hash each file's relative path + bytes
@@ -118,10 +124,10 @@ public class ContainerImageBuildResource : ComponentResource
         {
             var rel = Path.GetRelativePath(contextPath, file).Replace('\\', '/');
             var relBytes = Encoding.UTF8.GetBytes(rel);
-            sha256.TransformBlock(relBytes, 0, relBytes.Length, null, 0);
+            ContentHashBuilder.AppendBlock(sha256, relBytes);
 
             var bytes = File.ReadAllBytes(file);
-            sha256.TransformBlock(bytes, 0, bytes.Length, null, 0);
+            ContentHashBuilder.AppendBlock(sha256, bytes);
         }
 
         // finalize
@@ -129,9 +135,11 @@ public class ContainerImageBuildResource : ComponentResource
         return Convert.ToHexString(sha256.Hash!)[..8].ToLower();
     }
 
-    private List<string> LoadDockerIgnorePatterns(string contextPath)
+    private List<string> LoadDockerIgnorePatterns(string contextPath, string dockerfilePath)
     {
-        var dockerIgnorePath = Path.Combine(contextPath, ".dockerignore");
+        var dockerIgnorePath = File.Exists($"{dockerfilePath}.dockerignore")
+            ? $"{dockerfilePath}.dockerignore"
+            : Path.Combine(contextPath, ".dockerignore");
         var patterns = new List<string>();
         if (File.Exists(dockerIgnorePath))
             foreach (var line in File.ReadAllLines(dockerIgnorePath))
@@ -147,45 +155,50 @@ public class ContainerImageBuildResource : ComponentResource
     private bool IsIgnoredByDockerIgnore(string filePath, string contextPath, List<string> patterns)
     {
         var relativePath = Path.GetRelativePath(contextPath, filePath).Replace('\\', '/');
+        var ignored = false;
         foreach (var pattern in patterns)
-            if (MatchesPattern(relativePath, pattern))
-                return true;
-
-        return false;
+        {
+            var include = pattern.StartsWith('!');
+            if (MatchesPattern(relativePath, include ? pattern[1..] : pattern))
+                ignored = !include;
+        }
+        return ignored;
     }
 
     private bool MatchesPattern(string path, string pattern)
     {
-        pattern = pattern.Replace('\\', '/');
-        if (pattern.StartsWith("./"))
+        pattern = pattern.Replace('\\', '/').Trim('/');
+        while (pattern.StartsWith("./", StringComparison.Ordinal))
             pattern = pattern[2..];
+        if (pattern.Length == 0 || pattern == ".")
+            return false;
 
-        if (pattern.Contains("**/"))
+        var regex = new StringBuilder("^");
+        for (var i = 0; i < pattern.Length; i++)
         {
-            var parts = pattern.Split("**/");
-            if (parts.Length == 2)
+            if (pattern[i] == '*')
             {
-                var prefix = parts[0];
-                var suffix = parts[1];
-                if (string.IsNullOrEmpty(prefix))
-                    return path.Contains(suffix) || path.EndsWith(suffix);
-                return path.StartsWith(prefix) && path.Contains(suffix);
+                if (i + 1 < pattern.Length && pattern[i + 1] == '*')
+                {
+                    i++;
+                    if (i + 1 < pattern.Length && pattern[i + 1] == '/')
+                    {
+                        regex.Append("(?:.*/)?");
+                        i++;
+                    }
+                    else
+                        regex.Append(".*");
+                }
+                else
+                    regex.Append("[^/]*");
             }
+            else if (pattern[i] == '?')
+                regex.Append("[^/]");
+            else
+                regex.Append(Regex.Escape(pattern[i].ToString()));
         }
-
-        if (pattern.Contains("*"))
-        {
-            var regex = "^" + Regex.Escape(pattern).Replace("\\*", ".*") + "$";
-            return Regex.IsMatch(path, regex);
-        }
-
-        if (pattern.EndsWith("/"))
-        {
-            var dir = pattern.TrimEnd('/');
-            return path.StartsWith(dir + "/") || path == dir;
-        }
-
-        return path == pattern || path.StartsWith(pattern + "/");
+        regex.Append("(?:/.*)?$");
+        return Regex.IsMatch(path, regex.ToString(), RegexOptions.NonBacktracking);
     }
 
     private bool IsSourceFile(string filePath)

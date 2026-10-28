@@ -116,7 +116,9 @@ public class NeonPostgresDatabase : IPostgresDatabase
     public Output<string> DatabaseName => _database.Name.Apply(n => n!);
 
     public Output<string> ConnectionString =>
-        Output.Format($"postgresql://{Username}:{Password}@{Host}:{Port}/{DatabaseName}");
+        Output.Format(
+            $"postgresql://{Username.Apply(Uri.EscapeDataString)}:{Password.Apply(Uri.EscapeDataString)}@{Host}:{Port}/{DatabaseName.Apply(Uri.EscapeDataString)}"
+        );
 
     public Output<string> ProjectId => _project.Id;
     public Output<string> BranchId => _project.DefaultBranchId;

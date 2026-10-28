@@ -51,6 +51,33 @@ GitHub Actions runs the same build and unit suite on Linux, Windows, and macOS, 
 Linux emulator tests and package verification. Azure integration and live cloud compute/database
 deployments remain outside the emulator coverage described in the integration test documentation.
 
+## Second audit (2026-10-28)
+
+The follow-up review corrected additional deployment paths:
+
+- Cloudflare token creation and R2 uploads now pass credentials and payloads through secret environment inputs, protect command output, and keep values out of shell source. Token deletion targets the exact previously created token ID. Windows commands select PowerShell explicitly; Windows CI executes literal-argument and failure-propagation regressions.
+- PostgreSQL connection URLs on AWS, Azure, GCP, and Neon, plus Redis URLs for Upstash and PostHog, escape reserved characters in credentials and database names.
+- RDS/Aurora connection policies use database-user ARNs; ECS Exec policies use cluster/task ARNs and restrict the container name.
+- Cloud Run builds are idempotent, and readiness/health callbacks wait for the built service and run once per registration.
+- Image URLs include the exported digest so changed build settings or base images can roll out even when the source tag stays the same. Image and bucket source hashes frame file names and contents; Docker ignore exceptions, wildcard depth, and Dockerfile-specific ignore files are respected by source tagging.
+- Mailgun SMTP secrets depend on the created domain. All six generated-provider wrappers now include discovery metadata, which enables Pulumi plugin preinstallation and offline preparation.
+
+Source hash framing changes source tags and bucket build/sync triggers once on upgrade.
+Digest-qualified image URLs can also cause an initial compute rollout; review the target stack preview.
+
+The follow-up Release build passed with warnings treated as errors. All 128 C# unit tests,
+26 release/package script tests, and 6 Neon Python tests passed locally. All 25 AWS/GCP
+emulator integration tests passed; rebuilt packages passed metadata verification, and a fresh
+consumer loaded all 25 assemblies.
+
+### Remaining GCP database networking limitation
+
+`GcpPostgresOptions` does not yet expose a VPC/private network. `GcpPostgresDatabase`
+disables public IPv4 by default without configuring a private network and always exposes
+`PublicIpAddress` as its host. Consequently the default private Cloud SQL path is incomplete.
+A separate networking change must accept the target private network and choose the corresponding
+private address; this audit preserves the existing network exposure behavior.
+
 ## Local checks
 
 ```bash

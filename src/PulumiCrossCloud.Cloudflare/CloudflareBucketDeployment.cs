@@ -43,29 +43,27 @@ public class CloudflareBucketDeployment : BucketDeploymentResource
 
         var r2Endpoint = $"https://{accountId}.r2.cloudflarestorage.com";
 
-        // We pass the credentials directly in the command string to be 100% sure they are picked up.
-        // This also prevents "Partial credentials found" errors if some variables are in the host env.
-        var syncBase = Output
-            .Tuple(
-                accessKey ?? Output.Create(""),
-                secretKey ?? Output.Create(""),
-                sessionToken ?? Output.Create("")
-            )
-            .Apply(t =>
-            {
-                var ak = t.Item1;
-                var sk = t.Item2;
-                var st = t.Item3;
-                var auth = "";
-                if (!string.IsNullOrEmpty(ak) && !string.IsNullOrEmpty(sk))
-                {
-                    auth =
-                        $"AWS_ACCESS_KEY_ID={ak} AWS_SECRET_ACCESS_KEY={sk} AWS_DEFAULT_REGION=auto ";
-                    if (!string.IsNullOrEmpty(st))
-                        auth += $"AWS_SESSION_TOKEN={st} ";
-                }
-                return $"{auth}aws s3 sync {localPath} {destination} --endpoint-url {r2Endpoint} --delete --no-progress";
-            });
+        if ((accessKey is null) != (secretKey is null))
+            throw new ArgumentException("R2 access and secret keys must be provided together.");
+
+        var environment = new InputMap<string>
+        {
+            ["CROSSCLOUD_SYNC_SOURCE"] = localPath,
+            ["CROSSCLOUD_SYNC_DESTINATION"] = destination,
+            ["CROSSCLOUD_R2_ENDPOINT"] = r2Endpoint,
+            ["AWS_DEFAULT_REGION"] = "auto",
+        };
+        if (accessKey is not null && secretKey is not null)
+        {
+            environment["AWS_ACCESS_KEY_ID"] = Output.CreateSecret((Output<string>)accessKey);
+            environment["AWS_SECRET_ACCESS_KEY"] = Output.CreateSecret((Output<string>)secretKey);
+            // Explicit static credentials must not inherit an unrelated ambient session token.
+            var token = Output.CreateSecret((Output<string>)(sessionToken ?? Output.Create("")));
+            environment["AWS_SESSION_TOKEN"] = token;
+            environment["AWS_SECURITY_TOKEN"] = token;
+        }
+
+        var (syncBase, interpreter) = GetSyncCommand(OperatingSystem.IsWindows());
 
         var syncCommand = new Command(
             $"{name}-sync",
@@ -73,15 +71,34 @@ public class CloudflareBucketDeployment : BucketDeploymentResource
             {
                 Create = syncBase,
                 Update = syncBase,
+                Interpreter = interpreter,
+                Environment = environment,
+                Logging = Logging.None,
                 Triggers = new InputList<string> { (Input<string>)ContentHash },
             },
             new CustomResourceOptions
             {
                 Parent = this,
-                DependsOn = BuildResource != null ? [BuildResource] : [],
+                AdditionalSecretOutputs = ["stdout", "stderr"],
+                DependsOn = BuildResource is not null ? [BuildResource] : [],
             }
         );
 
         WebsiteUrl = Output.Create(destination);
     }
+
+    internal static (string Script, string[] Interpreter) GetSyncCommand(bool windows) =>
+        windows
+            ? (
+                """
+                $ErrorActionPreference = 'Stop'
+                & aws.exe s3 sync $env:CROSSCLOUD_SYNC_SOURCE $env:CROSSCLOUD_SYNC_DESTINATION --endpoint-url $env:CROSSCLOUD_R2_ENDPOINT --delete --no-progress
+                if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+                """,
+                ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command"]
+            )
+            : (
+                "aws s3 sync \"$CROSSCLOUD_SYNC_SOURCE\" \"$CROSSCLOUD_SYNC_DESTINATION\" --endpoint-url \"$CROSSCLOUD_R2_ENDPOINT\" --delete --no-progress",
+                ["/bin/sh", "-c"]
+            );
 }

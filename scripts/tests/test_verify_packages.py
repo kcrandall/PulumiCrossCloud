@@ -1,6 +1,7 @@
 """Catch package layouts that build locally but fail for NuGet consumers."""
 
 import importlib.util
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -35,11 +36,25 @@ class VerifyPackagesTests(unittest.TestCase):
                 f'{dependencies}</group></dependencies></metadata></package>',
             )
 
-    def write_package(self, wrapper, provider, *, bundled=True, dependency="PulumiCrossCloud.Core"):
+    def write_package(
+        self, wrapper, provider, *, bundled=True, dependency="PulumiCrossCloud.Core",
+        include_metadata=True, plugin_metadata=None, version=None,
+    ):
         path = self.directory / f"PulumiCrossCloud.{wrapper}.1.2.3.nupkg"
         with ZipFile(path, "w") as package:
             if bundled:
                 package.writestr(f"lib/net10.0/{provider}.dll", b"provider assembly")
+            if include_metadata:
+                generated_dir = verifier.GENERATED_DIRS[f"PulumiCrossCloud.{wrapper}"]
+                package.writestr(
+                    "content/pulumi-plugin.json",
+                    plugin_metadata if plugin_metadata is not None
+                    else (generated_dir / "pulumi-plugin.json").read_text(),
+                )
+                package.writestr(
+                    "content/version.txt",
+                    version if version is not None else (generated_dir / "version.txt").read_text(),
+                )
             package.writestr(
                 f"PulumiCrossCloud.{wrapper}.nuspec",
                 '<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">'
@@ -63,6 +78,35 @@ class VerifyPackagesTests(unittest.TestCase):
     def test_external_generated_provider_dependency_fails(self):
         self.write_package("Koyeb", "Pulumi.Koyeb", dependency="pulumi.koyeb")
         self.assertTrue(any("external generated-provider dependency pulumi.koyeb" in error for error in verifier.verify_packages(self.directory)))
+
+    def test_missing_plugin_discovery_metadata_fails(self):
+        self.write_package("Fly", "Pulumi.Fly", include_metadata=False)
+        errors = verifier.verify_packages(self.directory)
+        self.assertTrue(any("missing content/pulumi-plugin.json" in error for error in errors))
+        self.assertTrue(any("missing content/version.txt" in error for error in errors))
+
+    def test_incorrect_parameterized_provider_metadata_fails(self):
+        source = verifier.GENERATED_DIRS["PulumiCrossCloud.Fly"] / "pulumi-plugin.json"
+        for field, value in (("name", "wrong-provider"), ("version", "99.0.0"), ("value", "wrong-parameter")):
+            with self.subTest(field=field):
+                metadata = json.loads(source.read_text())
+                metadata["parameterization"][field] = value
+                self.write_package("Fly", "Pulumi.Fly", plugin_metadata=json.dumps(metadata))
+                self.assertTrue(any(
+                    "content/pulumi-plugin.json differs from generated SDK metadata" in error
+                    for error in verifier.verify_packages(self.directory)
+                ))
+
+    def test_incorrect_generated_provider_version_fails(self):
+        self.write_package("Fly", "Pulumi.Fly", version="99.0.0")
+        self.assertTrue(any(
+            "content/version.txt differs from generated SDK metadata" in error
+            for error in verifier.verify_packages(self.directory)
+        ))
+
+    def test_invalid_plugin_json_fails(self):
+        self.write_package("Fly", "Pulumi.Fly", plugin_metadata="not json")
+        self.assertTrue(any("PulumiCrossCloud.Fly.1.2.3.nupkg:" in error for error in verifier.verify_packages(self.directory)))
 
     def test_meta_package_must_directly_include_every_library(self):
         self.assertIn("PulumiCrossCloud.DigitalOcean", verifier.LIBRARY_IDS)

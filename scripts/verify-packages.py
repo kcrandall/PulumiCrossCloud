@@ -2,6 +2,7 @@
 """Verify bundled providers and complete meta-package dependencies."""
 
 import argparse
+import json
 from pathlib import Path
 import sys
 import xml.etree.ElementTree as ET
@@ -15,6 +16,11 @@ PROVIDERS = {
     "PostHog": "Pulumi.Posthog",
     "Sentry": "Pulumi.Sentry",
     "Upstash": "Pulumi.Upstash",
+}
+GENERATED_DIRS = {
+    f"PulumiCrossCloud.{wrapper}": Path(__file__).resolve().parents[1]
+    / "src" / f"PulumiCrossCloud.{wrapper}" / "Generated" / wrapper.lower()
+    for wrapper in PROVIDERS
 }
 LIBRARY_IDS = {
     directory.name
@@ -42,6 +48,19 @@ def verify_packages(package_dir):
                         assembly = f"lib/net10.0/{provider}.dll"
                         if assembly not in package.namelist() or package.getinfo(assembly).file_size == 0:
                             errors.append(f"{path.name}: missing bundled {assembly}")
+                        for filename in ("pulumi-plugin.json", "version.txt"):
+                            metadata_path = f"content/{filename}"
+                            if metadata_path not in package.namelist():
+                                errors.append(f"{path.name}: missing {metadata_path}")
+                                continue
+                            expected = (GENERATED_DIRS[package_id] / filename).read_text().strip()
+                            actual = package.read(metadata_path).decode("utf-8").strip()
+                            matches = (
+                                json.loads(actual) == json.loads(expected)
+                                if filename.endswith(".json") else actual == expected
+                            )
+                            if not matches:
+                                errors.append(f"{path.name}: {metadata_path} differs from generated SDK metadata")
                     nuspecs = [name for name in package.namelist() if name.endswith(".nuspec")]
                     if len(nuspecs) != 1:
                         errors.append(f"{path.name}: expected exactly one .nuspec")
@@ -57,7 +76,7 @@ def verify_packages(package_dir):
                         for library_id in sorted(LIBRARY_IDS):
                             if library_id.casefold() not in dependencies:
                                 errors.append(f"{path.name}: missing direct dependency {library_id}")
-            except (BadZipFile, ET.ParseError, OSError) as error:
+            except (BadZipFile, ET.ParseError, OSError, UnicodeError, json.JSONDecodeError) as error:
                 errors.append(f"{path.name}: {error}")
     return errors
 
@@ -72,7 +91,7 @@ def main():
     if errors:
         print("\n".join(errors), file=sys.stderr)
         return 1
-    print("Verified all six bundled providers and complete meta-package dependencies.")
+    print("Verified all six bundled providers, discovery metadata, and complete meta-package dependencies.")
     return 0
 
 
