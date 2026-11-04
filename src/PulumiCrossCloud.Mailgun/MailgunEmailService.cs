@@ -14,7 +14,9 @@ public class MailgunEmailService : IEmailService
         string name,
         string domainName,
         IDnsZone? zone = null,
-        Pulumi.Mailgun.Provider? provider = null
+        Pulumi.Mailgun.Provider? provider = null,
+        Input<string>? apiKey = null,
+        bool? waitForVerification = null
     )
     {
         Name = name;
@@ -47,12 +49,9 @@ public class MailgunEmailService : IEmailService
             resourceOptions
         );
 
-        // Use the generated password
-        Password = new MailgunSecret(
-            $"{name}-password",
-            Output.Tuple(smtpPassword.Result, _domain.Id).Apply(values => values.Item1),
-            _domain
-        );
+        // Use the generated password. It is assigned after DNS and verification below, so its
+        // value resource is the verification when there is one.
+        Output<string> password = smtpPassword.Result;
 
         SmtpEndpoint = Output.Create("smtp.mailgun.org");
         SmtpPort = Output.Create(587);
@@ -184,9 +183,56 @@ public class MailgunEmailService : IEmailService
 
         DnsRecords = recordList;
 
-        if (zone != null)
-            zone.RegisterRecords(DnsRecords);
+        var registrations = zone?.RegisterRecords(DnsRecords).ToList() ?? [];
+
+        // The bridged Mailgun provider has no verification resource, so the native
+        // crosscloud-mailgun provider checks DNS and waits until the domain is active.
+        if (waitForVerification ?? zone is not null)
+        {
+            var verificationProvider = new CrossCloudMailgunProvider(
+                $"{name}-verification-provider",
+                new CrossCloudMailgunProviderArgs
+                {
+                    ApiKey = apiKey ?? new Pulumi.Config("mailgun").RequireSecret("apiKey"),
+                }
+            );
+            var verificationArgs = new MailgunDomainVerificationArgs
+            {
+                Domain = _domain.Name,
+                WaitForSending = true,
+            };
+            foreach (var record in DnsRecords)
+                verificationArgs.Triggers.Add(record.Value);
+
+            Verification = new MailgunDomainVerification(
+                $"{name}-verification",
+                verificationArgs,
+                new CustomResourceOptions
+                {
+                    Provider = verificationProvider,
+                    DependsOn =
+                    [
+                        _domain,
+                        .. registrations.Select(registration => registration.Resource),
+                    ],
+                }
+            );
+        }
+
+        CustomResource ready = Verification is null ? _domain : Verification;
+        Password = new MailgunSecret(
+            $"{name}-password",
+            Output.Tuple(password, ready.Id).Apply(values => values.Item1),
+            _domain,
+            ready
+        );
     }
+
+    /// <summary>
+    /// Waits for Mailgun to activate the domain; null when no DNS zone was supplied and waiting
+    /// was not requested.
+    /// </summary>
+    public MailgunDomainVerification? Verification { get; }
 
     public string Name { get; }
 
@@ -226,11 +272,17 @@ public class MailgunEmailService : IEmailService
     {
         private readonly Output<string> _value;
 
-        public MailgunSecret(string name, Output<string> value, Resource resource)
+        public MailgunSecret(
+            string name,
+            Output<string> value,
+            Resource resource,
+            Resource valueResource
+        )
         {
             Name = name;
             _value = Output.CreateSecret(value);
             Resource = resource;
+            ValueResource = valueResource;
         }
 
         public Output<string?> Value => _value.Apply(v => (string?)v);
@@ -238,6 +290,8 @@ public class MailgunEmailService : IEmailService
         public bool IgnoreChangesAfterCreate => false;
 
         public Resource Resource { get; }
+
+        public Resource ValueResource { get; }
 
         public string Name { get; }
 

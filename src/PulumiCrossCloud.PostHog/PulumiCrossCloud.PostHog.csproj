@@ -7,7 +7,6 @@
   <ItemGroup>
     <PackageReference Include="OpenTelemetry.Api" Version="1.20.1" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.20.1" />
-    <PackageReference Include="Pulumi.Command" Version="1.2.1" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -18,8 +17,18 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="Generated\posthog\pulumi-plugin.json" Pack="true" PackagePath="content" Visible="false" />
-    <None Include="Generated\posthog\version.txt" Pack="true" PackagePath="content" Visible="false" />
+    <None
+      Include="Generated\posthog\pulumi-plugin.json"
+      Pack="true"
+      PackagePath="content"
+      Visible="false"
+    />
+    <None
+      Include="Generated\posthog\version.txt"
+      Pack="true"
+      PackagePath="content"
+      Visible="false"
+    />
   </ItemGroup>
 
   <Target

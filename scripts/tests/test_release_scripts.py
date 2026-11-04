@@ -113,7 +113,7 @@ class ReleaseScriptTests(unittest.TestCase):
 
     def test_pack_runs_unit_tests_without_emulator_prerequisites(self):
         test_call = next(call for call in self.pack_calls() if call[0] == "test")
-        self.assertEqual("Category!=Integration", test_call[test_call.index("--filter") + 1])
+        self.assertEqual("Category!=Integration&Category!=LiveApi", test_call[test_call.index("--filter") + 1])
 
     def test_pack_can_include_integration_tests(self):
         test_call = next(

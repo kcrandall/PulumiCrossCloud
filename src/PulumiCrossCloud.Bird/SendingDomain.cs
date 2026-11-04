@@ -1,16 +1,17 @@
 using System.Collections.Immutable;
 using Pulumi;
+using PulumiCrossCloud.Core;
 
 namespace PulumiCrossCloud.Bird;
 
 /// <summary>
-/// A Bird email sending domain (<c>bird:index:SendingDomain</c>). Publish the records in
+/// A Bird email sending domain (<c>crosscloud-bird:index:SendingDomain</c>). Publish the records in
 /// <see cref="DnsRecords"/>, then use <see cref="DomainVerification"/> to wait until it can send.
 /// Changing <see cref="SendingDomainArgs.Domain"/> replaces the domain.
 /// </summary>
 public class SendingDomain : CustomResource
 {
-    public const string TypeToken = "bird:index:SendingDomain";
+    public const string TypeToken = "crosscloud-bird:index:SendingDomain";
 
     [Output("domain")]
     public Output<string> Domain { get; private set; } = null!;
@@ -54,6 +55,24 @@ public class SendingDomain : CustomResource
     [Output("openTracking")]
     public Output<bool> OpenTracking { get; private set; } = null!;
 
+    /// <summary>
+    /// The default IP pool, or an empty string for normal organization routing.
+    /// </summary>
+    [Output("defaultIpPoolId")]
+    public Output<string> DefaultIpPoolId { get; private set; } = null!;
+
+    /// <summary>
+    /// Receiving control state: enabled, disabling, disable_failed or disabled.
+    /// </summary>
+    [Output("receivingState")]
+    public Output<string?> ReceivingState { get; private set; } = null!;
+
+    /// <summary>
+    /// Inbound readiness: not_configured until receiving is enabled, then pending or verified.
+    /// </summary>
+    [Output("inboundStatus")]
+    public Output<string?> InboundStatus { get; private set; } = null!;
+
     [Output("dkimSelector")]
     public Output<string?> DkimSelector { get; private set; } = null!;
 
@@ -67,10 +86,10 @@ public class SendingDomain : CustomResource
     public Output<ImmutableArray<SendingDomainDnsRecord>> DnsRecords { get; private set; } = null!;
 
     public SendingDomain(string name, SendingDomainArgs args, CustomResourceOptions? options = null)
-        : base(TypeToken, name, args, BirdPlugin.WithDefaults(options)) { }
+        : base(TypeToken, name, args, CrossCloudPlugins.WithDefaults(options)) { }
 
     private SendingDomain(string name, Input<string> id, CustomResourceOptions? options = null)
-        : base(TypeToken, name, null, BirdPlugin.WithDefaults(options, id)) { }
+        : base(TypeToken, name, null, CrossCloudPlugins.WithDefaults(options, id)) { }
 
     /// <summary>
     /// Reads an existing sending domain by its Bird ID (<c>dom_…</c>).
@@ -107,6 +126,12 @@ public sealed class SendingDomainArgs : ResourceArgs
 
     [Input("openTracking")]
     public Input<bool>? OpenTracking { get; set; }
+
+    /// <summary>
+    /// Default IP pool (<c>ipp_…</c>) for sends that omit one; an empty string uses normal organization routing.
+    /// </summary>
+    [Input("defaultIpPoolId")]
+    public Input<string>? DefaultIpPoolId { get; set; }
 }
 
 /// <summary>

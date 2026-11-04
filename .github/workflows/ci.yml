@@ -38,7 +38,7 @@ jobs:
         run: dotnet build PulumiCrossCloud.slnx --configuration Release --no-restore -p:ContinuousIntegrationBuild=true
 
       - name: Unit tests
-        run: dotnet test PulumiCrossCloud.slnx --configuration Release --no-build --no-restore --filter "Category!=Integration" --verbosity minimal
+        run: dotnet test PulumiCrossCloud.slnx --configuration Release --no-build --no-restore --filter "Category!=Integration&Category!=LiveApi" --verbosity minimal
 
       - name: Neon compute policy tests
         run: python -m unittest discover -s tests/PulumiCrossCloud.Neon.Tests -p "test_*.py"
@@ -53,9 +53,32 @@ jobs:
           bash scripts/pack.sh --skip-tests --prerelease stable
           python3 scripts/verify-packages.py
 
-      - name: Package Bird provider plugin
+      - name: Package Native AOT provider plugins
         if: runner.os == 'Linux'
-        run: bash scripts/package-bird-plugin.sh --version 0.0.0-ci --rid linux-x64 --output artifacts/plugins
+        run: bash scripts/package-plugins.sh --version 0.0.0-ci --rid linux-x64 --output artifacts/plugins
+
+  live-api:
+    name: Provider plugins against live vendor APIs
+    # Runs only on main; each test skips itself when its credentials are not configured.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      BIRD_API_KEY: ${{ secrets.BIRD_API_KEY }}
+      BIRD_TEST_DOMAIN_SUFFIX: ${{ vars.BIRD_TEST_DOMAIN_SUFFIX }}
+      MAILGUN_API_KEY: ${{ secrets.MAILGUN_API_KEY }}
+      MAILGUN_TEST_DOMAIN: ${{ vars.MAILGUN_TEST_DOMAIN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v6.0.0
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Live API tests
+        run: dotnet test tests/PulumiCrossCloud.Plugin.Tests/PulumiCrossCloud.Plugin.Tests.csproj --configuration Release --filter "Category=LiveApi" --verbosity normal
 
   integration:
     name: AWS and GCP emulator integration

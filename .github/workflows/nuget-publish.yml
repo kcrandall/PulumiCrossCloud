@@ -39,23 +39,26 @@ jobs:
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "Resolved version: ${VERSION}"
 
-  bird-plugin:
-    name: Bird plugin ${{ matrix.rid }}
+  plugins:
+    name: Provider plugins ${{ matrix.rid }}
     needs: version
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: true
       matrix:
+        # Native AOT compiles for the host OS, so each platform builds on its own runner.
         include:
           - { rid: linux-x64, runner: ubuntu-latest }
-          - { rid: linux-arm64, runner: ubuntu-latest }
-          - { rid: win-x64, runner: ubuntu-latest }
-          - { rid: win-arm64, runner: ubuntu-latest }
-          # macOS executables must be published on macOS so the apphost is code signed.
+          - { rid: linux-arm64, runner: ubuntu-24.04-arm }
+          - { rid: win-x64, runner: windows-latest }
+          - { rid: win-arm64, runner: windows-11-arm }
           - { rid: osx-x64, runner: macos-latest }
           - { rid: osx-arm64, runner: macos-latest }
     env:
       DOTNET_NOLOGO: true
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
@@ -65,18 +68,18 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
-      - name: Package plugin
-        run: bash ./scripts/package-bird-plugin.sh --version "${{ needs.version.outputs.version }}" --rid "${{ matrix.rid }}" --output artifacts/plugins
+      - name: Package Native AOT plugins
+        run: bash ./scripts/package-plugins.sh --version "${{ needs.version.outputs.version }}" --rid "${{ matrix.rid }}" --output artifacts/plugins
 
-      - name: Upload plugin archive
+      - name: Upload plugin archives
         uses: actions/upload-artifact@v7
         with:
-          name: bird-plugin-${{ matrix.rid }}
+          name: plugins-${{ matrix.rid }}
           path: artifacts/plugins/*.tar.gz
           if-no-files-found: error
 
-  publish:
-    needs: [version, bird-plugin]
+  release:
+    needs: [version, plugins]
     runs-on: ubuntu-latest
     permissions:
       # Creates the GitHub release that hosts the provider plugins.
@@ -97,16 +100,23 @@ jobs:
         run: |
           bash ./scripts/pack.sh --version "${PACKAGE_VERSION}" --prerelease stable
 
+      - name: Upload NuGet packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: nuget-packages
+          path: artifacts/nuget/*
+          if-no-files-found: error
+
       - name: Download plugin archives
         uses: actions/download-artifact@v8
         with:
-          pattern: bird-plugin-*
+          pattern: plugins-*
           path: artifacts/plugins
           merge-multiple: true
 
-      # PulumiCrossCloud.Bird resolves pulumi-resource-bird from the release tagged with its own
-      # version (github://api.github.com/kcrandall/PulumiCrossCloud), so the release is created
-      # before the packages that point at it are published.
+      # The packages resolve each pulumi-resource-crosscloud-* plugin from the release tagged with
+      # their own version (github://api.github.com/kcrandall/PulumiCrossCloud), so the release is
+      # created and checked before the packages that point at it are published.
       - name: Publish provider plugins to GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -120,9 +130,53 @@ jobs:
             gh release create "${TAG}" artifacts/plugins/*.tar.gz \
               --target "${GITHUB_SHA}" \
               --title "PulumiCrossCloud ${PACKAGE_VERSION}" \
-              --notes "NuGet packages and pulumi-resource-bird plugins for ${PACKAGE_VERSION}." \
+              --notes "NuGet packages and pulumi-resource-crosscloud-* provider plugins for ${PACKAGE_VERSION}." \
               "${PRERELEASE_FLAG[@]}"
           fi
+
+  verify-plugins:
+    name: Plugin download on ${{ matrix.os }}
+    needs: [version, release]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Install Pulumi CLI
+        run: |
+          curl -fsSL https://get.pulumi.com | sh -s -- --version 3.272.0
+          echo "${HOME}/.pulumi/bin" >> "${GITHUB_PATH}"
+
+      - name: Install each plugin the way Pulumi downloads it
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          for plugin in bird posthog mailgun; do
+            pulumi plugin install resource "crosscloud-${plugin}" "${VERSION}" \
+              --server github://api.github.com/kcrandall/PulumiCrossCloud
+          done
+          pulumi plugin ls | grep crosscloud-
+
+  publish:
+    needs: [version, verify-plugins]
+    runs-on: ubuntu-latest
+    env:
+      DOTNET_NOLOGO: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v6.0.0
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Download NuGet packages
+        uses: actions/download-artifact@v8
+        with:
+          name: nuget-packages
+          path: artifacts/nuget
 
       - name: Publish packages to NuGet
         env:

@@ -87,7 +87,7 @@ if [[ "${RUN_TESTS}" == "true" ]]; then
   python3 -m unittest discover -s "${REPO_DIR}/tests/PulumiCrossCloud.Neon.Tests" -p 'test_*.py'
   TEST_FILTER_ARGS=()
   if [[ "${INCLUDE_INTEGRATION_TESTS}" != "true" ]]; then
-    TEST_FILTER_ARGS=(--filter 'Category!=Integration')
+    TEST_FILTER_ARGS=(--filter 'Category!=Integration&Category!=LiveApi')
   fi
   dotnet test "${SOLUTION_FILE}" \
     --configuration "${CONFIGURATION}" \

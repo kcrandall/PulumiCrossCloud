@@ -28,13 +28,33 @@ public sealed class BirdEmailServiceOptions
     public bool? WaitForVerification { get; init; }
 
     /// <summary>
+    /// Default IP pool (<c>ipp_…</c>) for sends that omit one. Null leaves Bird's setting alone;
+    /// an empty string uses normal organization routing.
+    /// </summary>
+    public string? DefaultIpPoolId { get; init; }
+
+    /// <summary>
+    /// Enable inbound mail on the domain and publish its MX records. Mail to any address at the
+    /// domain then arrives as an inbound message. Use a dedicated subdomain: MX records on a
+    /// domain that already receives mail would redirect it.
+    /// </summary>
+    public bool ReceivingEnabled { get; init; }
+
+    /// <summary>
+    /// How many inbound MX records Bird lists for the region (3 at the time of writing). Each
+    /// gets a stable DNS resource, so the count is fixed up front; deployment fails with the
+    /// actual count if Bird reports a different number.
+    /// </summary>
+    public int InboundMxRecordCount { get; init; } = 3;
+
+    /// <summary>
     /// SMTP submission port: 587 or 2525 (STARTTLS) or 465 (implicit TLS).
     /// </summary>
     public int SmtpPort { get; init; } = 587;
 
     /// <summary>
     /// API key used as the SMTP password. It needs the <c>emails</c> scope. Defaults to the
-    /// factory's API key, or the <c>bird:apiKey</c> stack config secret.
+    /// factory's API key, or the <c>crosscloud-bird:apiKey</c> stack config secret.
     /// </summary>
     public Input<string>? SmtpApiKey { get; init; }
 }

@@ -1,23 +1,27 @@
 using Pulumi;
+using PulumiCrossCloud.Core;
 
 namespace PulumiCrossCloud.Bird;
 
 /// <summary>
-/// An explicit <c>bird</c> provider. Without one, resources use the default provider configured
-/// through <c>bird:apiKey</c> and <c>bird:region</c> stack config (or <c>BIRD_API_KEY</c>/<c>BIRD_REGION</c>).
+/// An explicit <c>crosscloud-bird</c> provider. Without one, resources use the default provider
+/// configured through <c>crosscloud-bird:apiKey</c> and <c>crosscloud-bird:region</c> stack config
+/// (or <c>BIRD_API_KEY</c>/<c>BIRD_REGION</c>).
 /// </summary>
 public class BirdProvider : ProviderResource
 {
+    public const string Package = "crosscloud-bird";
+
     public BirdProvider(
         string name,
         BirdProviderArgs? args = null,
         CustomResourceOptions? options = null
     )
         : base(
-            BirdPlugin.Name,
+            Package,
             name,
             args ?? new BirdProviderArgs(),
-            BirdPlugin.WithDefaults(options)
+            CrossCloudPlugins.WithDefaults(options)
         ) { }
 }
 

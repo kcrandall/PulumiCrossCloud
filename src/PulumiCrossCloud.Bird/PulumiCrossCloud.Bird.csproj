@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Description>Bird (bird.com) email sending domains for PulumiCrossCloud, backed by the pulumi-resource-bird provider plugin.</Description>
+    <Description>Bird (bird.com) email sending domains for PulumiCrossCloud, backed by the pulumi-resource-crosscloud-bird provider plugin.</Description>
     <PackageTags>$(PackageTags);bird;email</PackageTags>
   </PropertyGroup>
 

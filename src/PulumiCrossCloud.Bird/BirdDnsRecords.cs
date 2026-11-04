@@ -9,6 +9,7 @@ public static class BirdDnsRecords
     public const string ReturnPath = "return_path";
     public const string Dmarc = "dmarc";
     public const string Tracking = "tracking";
+    public const string InboundMx = "inbound_mx";
 
     /// <summary>
     /// Fallback DMARC policy published when Bird does not suggest one. <c>p=none</c> satisfies Bird's sending check.
@@ -28,6 +29,20 @@ public static class BirdDnsRecords
             .Where(record => record.Purpose == purpose && record.State != "deprecated")
             .OrderBy(record => record.State == "pending" ? 0 : 1)
             .FirstOrDefault();
+
+    /// <summary>
+    /// Every current record for a purpose that has several, such as <see cref="InboundMx"/>,
+    /// in a stable order (by value, then host) so each keeps the same DNS resource.
+    /// </summary>
+    public static IReadOnlyList<SendingDomainDnsRecord> SelectAll(
+        IEnumerable<SendingDomainDnsRecord> records,
+        string purpose
+    ) =>
+        records
+            .Where(record => record.Purpose == purpose && record.State != "deprecated")
+            .OrderBy(record => record.Value, StringComparer.Ordinal)
+            .ThenBy(record => record.Host, StringComparer.Ordinal)
+            .ToList();
 
     /// <summary>
     /// Like <see cref="Select"/>, but fails with a descriptive error when Bird reports no such record.

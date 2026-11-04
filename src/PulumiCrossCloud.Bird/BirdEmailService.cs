@@ -7,7 +7,7 @@ namespace PulumiCrossCloud.Bird;
 /// <summary>
 /// Sends email through Bird's SMTP relay from a verified sending domain.
 /// Creates the Bird domain, optionally publishes its DKIM, return-path, DMARC and tracking records
-/// in a DNS zone, and waits for Bird to verify it. SMTP uses the literal username <c>bird</c>
+/// in a DNS zone, waits for Bird to verify it, and can enable inbound mail. SMTP uses the literal username <c>bird</c>
 /// with an API key as the password.
 /// </summary>
 public class BirdEmailService : IEmailService
@@ -32,6 +32,7 @@ public class BirdEmailService : IEmailService
                 Domain = domainName,
                 ReturnPathName = Optional(options.ReturnPathName),
                 TrackingName = Optional(options.TrackingName),
+                DefaultIpPoolId = Optional(options.DefaultIpPoolId),
             },
             new CustomResourceOptions { Provider = provider }
         );
@@ -59,6 +60,9 @@ public class BirdEmailService : IEmailService
         }
         if (options.TrackingName != "")
             records.Add(Record(DnsRecordType.CNAME, BirdDnsRecords.Tracking, domainName));
+        if (options.ReceivingEnabled)
+            for (var index = 0; index < options.InboundMxRecordCount; index++)
+                records.Add(InboundMxRecord(index, options.InboundMxRecordCount, domainName));
         DnsRecords = records;
 
         var registrations = zone?.RegisterRecords(DnsRecords).ToList() ?? [];
@@ -87,6 +91,18 @@ public class BirdEmailService : IEmailService
             );
         }
 
+        if (options.ReceivingEnabled)
+        {
+            // Bird only enables receiving once DKIM verifies, and checks the MX records after.
+            List<Resource> dependencies = [Verification is null ? Domain : Verification];
+            dependencies.AddRange(registrations.Select(registration => registration.Resource));
+            Receiving = new DomainReceiving(
+                $"{name}-receiving",
+                new DomainReceivingArgs { DomainId = Domain.Id },
+                new CustomResourceOptions { Provider = provider, DependsOn = dependencies }
+            );
+        }
+
         SmtpEndpoint = Output.Create(region.SmtpHost());
         SmtpPort = Output.Create(options.SmtpPort);
         Username = Output.Create("bird");
@@ -109,6 +125,11 @@ public class BirdEmailService : IEmailService
     /// Waits for Bird to verify the domain; null when verification waiting is disabled.
     /// </summary>
     public DomainVerification? Verification { get; }
+
+    /// <summary>
+    /// Inbound mail on the domain; null unless <see cref="BirdEmailServiceOptions.ReceivingEnabled"/> is set.
+    /// </summary>
+    public DomainReceiving? Receiving { get; }
 
     public IReadOnlyList<IDnsRegistration> DnsRegistrations { get; }
 
@@ -137,6 +158,26 @@ public class BirdEmailService : IEmailService
 
     private static Input<string>? Optional(string? value) =>
         value is { } text ? (Input<string>)text : null;
+
+    private DnsRecord InboundMxRecord(int index, int expectedCount, string domainName)
+    {
+        var record = Domain.DnsRecords.Apply(all =>
+        {
+            var mx = BirdDnsRecords.SelectAll(all, BirdDnsRecords.InboundMx);
+            if (mx.Count != expectedCount)
+                throw new InvalidOperationException(
+                    $"Bird reports {mx.Count} inbound MX records for {domainName}, but "
+                        + $"InboundMxRecordCount is {expectedCount}. Set it to {mx.Count}."
+                );
+            return mx[index];
+        });
+        return new DnsRecord(
+            DnsRecordType.MX,
+            record.Apply(r => r.Host),
+            record.Apply(r => r.Value),
+            $"{domainName}-inbound-mx-{index + 1}"
+        );
+    }
 
     private DnsRecord Record(DnsRecordType type, string purpose, string domainName)
     {

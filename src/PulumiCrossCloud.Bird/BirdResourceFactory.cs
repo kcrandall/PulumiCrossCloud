@@ -10,8 +10,8 @@ public class BirdResourceFactory : CloudResourceFactory
     private readonly BirdRegion _region;
 
     /// <summary>
-    /// Uses the default Bird provider, configured by the <c>bird:apiKey</c> stack config secret
-    /// (or <c>BIRD_API_KEY</c>), which is also used as the SMTP password.
+    /// Uses the default Bird provider, configured by the <c>crosscloud-bird:apiKey</c> stack config
+    /// secret (or <c>BIRD_API_KEY</c>), which is also used as the SMTP password.
     /// </summary>
     public BirdResourceFactory(BirdRegion region = BirdRegion.Us1)
         : base(CloudProvider.Bird)
@@ -45,6 +45,12 @@ public class BirdResourceFactory : CloudResourceFactory
     }
 
     /// <summary>
+    /// The explicit provider this factory created or was given; null when it uses the default
+    /// provider. Pass it in <see cref="InvokeOptions"/> to <see cref="GetSendingDomain"/>.
+    /// </summary>
+    public BirdProvider? ProviderResource => _providerResource;
+
+    /// <summary>
     /// Options applied by <see cref="CreateEmailService(string, string, IDnsZone?)"/>.
     /// </summary>
     public BirdEmailServiceOptions EmailServiceOptions { get; init; } = new();
@@ -63,7 +69,9 @@ public class BirdResourceFactory : CloudResourceFactory
     )
     {
         var smtpApiKey =
-            options.SmtpApiKey ?? _apiKey ?? new Config(BirdPlugin.Name).RequireSecret("apiKey");
+            options.SmtpApiKey
+            ?? _apiKey
+            ?? new Config(BirdProvider.Package).RequireSecret("apiKey");
         return new BirdEmailService(
             name,
             domainName,

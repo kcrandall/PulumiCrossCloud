@@ -1,17 +1,18 @@
 using System.Collections.Immutable;
 using Pulumi;
+using PulumiCrossCloud.Core;
 
 namespace PulumiCrossCloud.Bird;
 
 /// <summary>
-/// Runs Bird's DNS check for a sending domain (<c>bird:index:DomainVerification</c>) and, by
+/// Runs Bird's DNS check for a sending domain (<c>crosscloud-bird:index:DomainVerification</c>) and, by
 /// default, waits until the domain may send. Make it depend on the DNS record resources.
 /// The wait honors <c>CustomTimeouts.Create</c> and defaults to 20 minutes.
 /// Deleting it has no effect in Bird.
 /// </summary>
 public class DomainVerification : CustomResource
 {
-    public const string TypeToken = "bird:index:DomainVerification";
+    public const string TypeToken = "crosscloud-bird:index:DomainVerification";
 
     [Output("domainId")]
     public Output<string> DomainId { get; private set; } = null!;
@@ -36,7 +37,7 @@ public class DomainVerification : CustomResource
         DomainVerificationArgs args,
         CustomResourceOptions? options = null
     )
-        : base(TypeToken, name, args, BirdPlugin.WithDefaults(options)) { }
+        : base(TypeToken, name, args, CrossCloudPlugins.WithDefaults(options)) { }
 }
 
 public sealed class DomainVerificationArgs : ResourceArgs
