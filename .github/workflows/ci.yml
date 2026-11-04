@@ -53,6 +53,10 @@ jobs:
           bash scripts/pack.sh --skip-tests --prerelease stable
           python3 scripts/verify-packages.py
 
+      - name: Package Bird provider plugin
+        if: runner.os == 'Linux'
+        run: bash scripts/package-bird-plugin.sh --version 0.0.0-ci --rid linux-x64 --output artifacts/plugins
+
   integration:
     name: AWS and GCP emulator integration
     runs-on: ubuntu-latest

@@ -21,12 +21,41 @@ permissions:
   contents: read
 
 jobs:
-  publish:
+  version:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     env:
-      DOTNET_NOLOGO: true
       INPUT_VERSION: ${{ github.event.inputs.version }}
       INPUT_PRERELEASE: ${{ github.event.inputs.prerelease || 'alpha' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Resolve lockstep version
+        id: version
+        run: |
+          VERSION="$(bash ./scripts/resolve-version.sh --version "${INPUT_VERSION:-}" --prerelease "${INPUT_PRERELEASE:-alpha}")"
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "Resolved version: ${VERSION}"
+
+  bird-plugin:
+    name: Bird plugin ${{ matrix.rid }}
+    needs: version
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { rid: linux-x64, runner: ubuntu-latest }
+          - { rid: linux-arm64, runner: ubuntu-latest }
+          - { rid: win-x64, runner: ubuntu-latest }
+          - { rid: win-arm64, runner: ubuntu-latest }
+          # macOS executables must be published on macOS so the apphost is code signed.
+          - { rid: osx-x64, runner: macos-latest }
+          - { rid: osx-arm64, runner: macos-latest }
+    env:
+      DOTNET_NOLOGO: true
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
@@ -36,18 +65,64 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
-      - name: Resolve lockstep version
-        id: version
-        run: |
-          VERSION="$(bash ./scripts/resolve-version.sh --version "${INPUT_VERSION:-}" --prerelease "${INPUT_PRERELEASE:-alpha}")"
-          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
-          echo "Resolved version: ${VERSION}"
+      - name: Package plugin
+        run: bash ./scripts/package-bird-plugin.sh --version "${{ needs.version.outputs.version }}" --rid "${{ matrix.rid }}" --output artifacts/plugins
+
+      - name: Upload plugin archive
+        uses: actions/upload-artifact@v7
+        with:
+          name: bird-plugin-${{ matrix.rid }}
+          path: artifacts/plugins/*.tar.gz
+          if-no-files-found: error
+
+  publish:
+    needs: [version, bird-plugin]
+    runs-on: ubuntu-latest
+    permissions:
+      # Creates the GitHub release that hosts the provider plugins.
+      contents: write
+    env:
+      DOTNET_NOLOGO: true
+      PACKAGE_VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v6.0.0
+        with:
+          dotnet-version: "10.0.x"
 
       - name: Pack all PulumiCrossCloud packages
-        env:
-          PACKAGE_VERSION: ${{ steps.version.outputs.version }}
         run: |
           bash ./scripts/pack.sh --version "${PACKAGE_VERSION}" --prerelease stable
+
+      - name: Download plugin archives
+        uses: actions/download-artifact@v8
+        with:
+          pattern: bird-plugin-*
+          path: artifacts/plugins
+          merge-multiple: true
+
+      # PulumiCrossCloud.Bird resolves pulumi-resource-bird from the release tagged with its own
+      # version (github://api.github.com/kcrandall/PulumiCrossCloud), so the release is created
+      # before the packages that point at it are published.
+      - name: Publish provider plugins to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v${PACKAGE_VERSION}"
+          PRERELEASE_FLAG=()
+          [[ "${PACKAGE_VERSION}" == *-* ]] && PRERELEASE_FLAG=(--prerelease)
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release upload "${TAG}" artifacts/plugins/*.tar.gz --clobber
+          else
+            gh release create "${TAG}" artifacts/plugins/*.tar.gz \
+              --target "${GITHUB_SHA}" \
+              --title "PulumiCrossCloud ${PACKAGE_VERSION}" \
+              --notes "NuGet packages and pulumi-resource-bird plugins for ${PACKAGE_VERSION}." \
+              "${PRERELEASE_FLAG[@]}"
+          fi
 
       - name: Publish packages to NuGet
         env:

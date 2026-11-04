@@ -4,6 +4,9 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
+  <Folder Name="/providers/">
+    <Project Path="providers/PulumiCrossCloud.Bird.Provider/PulumiCrossCloud.Bird.Provider.csproj" />
+  </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/PulumiCrossCloud.Samples.Aws/PulumiCrossCloud.Samples.Aws.csproj" />
     <Project Path="samples/PulumiCrossCloud.Samples.Azure/PulumiCrossCloud.Samples.Azure.csproj" />
@@ -15,6 +18,7 @@
     <Project Path="src/PulumiCrossCloud.Aws/PulumiCrossCloud.Aws.csproj" />
     <Project Path="src/PulumiCrossCloud.Azure/PulumiCrossCloud.Azure.csproj" />
     <Project Path="src/PulumiCrossCloud.Aiven/PulumiCrossCloud.Aiven.csproj" />
+    <Project Path="src/PulumiCrossCloud.Bird/PulumiCrossCloud.Bird.csproj" />
     <Project Path="src/PulumiCrossCloud.Cloudflare/PulumiCrossCloud.Cloudflare.csproj" />
     <Project Path="src/PulumiCrossCloud.Core/PulumiCrossCloud.Core.csproj" />
     <Project Path="src/PulumiCrossCloud.DigitalOcean/PulumiCrossCloud.DigitalOcean.csproj" />
@@ -42,6 +46,7 @@
   <Folder Name="/src/PulumiCrossCloud.Neon/Generated/neon/" />
   <Folder Name="/tests/">
     <Project Path="tests/PulumiCrossCloud.Aws.Tests/PulumiCrossCloud.Aws.Tests.csproj" />
+    <Project Path="tests/PulumiCrossCloud.Bird.Tests/PulumiCrossCloud.Bird.Tests.csproj" />
     <Project Path="tests/PulumiCrossCloud.Cloudflare.Tests/PulumiCrossCloud.Cloudflare.Tests.csproj" />
     <Project Path="tests/PulumiCrossCloud.Core.Tests/PulumiCrossCloud.Core.Tests.csproj" />
     <Project Path="tests/PulumiCrossCloud.Gcp.Tests/PulumiCrossCloud.Gcp.Tests.csproj" />
