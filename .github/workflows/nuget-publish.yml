@@ -47,12 +47,12 @@ jobs:
       fail-fast: true
       matrix:
         # Native AOT compiles for the host OS, so each platform builds on its own runner.
+        # macOS is Apple Silicon only; Intel Macs are not supported.
         include:
           - { rid: linux-x64, runner: ubuntu-latest }
           - { rid: linux-arm64, runner: ubuntu-24.04-arm }
           - { rid: win-x64, runner: windows-latest }
           - { rid: win-arm64, runner: windows-11-arm }
-          - { rid: osx-x64, runner: macos-latest }
           - { rid: osx-arm64, runner: macos-latest }
     env:
       DOTNET_NOLOGO: true
@@ -151,6 +151,8 @@ jobs:
       - name: Install each plugin the way Pulumi downloads it
         env:
           VERSION: ${{ needs.version.outputs.version }}
+          # Authenticated requests avoid GitHub's anonymous API rate limit on shared runners.
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           for plugin in bird posthog mailgun; do
             pulumi plugin install resource "crosscloud-${plugin}" "${VERSION}" \

@@ -33,9 +33,14 @@ used directly fall back to each plugin's default provider:
 ## Distribution
 
 The plugins are published as Native AOT executables (about 8 MB compressed, no .NET runtime
-needed). The NuGet publish workflow builds them for Linux, macOS and Windows on x64 and arm64,
-attaches them to the GitHub release `v<version>`, and checks that `pulumi plugin install` can
-download each one before it pushes the NuGet packages. Resources request the plugin version
+needed). The NuGet publish workflow builds them for Linux and Windows on x64 and arm64 and for
+Apple Silicon Macs (Intel Macs are not supported), attaches them to the GitHub release
+`v<version>`, and checks that `pulumi plugin install` can download each one before it pushes the
+NuGet packages.
+
+Pulumi downloads plugins through the GitHub API, which limits anonymous requests per IP address.
+Set `GITHUB_TOKEN` (any token, no scopes needed) in CI deployments so shared runners don't hit
+that limit. In GitHub Actions, `GITHUB_TOKEN: ${{ github.token }}` is enough. Resources request the plugin version
 equal to their package version from `github://api.github.com/kcrandall/PulumiCrossCloud`.
 
 Build archives locally with:

@@ -20,14 +20,14 @@ name Pulumi expects for github:// plugin downloads:
 
 Options:
   --version <semver>     Plugin version; must match the PulumiCrossCloud package version.
-  --rid <rid>            linux-x64, linux-arm64, osx-x64, osx-arm64, win-x64 or win-arm64.
+  --rid <rid>            linux-x64, linux-arm64, osx-arm64, win-x64 or win-arm64.
   --plugin <name>        bird, posthog or mailgun (repeatable; default: all).
   --framework-dependent  Publish a small single-file executable that needs the .NET 10 runtime
                          instead of a Native AOT binary.
   --output <path>        Output directory (default: artifacts/plugins).
 
 Native AOT needs the platform toolchain and compiles for the host OS only: publish Linux on
-Linux, Windows on Windows and macOS on macOS (either architecture on macOS).
+Linux, Windows on Windows and macOS (Apple Silicon) on macOS.
 EOF
 }
 
@@ -92,7 +92,6 @@ for plugin in "${PLUGINS[@]}"; do
     case "${rid}" in
       linux-x64) platform="linux-amd64" ;;
       linux-arm64) platform="linux-arm64" ;;
-      osx-x64) platform="darwin-amd64" ;;
       osx-arm64) platform="darwin-arm64" ;;
       win-x64) platform="windows-amd64" ;;
       win-arm64) platform="windows-arm64" ;;
