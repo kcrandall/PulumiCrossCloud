@@ -164,10 +164,28 @@ public class KeycloakStack : ComponentResource
         // After compute is ready, configure Keycloak realm/clients/idps using the native Pulumi.Keycloak provider
         if (realmConfig is not null)
         {
+            // Wait for /health/ready once the compute and its dependencies exist. Previews skip it.
+            var readyServiceUrl = Output
+                .Tuple(
+                    compute.ServiceUrl,
+                    Output.All(
+                        computeDependencies.Select(resource =>
+                            resource is CustomResource custom ? custom.Id : resource.Urn
+                        )
+                    )
+                )
+                .Apply(async t =>
+                {
+                    var serviceUrl = t.Item1;
+                    if (!Pulumi.Deployment.Instance.IsDryRun && !string.IsNullOrWhiteSpace(serviceUrl))
+                        await KeycloakReadiness.WaitAsync(serviceUrl);
+                    return serviceUrl;
+                });
+
             // Use Output.All to combine ServiceUrl and admin password, then configure Keycloak
             RealmResults = Output
                 .Tuple(
-                    compute.ServiceUrl,
+                    readyServiceUrl,
                     keycloakAdminPasswordSecret.Value.Apply(s => s ?? string.Empty)
                 )
                 .Apply(t =>
@@ -223,22 +241,6 @@ public class KeycloakStack : ComponentResource
                             );
                     }
 
-                    // Wait for KC to be ready
-                    var readyScript =
-                        $"bash -lc 'for i in {{1..60}}; do if curl -sf {serviceUrl}/health/ready >/dev/null; then echo ready; exit 0; fi; sleep 5; done; echo timeout; exit 1'";
-
-                    var readyCheck = new Pulumi.Command.Local.Command(
-                        $"wait-for-keycloak-{name}",
-                        new Pulumi.Command.Local.CommandArgs
-                        {
-                            Create = readyScript,
-                            Update = readyScript,
-                        },
-                        computeDependencies.Length > 0
-                            ? new CustomResourceOptions { DependsOn = computeDependencies }
-                            : null
-                    );
-
                     var providerArgs =
                         realmConfig!.ProviderOverrides
                         ?? new Pulumi.Keycloak.ProviderArgs
@@ -253,7 +255,7 @@ public class KeycloakStack : ComponentResource
                     var provider = new Pulumi.Keycloak.Provider(
                         $"{name}-kc-provider",
                         providerArgs,
-                        new CustomResourceOptions { DependsOn = new[] { readyCheck } } // ensure readiness
+                        new CustomResourceOptions { DependsOn = computeDependencies }
                     );
 
                     var result = PulumiRealmDeployer.Deploy(
@@ -261,7 +263,7 @@ public class KeycloakStack : ComponentResource
                         provider,
                         factory,
                         serviceUrl,
-                        dependsOn: new Resource[] { readyCheck }
+                        dependsOn: computeDependencies
                     );
 
                     // Return the realm deployment result

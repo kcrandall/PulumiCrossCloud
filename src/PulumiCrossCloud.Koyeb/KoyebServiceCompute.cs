@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using Pulumi;
-using Pulumi.Command.Local;
 using PulumiCrossCloud.Core;
 
 namespace PulumiCrossCloud.Koyeb;
@@ -20,7 +19,7 @@ public sealed class KoyebServiceCompute : ICompute
     private readonly global::Pulumi.Koyeb.Provider? _provider;
     private global::Pulumi.Koyeb.App? _app;
     private global::Pulumi.Koyeb.Service? _service;
-    private Command? _scaleToZeroSleepCommand;
+    private KoyebServiceSleep? _scaleToZeroSleep;
 
     public KoyebServiceCompute(
         string name,
@@ -99,7 +98,7 @@ public sealed class KoyebServiceCompute : ICompute
             new CustomResourceOptions { Provider = _provider, DependsOn = [_app] }
         );
 
-        _scaleToZeroSleepCommand = BuildScaleToZeroSleepCommand();
+        _scaleToZeroSleep = BuildScaleToZeroSleep();
     }
 
     public IEnumerable<Resource> GetDependencies()
@@ -107,7 +106,7 @@ public sealed class KoyebServiceCompute : ICompute
         if (_service is null)
             return [];
 
-        return _scaleToZeroSleepCommand is null ? [_service] : [_service, _scaleToZeroSleepCommand];
+        return _scaleToZeroSleep is null ? [_service] : [_service, _scaleToZeroSleep];
     }
 
     public IEnumerable<DnsRecord> GetRequiredDnsRecords(IEnumerable<string> names) =>
@@ -220,46 +219,24 @@ public sealed class KoyebServiceCompute : ICompute
         return definition;
     }
 
-    private Command? BuildScaleToZeroSleepCommand()
+    private KoyebServiceSleep? BuildScaleToZeroSleep()
     {
         if (
             ScaleToZeroOptions is null
             || !ScaleToZeroOptions.HasConfiguredSleepDelays
-            || _app is null
             || _service is null
         )
             return null;
 
-        var arguments = new List<string>();
-        if (ScaleToZeroOptions.LightSleepDelay.HasValue)
-            arguments.Add(
-                $"--light-sleep-delay {FormatKoyebDuration(ScaleToZeroOptions.LightSleepDelay.Value)}"
-            );
-
-        if (ScaleToZeroOptions.DeepSleepDelay.HasValue)
-            arguments.Add(
-                $"--deep-sleep-delay {FormatKoyebDuration(ScaleToZeroOptions.DeepSleepDelay.Value)}"
-            );
-
-        var appName = _app.Name.Apply(ShellQuote);
-        var serviceName = ShellQuote(Name);
-        var updateCommand = appName.Apply(app =>
-            $"koyeb services update {app}/{serviceName} --min-scale {MinCount} --max-scale {MaxCount} {string.Join(' ', arguments)} --wait"
-        );
-
-        return new Command(
+        return new KoyebServiceSleep(
             $"{Name}-scale-to-zero-sleep",
-            new CommandArgs
+            new KoyebServiceSleepArgs
             {
-                Create = updateCommand,
-                Update = updateCommand,
-                Triggers = new InputList<object>
-                {
-                    (Input<object>)FormatKoyebDuration(ScaleToZeroOptions.LightSleepDelay),
-                    (Input<object>)FormatKoyebDuration(ScaleToZeroOptions.DeepSleepDelay),
-                    (Input<object>)MinCount.ToString(),
-                    (Input<object>)MaxCount.ToString(),
-                },
+                ServiceId = _service.Id,
+                LightSleepDelaySeconds = DelaySeconds(ScaleToZeroOptions.LightSleepDelay),
+                DeepSleepDelaySeconds = DelaySeconds(ScaleToZeroOptions.DeepSleepDelay),
+                // A redeploy by the bridged provider sends a definition without the delays.
+                Triggers = [_service.Version],
             },
             new CustomResourceOptions { DependsOn = [_service] }
         );
@@ -280,31 +257,17 @@ public sealed class KoyebServiceCompute : ICompute
         return string.IsNullOrWhiteSpace(domain?.Name) ? string.Empty : $"https://{domain.Name}";
     }
 
-    private static string FormatKoyebDuration(TimeSpan? duration) =>
-        duration.HasValue ? FormatKoyebDuration(duration.Value) : string.Empty;
-
-    private static string FormatKoyebDuration(TimeSpan duration)
+    private static int? DelaySeconds(TimeSpan? delay)
     {
-        if (duration == TimeSpan.Zero)
-            return "0";
-
-        if (duration < TimeSpan.Zero)
+        if (delay is null)
+            return null;
+        if (delay < TimeSpan.Zero || delay.Value.Ticks % TimeSpan.TicksPerSecond != 0)
             throw new ArgumentOutOfRangeException(
-                nameof(duration),
-                "Koyeb sleep delays cannot be negative."
+                nameof(delay),
+                "Koyeb sleep delays must be a non-negative whole number of seconds."
             );
-
-        if (duration.TotalSeconds % 3600 == 0)
-            return $"{(int)duration.TotalHours}h";
-
-        if (duration.TotalSeconds % 60 == 0)
-            return $"{(int)duration.TotalMinutes}m";
-
-        return $"{(int)duration.TotalSeconds}s";
+        return (int)delay.Value.TotalSeconds;
     }
-
-    private static string ShellQuote(string value) =>
-        $"'{value.Replace("'", "'\\''", StringComparison.Ordinal)}'";
 
     private static string ExtractHost(string url)
     {

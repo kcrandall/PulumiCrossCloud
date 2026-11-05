@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- The Pulumi engine discovers resource plugins by this executable name. -->
+    <AssemblyName>pulumi-resource-crosscloud-koyeb</AssemblyName>
+    <RootNamespace>PulumiCrossCloud.Plugin.Koyeb</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PulumiCrossCloud.Plugin.Common\PulumiCrossCloud.Plugin.Common.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PulumiCrossCloud.Plugin.Tests" />
+  </ItemGroup>
+</Project>

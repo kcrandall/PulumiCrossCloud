@@ -21,5 +21,6 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Dockerfile" />
+    <InternalsVisibleTo Include="PulumiCrossCloud.Provider.Tests" />
   </ItemGroup>
 </Project>

@@ -35,6 +35,28 @@ public sealed class ProviderRegressionTests(ProviderDeployment deployment)
     }
 
     [Fact]
+    public void KoyebScaleToZero_SetsSleepDelaysThroughTheNativeProvider()
+    {
+        var sleep = deployment.Resources.Single(resource =>
+            resource.Name == "sleepy-koyeb-scale-to-zero-sleep"
+        );
+
+        Assert.Equal(KoyebServiceSleep.TypeToken, sleep.Type);
+        Assert.Equal("sleepy-koyeb-service-id", sleep.Inputs["serviceId"]);
+        Assert.Equal(60, Convert.ToInt32(sleep.Inputs["lightSleepDelaySeconds"]));
+        Assert.Equal(1800, Convert.ToInt32(sleep.Inputs["deepSleepDelaySeconds"]));
+        Assert.Equal(
+            ["3"],
+            ((IEnumerable<object>)sleep.Inputs["triggers"]).Cast<string>()
+        );
+        Assert.DoesNotContain(
+            deployment.Resources,
+            resource => resource.Type == "command:local:Command"
+        );
+        Assert.DoesNotContain(deployment.Resources, r => r.Name == "test-koyeb-scale-to-zero-sleep");
+    }
+
+    [Fact]
     public void AzureBucket_AcceptsHyphenatedNamesAndSanitizesOnlyTheStorageAccountName()
     {
         var account = deployment.Resources.Single(resource => resource.Name == "myassets");
@@ -79,6 +101,8 @@ public sealed class ProviderDeployment : IMocks, IAsyncLifetime
             {
                 new Dictionary<string, object> { ["name"] = "test-koyeb.koyeb.app" },
             };
+        if (args.Type == "koyeb:index/service:Service")
+            state["version"] = "3";
         return Task.FromResult<(string? id, object state)>(($"{args.Name}-id", state));
     }
 
@@ -104,6 +128,20 @@ public sealed class ProviderRegressionStack : Stack
         );
         ConfigureRepeatedSecret("koyeb", koyeb, secret);
         koyeb.Build();
+        var sleepy = new KoyebServiceCompute(
+            "sleepy-koyeb",
+            new KoyebContainerRegistry("sleepy-registry"),
+            "image"
+        )
+        {
+            MinCount = 0,
+            ScaleToZeroOptions = new KoyebScaleToZeroOptions
+            {
+                LightSleepDelay = TimeSpan.FromMinutes(1),
+                DeepSleepDelay = TimeSpan.FromMinutes(30),
+            },
+        };
+        sleepy.Build();
         var digitalOcean = new DigitalOceanAppPlatformCompute(
             "test-digitalocean",
             new TestRegistry("do-registry", CloudProvider.DigitalOcean),

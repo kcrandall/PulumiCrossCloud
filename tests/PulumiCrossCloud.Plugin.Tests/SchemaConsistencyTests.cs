@@ -3,11 +3,13 @@ using System.Text.Json;
 using Pulumi;
 using PulumiCrossCloud.Bird;
 using PulumiCrossCloud.Cloudflare;
+using PulumiCrossCloud.Koyeb;
 using PulumiCrossCloud.Neon;
 using PulumiCrossCloud.Mailgun;
 using PulumiCrossCloud.PostHog;
 using BirdPlugin = PulumiCrossCloud.Plugin.Bird;
 using CloudflarePlugin = PulumiCrossCloud.Plugin.Cloudflare;
+using KoyebPlugin = PulumiCrossCloud.Plugin.Koyeb;
 using NeonPlugin = PulumiCrossCloud.Plugin.Neon;
 using MailgunPlugin = PulumiCrossCloud.Plugin.Mailgun;
 using PostHogPlugin = PulumiCrossCloud.Plugin.PostHog;
@@ -65,6 +67,12 @@ public sealed class SchemaConsistencyTests
                 typeof(CloudflareAccountToken),
                 typeof(CloudflareAccountTokenArgs)
             },
+            {
+                KoyebPlugin.KoyebSchema.Json,
+                KoyebServiceSleep.TypeToken,
+                typeof(KoyebServiceSleep),
+                typeof(KoyebServiceSleepArgs)
+            },
         };
 
     public static TheoryData<string, string, Type> Providers =>
@@ -90,6 +98,11 @@ public sealed class SchemaConsistencyTests
                 CloudflarePlugin.CloudflareSchema.Json,
                 CrossCloudCloudflareProvider.Package,
                 typeof(CrossCloudCloudflareProviderArgs)
+            },
+            {
+                KoyebPlugin.KoyebSchema.Json,
+                CrossCloudKoyebProvider.Package,
+                typeof(CrossCloudKoyebProviderArgs)
             },
         };
 
