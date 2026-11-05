@@ -46,19 +46,38 @@ public class MailgunResourceFactory : CloudResourceFactory
     /// </summary>
     public bool? WaitForVerification { get; init; }
 
+    /// <summary>
+    /// Options applied by <see cref="CreateEmailService(string, string, IDnsZone?)"/>.
+    /// </summary>
+    public MailgunEmailServiceOptions EmailServiceOptions { get; init; } = new();
+
     public override IEmailService CreateEmailService(
         string name,
         string domainName,
         IDnsZone? zone = null
-    )
-    {
-        return new MailgunEmailService(
+    ) => CreateEmailService(name, domainName, zone, EmailServiceOptions);
+
+    public override IEmailService CreateEmailService(
+        string name,
+        string domainName,
+        IDnsZone? zone,
+        InboundMailOptions inboundMail
+    ) =>
+        CreateEmailService(
             name,
             domainName,
             zone,
-            _providerResource,
-            _apiKey,
-            WaitForVerification
+            EmailServiceOptions with
+            {
+                InboundMail = inboundMail,
+            }
         );
-    }
+
+    public MailgunEmailService CreateEmailService(
+        string name,
+        string domainName,
+        IDnsZone? zone,
+        MailgunEmailServiceOptions options
+    ) =>
+        new(name, domainName, zone, _providerResource, _apiKey, WaitForVerification, options);
 }

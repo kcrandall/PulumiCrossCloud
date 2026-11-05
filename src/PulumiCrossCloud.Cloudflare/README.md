@@ -113,3 +113,20 @@ When `proxied: true`:
 - NS (nameserver)
 - CAA (certificate authority authorization)
 - PTR (pointer records)
+
+## Account API tokens and R2 credentials
+
+`AccountApiToken` creates an account-owned API token, and `CloudflareR2Credentials` derives
+S3-compatible R2 keys from one scoped to a single bucket. Both use the native
+`crosscloud-cloudflare` provider (`CloudflareAccountToken`), because the bridged provider only
+creates user tokens, which stop working when that user leaves the account. The token passed in
+(`primaryToken`) must be allowed to manage the account's API tokens.
+
+- Changing the name or permissions updates the token in place and keeps its value.
+- `pulumi refresh` detects revoked tokens and permission changes made in the dashboard.
+- Destroying the resource revokes the token.
+
+Stacks created before this provider existed used a shell command for these tokens. Run
+`scripts/migrate-cloudflare-account-tokens.py` once before upgrading, or the upgrade replaces
+and revokes them; see [upgrading](../../docs/upgrading.md).
+

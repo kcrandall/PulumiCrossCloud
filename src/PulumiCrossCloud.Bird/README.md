@@ -19,8 +19,13 @@ app.AddEnvironmentVariable("Email__Username", email.Username);   // bird
 
 `email.Password` is the API key, held as a Pulumi secret. `email.Ready` (and the password's
 `ValueResource`) is the verification resource, so anything that depends on it deploys after the
-domain can send. The SMTP password needs the `emails` scope. Pass
-`BirdEmailServiceOptions.SmtpApiKey` to use a different key from the one that manages domains.
+domain can send. The SMTP password needs the `emails` scope.
+
+Give the application its own key: create one in the dashboard (or `bird api-keys create`) with
+only `emails:write`, and pass it as `BirdEmailServiceOptions.SmtpApiKey`. Pulumi cannot create
+it, because Bird never lets an API key issue keys. The key that manages domains then stays with
+the deployment and needs `domains:write`, plus `webhooks:write` and `email_management:write`
+if you use webhooks or suppressions.
 
 `new BirdResourceFactory()` uses the default provider instead. Configure it with
 `pulumi config set --secret crosscloud-bird:apiKey <key>` (or `BIRD_API_KEY`). The region
@@ -54,6 +59,27 @@ expect. If Bird reports a different number, deployment fails and names the actua
 Destroying `DomainReceiving` turns receiving off and waits until Bird finishes, because Bird
 refuses to delete a domain that still receives mail.
 
+### Inbound mail to a URL
+
+`factory.CreateEmailService(name, domain, zone, new InboundMailOptions { WebhookUrl = ... })`
+(or `BirdEmailServiceOptions.InboundMail`) turns receiving on as above and adds a `Webhook`
+for `email.received` events. `email.InboundMail.SigningSecret` holds its `whsec_` secret for
+verifying deliveries; each event's `inbound_message_id` fetches the message from
+`/v1/email/inbound-messages/{id}`. Bird webhook endpoints are workspace wide, so a handler
+receives mail for every receiving domain in the workspace and should check the recipient.
+`InboundMailOptions` is shared with Mailgun, so the same call works with either factory.
+
+### Webhooks and suppressions
+
+- `new Webhook(name, new WebhookArgs { Url = ..., Events = ["email.delivered", "email.bounced"] })`
+  subscribes an endpoint to any event types. URL, events, description and `Paused` update in
+  place. `Secret` is only known for endpoints created by Pulumi, because Bird returns it once.
+- `new Suppression(name, new SuppressionArgs { Email = "..." })` stops all email to an address.
+  Deleting it removes only that manual record.
+
+Pass `new CustomResourceOptions { Provider = factory.ProviderResource }` when the factory created
+an explicit provider.
+
 ### Other options
 
 - `DefaultIpPoolId`: the IP pool (`ipp_…`) for sends that don't name one. An empty string
@@ -77,4 +103,6 @@ Resources:
 - `crosscloud-bird:index:DomainVerification`. Triggers Bird's DNS check. A change to `triggers`
   (the published record values) runs it again. Deleting it does not change anything in Bird.
 - `crosscloud-bird:index:DomainReceiving`. Turns inbound mail on, and off again when deleted.
+- `crosscloud-bird:index:Webhook`. A webhook endpoint; everything updates in place.
+- `crosscloud-bird:index:Suppression`. A manual suppression; changing the address replaces it.
 - `crosscloud-bird:index:getSendingDomain`. Looks up a domain by name.

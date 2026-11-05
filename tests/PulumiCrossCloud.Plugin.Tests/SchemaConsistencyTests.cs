@@ -44,6 +44,18 @@ public sealed class SchemaConsistencyTests
                 typeof(DomainReceivingArgs)
             },
             {
+                BirdPlugin.BirdSchema.Json,
+                Webhook.TypeToken,
+                typeof(Webhook),
+                typeof(WebhookArgs)
+            },
+            {
+                BirdPlugin.BirdSchema.Json,
+                Suppression.TypeToken,
+                typeof(Suppression),
+                typeof(SuppressionArgs)
+            },
+            {
                 PostHogPlugin.PostHogSchema.Json,
                 PostHogOrganizationResource.TypeToken,
                 typeof(PostHogOrganizationResource),

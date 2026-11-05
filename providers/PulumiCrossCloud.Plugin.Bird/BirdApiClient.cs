@@ -7,7 +7,7 @@ using PulumiCrossCloud.Plugin.Common;
 namespace PulumiCrossCloud.Plugin.Bird;
 
 /// <summary>
-/// Client for Bird's sending-domain API (<c>/v1/email/domains</c>).
+/// Client for Bird's sending-domain, webhook and email suppression APIs.
 /// </summary>
 internal sealed class BirdApiClient(
     HttpClient http,
@@ -91,6 +91,68 @@ internal sealed class BirdApiClient(
     }
 
     private static string DomainPath(string id) => $"{Domains}/{Uri.EscapeDataString(id)}";
+
+    private const string Webhooks = "v1/webhooks";
+
+    /// <summary>
+    /// Creates a webhook endpoint. The response is the only one that carries its signing secret.
+    /// </summary>
+    public async Task<BirdWebhook> CreateWebhookAsync(JsonObject body, CancellationToken ct) =>
+        (await SendAsync(HttpMethod.Post, Webhooks, body, BirdJson.Default.BirdWebhook, ct))!;
+
+    public Task<BirdWebhook?> GetWebhookAsync(string id, CancellationToken ct) =>
+        SendAsync(
+            HttpMethod.Get,
+            WebhookPath(id),
+            null,
+            BirdJson.Default.BirdWebhook,
+            ct,
+            allowNotFound: true
+        );
+
+    public async Task<BirdWebhook> UpdateWebhookAsync(
+        string id,
+        JsonObject body,
+        CancellationToken ct
+    ) =>
+        (await SendAsync(HttpMethod.Patch, WebhookPath(id), body, BirdJson.Default.BirdWebhook, ct))!;
+
+    public Task<bool> DeleteWebhookAsync(string id, CancellationToken ct) =>
+        SendAsync(HttpMethod.Delete, WebhookPath(id), ct, allowNotFound: true);
+
+    private static string WebhookPath(string id) => $"{Webhooks}/{Uri.EscapeDataString(id)}";
+
+    private const string Suppressions = "v1/email/suppressions";
+
+    /// <summary>
+    /// Adds a manual suppression; returns the existing manual record when there is one.
+    /// </summary>
+    public async Task<BirdSuppression> CreateSuppressionAsync(string email, CancellationToken ct) =>
+        (
+            await SendAsync(
+                HttpMethod.Post,
+                Suppressions,
+                new JsonObject { ["email"] = email },
+                BirdJson.Default.BirdSuppression,
+                ct
+            )
+        )!;
+
+    public Task<BirdSuppression?> GetSuppressionAsync(string id, CancellationToken ct) =>
+        SendAsync(
+            HttpMethod.Get,
+            SuppressionPath(id),
+            null,
+            BirdJson.Default.BirdSuppression,
+            ct,
+            allowNotFound: true
+        );
+
+    public Task<bool> DeleteSuppressionAsync(string id, CancellationToken ct) =>
+        SendAsync(HttpMethod.Delete, SuppressionPath(id), ct, allowNotFound: true);
+
+    private static string SuppressionPath(string id) =>
+        $"{Suppressions}/{Uri.EscapeDataString(id)}";
 }
 
 [JsonSourceGenerationOptions(
@@ -99,4 +161,6 @@ internal sealed class BirdApiClient(
 )]
 [JsonSerializable(typeof(BirdDomain))]
 [JsonSerializable(typeof(BirdDomainList))]
+[JsonSerializable(typeof(BirdWebhook))]
+[JsonSerializable(typeof(BirdSuppression))]
 internal sealed partial class BirdJson : JsonSerializerContext;

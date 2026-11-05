@@ -79,3 +79,24 @@ internal sealed record BirdDnsRecord
     public string Status { get; init; } = "";
     public string? Error { get; init; }
 }
+
+internal sealed record BirdWebhook
+{
+    public string Id { get; init; } = "";
+    public string Url { get; init; } = "";
+    public string? Description { get; init; }
+    public List<string> Events { get; init; } = [];
+
+    /// <summary>active, degraded or paused.</summary>
+    public string Status { get; init; } = "";
+
+    /// <summary>Signing secret (<c>whsec_…</c>); only returned when the endpoint is created.</summary>
+    public string? Secret { get; init; }
+}
+
+internal sealed record BirdSuppression
+{
+    public string Id { get; init; } = "";
+    public string Email { get; init; } = "";
+    public string Reason { get; init; } = "";
+}

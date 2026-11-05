@@ -105,6 +105,37 @@ internal static class BirdSchema
                 "inboundStatus": { "type": "string" }
               },
               "required": ["domainId"]
+            },
+            "crosscloud-bird:index:Webhook": {
+              "description": "A webhook endpoint for the listed event types, such as email.received. Everything updates in place; the signing secret is only returned on creation.",
+              "inputProperties": {
+                "url": { "type": "string" },
+                "events": { "type": "array", "items": { "type": "string" } },
+                "description": { "type": "string" },
+                "paused": { "type": "boolean" }
+              },
+              "requiredInputs": ["url", "events"],
+              "properties": {
+                "url": { "type": "string" },
+                "events": { "type": "array", "items": { "type": "string" } },
+                "description": { "type": "string" },
+                "paused": { "type": "boolean" },
+                "status": { "type": "string" },
+                "secret": { "type": "string", "secret": true }
+              },
+              "required": ["url", "events", "paused", "status"]
+            },
+            "crosscloud-bird:index:Suppression": {
+              "description": "A manual suppression that stops all email to one address.",
+              "inputProperties": {
+                "email": { "type": "string", "willReplaceOnChanges": true }
+              },
+              "requiredInputs": ["email"],
+              "properties": {
+                "email": { "type": "string" },
+                "reason": { "type": "string" }
+              },
+              "required": ["email", "reason"]
             }
           },
           "functions": {

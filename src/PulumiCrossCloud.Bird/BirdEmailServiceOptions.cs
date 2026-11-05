@@ -1,8 +1,9 @@
 using Pulumi;
+using PulumiCrossCloud.Core;
 
 namespace PulumiCrossCloud.Bird;
 
-public sealed class BirdEmailServiceOptions
+public sealed record BirdEmailServiceOptions
 {
     /// <summary>
     /// Return-path (bounce) name part. Bird defaults to <c>send</c>.
@@ -39,6 +40,13 @@ public sealed class BirdEmailServiceOptions
     /// domain that already receives mail would redirect it.
     /// </summary>
     public bool ReceivingEnabled { get; init; }
+
+    /// <summary>
+    /// Enable inbound mail (as <see cref="ReceivingEnabled"/> does) and post each message to a
+    /// URL through an <c>email.received</c> webhook. Webhook endpoints receive the events of
+    /// every domain in the workspace, so handlers should check the recipient domain.
+    /// </summary>
+    public InboundMailOptions? InboundMail { get; init; }
 
     /// <summary>
     /// How many inbound MX records Bird lists for the region (3 at the time of writing). Each

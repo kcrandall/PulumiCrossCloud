@@ -14,10 +14,11 @@ minutes of inactivity; -1 disables suspension and requires a paid Neon plan. Zer
 uses Neon's five-minute default. Null leaves a setting unchanged.
 
 The Neon provider's project defaults do not update the live compute, so the library
-uses a tracked Pulumi Command resource to update that endpoint through Neon's API
-and confirm its settings. This requires `python3` on the Pulumi runner and an API
-key supplied to `NeonCloudResourceFactory` (or `neon:apiKey` when constructing the
-database without a provider). The helper does not create or delete endpoints.
-`NeonPostgresDatabase.ComputeSettings` exposes the confirmed policy as JSON.
-Running `pulumi up` applies changes to the requested policy; it does not continuously
-reconcile manual endpoint edits while the inputs remain unchanged.
+updates that endpoint through the native `crosscloud-neon` provider
+(`NeonEndpointSettings`, see [native provider plugins](provider-plugins.md)). It needs the
+API key supplied to `NeonCloudResourceFactory` (or `neon:apiKey` when constructing the
+database without a provider). It sends only the settings that differ, waits until Neon
+reports them, and never creates or deletes endpoints; removing the settings leaves the
+compute as it is. `NeonPostgresDatabase.ComputeSettings` exposes the confirmed policy as
+JSON, and `EndpointSettings` is the resource itself. `pulumi refresh` reports changes made
+in the Neon console, and the next `pulumi up` restores the requested values.

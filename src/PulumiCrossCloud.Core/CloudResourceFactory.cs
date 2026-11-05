@@ -185,6 +185,25 @@ public abstract class CloudResourceFactory
         );
 
     /// <summary>
+    /// Creates an email service that also receives mail: messages to any address at
+    /// <paramref name="domainName"/> are posted to <see cref="InboundMailOptions.WebhookUrl"/>.
+    /// Default implementation throws NotSupportedException.
+    /// </summary>
+    /// <param name="name">Pulumi resource name.</param>
+    /// <param name="domainName">The domain to send from and receive at; prefer a dedicated subdomain.</param>
+    /// <param name="zone">Optional DNS zone to configure records in, including MX records.</param>
+    /// <param name="inboundMail">Where inbound mail is delivered.</param>
+    public virtual IEmailService CreateEmailService(
+        string name,
+        string domainName,
+        IDnsZone? zone,
+        InboundMailOptions inboundMail
+    ) =>
+        throw new NotSupportedException(
+            $"Receiving email is not supported for provider {_provider}."
+        );
+
+    /// <summary>
     /// Creates a Postgres database resource.
     /// Default implementation throws NotSupportedException.
     /// </summary>

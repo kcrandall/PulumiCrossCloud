@@ -153,6 +153,117 @@ public sealed class EmailServiceLibraryTests
         Assert.DoesNotContain(mocks.Resources, r => r.Type?.StartsWith("command:") == true);
     }
 
+    [Fact]
+    public async Task InboundMailThroughBirdSubscribesAnEmailReceivedWebhook()
+    {
+        var mocks = new Mocks(inboundMxCount: 3);
+        IEmailService? email = null;
+        await Deployment.TestAsync(
+            mocks,
+            new TestOptions { IsPreview = false },
+            () =>
+                email = new BirdResourceFactory(Output.CreateSecret("bk_us1_key")).CreateEmailService(
+                    "email",
+                    "inbound.example.com",
+                    new RecordingZone(),
+                    new InboundMailOptions { WebhookUrl = "https://app.example.com/inbound" }
+                )
+        );
+
+        Assert.Contains(mocks.Resources, r => r.Type == DomainReceiving.TypeToken);
+        var webhook = mocks.Resources.Single(r => r.Type == Webhook.TypeToken);
+        Assert.Equal("https://app.example.com/inbound", webhook.Inputs["url"]);
+        Assert.Equal(["email.received"], ((IEnumerable<object>)webhook.Inputs["events"]).Cast<string>());
+        Assert.NotNull(email!.InboundMail);
+        Assert.NotNull(email.InboundMail!.SigningSecret);
+        Assert.Contains(email.DnsRecords, record => record.Type == DnsRecordType.MX);
+    }
+
+    [Fact]
+    public async Task InboundMailThroughMailgunForwardsTheDomainWithARoute()
+    {
+        var mocks = new Mocks();
+        IEmailService? email = null;
+        await Deployment.TestAsync(
+            mocks,
+            new TestOptions { IsPreview = false },
+            () =>
+                email = new MailgunResourceFactory(Output.CreateSecret("key-123")).CreateEmailService(
+                    "email",
+                    "inbound.example.com",
+                    null,
+                    new InboundMailOptions { WebhookUrl = "https://app.example.com/inbound" }
+                )
+        );
+
+        var route = mocks.Resources.Single(r => r.Type == "mailgun:index/route:Route");
+        Assert.Equal("match_recipient(\".*@inbound.example.com\")", route.Inputs["expression"]);
+        Assert.Equal(
+            ["forward(\"https://app.example.com/inbound\")", "stop()"],
+            ((IEnumerable<object>)route.Inputs["actions"]).Cast<string>()
+        );
+        Assert.NotNull(email!.InboundMail);
+        Assert.Null(email.InboundMail!.SigningSecret);
+    }
+
+    [Fact]
+    public async Task MailgunOptionsSetTrackingAndADedicatedSmtpLogin()
+    {
+        var mocks = new Mocks();
+        MailgunEmailService? email = null;
+        Task<string>? username = null;
+        await Deployment.TestAsync(
+            mocks,
+            new TestOptions { IsPreview = false },
+            () =>
+            {
+                email = new MailgunResourceFactory(Output.CreateSecret("key-123"))
+                {
+                    EmailServiceOptions = new MailgunEmailServiceOptions
+                    {
+                        ClickTracking = true,
+                        OpenTracking = false,
+                        SmtpLogin = "app",
+                    },
+                }.CreateEmailService(
+                    "email",
+                    "mail.example.com",
+                    null,
+                    new MailgunEmailServiceOptions { ClickTracking = true, SmtpLogin = "app" }
+                );
+                username = email.Username.GetValueAsync();
+            }
+        );
+
+        var domain = mocks.Resources.Single(r => r.Type == "mailgun:index/domain:Domain");
+        Assert.True((bool)domain.Inputs["clickTracking"]);
+        Assert.False(domain.Inputs.ContainsKey("openTracking"));
+        var credential = mocks.Resources.Single(r =>
+            r.Type == "mailgun:index/domainCredential:DomainCredential"
+        );
+        Assert.Equal("app", credential.Inputs["login"]);
+        Assert.Equal("mail.example.com", credential.Inputs["domain"]);
+        Assert.Equal("app@mail.example.com", await username!);
+        Assert.NotNull(email!.SmtpCredential);
+    }
+
+    [Fact]
+    public async Task MailgunDefaultsKeepThePostmasterLogin()
+    {
+        var mocks = new Mocks();
+        Task<string>? username = null;
+        await Deployment.TestAsync(
+            mocks,
+            new TestOptions { IsPreview = false },
+            () => username = new MailgunEmailService("email", "mail.example.com").Username.GetValueAsync()
+        );
+
+        Assert.Equal("postmaster@mail.example.com", await username!);
+        Assert.DoesNotContain(mocks.Resources, r => r.Type == "mailgun:index/domainCredential:DomainCredential");
+        var domain = mocks.Resources.Single(r => r.Type == "mailgun:index/domain:Domain");
+        Assert.False(domain.Inputs.ContainsKey("clickTracking"));
+    }
+
     private sealed class Mocks(int inboundMxCount = 1) : IMocks
     {
         public ConcurrentQueue<MockResourceArgs> Resources { get; } = new();
@@ -189,6 +300,11 @@ public sealed class EmailServiceLibraryTests
                 case "random:index/randomPassword:RandomPassword":
                     state["result"] = "generated";
                     break;
+                case Webhook.TypeToken:
+                    state["status"] = "active";
+                    state["paused"] = false;
+                    state["secret"] = "whsec_test";
+                    return Task.FromResult<(string?, object)>(("whk_1", state));
                 case PostHogOrganizationResource.TypeToken:
                     state["slug"] = "acme";
                     state["adopted"] = false;

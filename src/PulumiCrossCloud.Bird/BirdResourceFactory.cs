@@ -61,6 +61,23 @@ public class BirdResourceFactory : CloudResourceFactory
         IDnsZone? zone = null
     ) => CreateEmailService(name, domainName, zone, EmailServiceOptions);
 
+    public override IEmailService CreateEmailService(
+        string name,
+        string domainName,
+        IDnsZone? zone,
+        InboundMailOptions inboundMail
+    ) =>
+        CreateEmailService(
+            name,
+            domainName,
+            zone,
+            EmailServiceOptions with
+            {
+                ReceivingEnabled = true,
+                InboundMail = inboundMail,
+            }
+        );
+
     public BirdEmailService CreateEmailService(
         string name,
         string domainName,

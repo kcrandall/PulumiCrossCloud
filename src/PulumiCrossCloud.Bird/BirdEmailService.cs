@@ -24,6 +24,7 @@ public class BirdEmailService : IEmailService
     {
         options ??= new BirdEmailServiceOptions();
         Name = name;
+        var receivingEnabled = options.ReceivingEnabled || options.InboundMail is not null;
 
         Domain = new SendingDomain(
             name,
@@ -60,7 +61,7 @@ public class BirdEmailService : IEmailService
         }
         if (options.TrackingName != "")
             records.Add(Record(DnsRecordType.CNAME, BirdDnsRecords.Tracking, domainName));
-        if (options.ReceivingEnabled)
+        if (receivingEnabled)
             for (var index = 0; index < options.InboundMxRecordCount; index++)
                 records.Add(InboundMxRecord(index, options.InboundMxRecordCount, domainName));
         DnsRecords = records;
@@ -91,7 +92,7 @@ public class BirdEmailService : IEmailService
             );
         }
 
-        if (options.ReceivingEnabled)
+        if (receivingEnabled)
         {
             // Bird only enables receiving once DKIM verifies, and checks the MX records after.
             List<Resource> dependencies = [Verification is null ? Domain : Verification];
@@ -100,6 +101,26 @@ public class BirdEmailService : IEmailService
                 $"{name}-receiving",
                 new DomainReceivingArgs { DomainId = Domain.Id },
                 new CustomResourceOptions { Provider = provider, DependsOn = dependencies }
+            );
+        }
+
+        if (options.InboundMail is { } inboundMail)
+        {
+            // Webhook endpoints are workspace wide; handlers should check the recipient domain.
+            InboundWebhook = new Webhook(
+                $"{name}-inbound-webhook",
+                new WebhookArgs
+                {
+                    Url = inboundMail.WebhookUrl,
+                    Events = ["email.received"],
+                    Description = $"Inbound mail for {domainName}",
+                },
+                new CustomResourceOptions { Provider = provider, DependsOn = [Receiving!] }
+            );
+            InboundMail = new InboundMailEndpoint(
+                InboundWebhook.Url,
+                InboundWebhook.Secret,
+                InboundWebhook
             );
         }
 
@@ -127,9 +148,17 @@ public class BirdEmailService : IEmailService
     public DomainVerification? Verification { get; }
 
     /// <summary>
-    /// Inbound mail on the domain; null unless <see cref="BirdEmailServiceOptions.ReceivingEnabled"/> is set.
+    /// Inbound mail on the domain; null unless <see cref="BirdEmailServiceOptions.ReceivingEnabled"/>
+    /// or <see cref="BirdEmailServiceOptions.InboundMail"/> is set.
     /// </summary>
     public DomainReceiving? Receiving { get; }
+
+    /// <summary>
+    /// The <c>email.received</c> webhook; null unless <see cref="BirdEmailServiceOptions.InboundMail"/> is set.
+    /// </summary>
+    public Webhook? InboundWebhook { get; }
+
+    public InboundMailEndpoint? InboundMail { get; }
 
     public IReadOnlyList<IDnsRegistration> DnsRegistrations { get; }
 

@@ -36,6 +36,8 @@ internal sealed class BirdResourceProvider : ResourceProviderBase
             Delay
         );
         Resources[DomainReceivingResource.Type] = new DomainReceivingResource(GetClient, Delay);
+        Resources[WebhookResource.Type] = new WebhookResource(GetClient);
+        Resources[SuppressionResource.Type] = new SuppressionResource(GetClient);
         Functions[GetSendingDomain] = FindSendingDomain;
     }
 

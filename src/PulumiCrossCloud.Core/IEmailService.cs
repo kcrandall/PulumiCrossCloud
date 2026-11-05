@@ -38,4 +38,10 @@ public interface IEmailService : ICloudResource, IPolicyProvider<EmailPermission
     /// an application deployment, depend on it.
     /// </summary>
     Resource Ready => Password.ValueResource;
+
+    /// <summary>
+    /// Where inbound mail is delivered; null unless the service was created with
+    /// <see cref="InboundMailOptions"/>.
+    /// </summary>
+    InboundMailEndpoint? InboundMail => null;
 }

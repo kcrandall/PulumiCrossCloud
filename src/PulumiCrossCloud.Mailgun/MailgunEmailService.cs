@@ -16,9 +16,11 @@ public class MailgunEmailService : IEmailService
         IDnsZone? zone = null,
         Pulumi.Mailgun.Provider? provider = null,
         Input<string>? apiKey = null,
-        bool? waitForVerification = null
+        bool? waitForVerification = null,
+        MailgunEmailServiceOptions? options = null
     )
     {
+        options ??= new MailgunEmailServiceOptions();
         Name = name;
 
         var resourceOptions = new CustomResourceOptions { Provider = provider };
@@ -41,6 +43,8 @@ public class MailgunEmailService : IEmailService
             {
                 Name = domainName,
                 SmtpPassword = smtpPassword.Result,
+                ClickTracking = options.ClickTracking,
+                OpenTracking = options.OpenTracking,
                 // We specify a DKIM selector to ensure stable DNS record names if needed,
                 // but Mailgun defaults are usually fine ("k1" or similar).
                 // However, to extract specific records reliably without knowing the selector,
@@ -52,10 +56,44 @@ public class MailgunEmailService : IEmailService
         // Use the generated password. It is assigned after DNS and verification below, so its
         // value resource is the verification when there is one.
         Output<string> password = smtpPassword.Result;
+        var login = "postmaster";
+        if (options.SmtpLogin is { } smtpLogin)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(smtpLogin, nameof(options.SmtpLogin));
+            if (smtpLogin.Contains('@'))
+                throw new ArgumentException(
+                    "SmtpLogin is the local part only, such as \"app\".",
+                    nameof(options)
+                );
+
+            var credentialPassword = new RandomPassword(
+                $"{name}-smtp-credential-password",
+                new RandomPasswordArgs
+                {
+                    Length = 32,
+                    Special = true,
+                    OverrideSpecial = "_%@",
+                }
+            );
+            SmtpCredential = new DomainCredential(
+                $"{name}-smtp-credential",
+                new DomainCredentialArgs
+                {
+                    Domain = _domain.Name,
+                    Login = smtpLogin,
+                    Password = credentialPassword.Result,
+                },
+                resourceOptions
+            );
+            login = smtpLogin;
+            password = Output
+                .Tuple(credentialPassword.Result, SmtpCredential.Id)
+                .Apply(values => values.Item1);
+        }
 
         SmtpEndpoint = Output.Create("smtp.mailgun.org");
         SmtpPort = Output.Create(587);
-        Username = Output.Create($"postmaster@{domainName}");
+        Username = Output.Create($"{login}@{domainName}");
 
         // Process DNS Records
         // Mailgun returns a list of records. We map each one to a DnsRecord.
@@ -219,6 +257,31 @@ public class MailgunEmailService : IEmailService
             );
         }
 
+        if (options.InboundMail is { } inboundMail)
+        {
+            // Routes are account wide; the expression limits this one to the domain.
+            InboundRoute = new Route(
+                $"{name}-inbound-route",
+                new RouteArgs
+                {
+                    Priority = 0,
+                    Description = $"Inbound mail for {domainName}",
+                    Expression = $"match_recipient(\".*@{domainName}\")",
+                    Actions =
+                    [
+                        inboundMail.WebhookUrl.Apply(url => $"forward(\"{url}\")"),
+                        "stop()",
+                    ],
+                },
+                new CustomResourceOptions { Provider = provider, DependsOn = [_domain] }
+            );
+            InboundMail = new InboundMailEndpoint(
+                inboundMail.WebhookUrl.Apply(url => url),
+                null,
+                InboundRoute
+            );
+        }
+
         CustomResource ready = Verification is null ? _domain : Verification;
         Password = new MailgunSecret(
             $"{name}-password",
@@ -233,6 +296,18 @@ public class MailgunEmailService : IEmailService
     /// was not requested.
     /// </summary>
     public MailgunDomainVerification? Verification { get; }
+
+    /// <summary>
+    /// The dedicated SMTP login; null unless <see cref="MailgunEmailServiceOptions.SmtpLogin"/> is set.
+    /// </summary>
+    public DomainCredential? SmtpCredential { get; }
+
+    /// <summary>
+    /// The route that forwards inbound mail; null unless <see cref="MailgunEmailServiceOptions.InboundMail"/> is set.
+    /// </summary>
+    public Route? InboundRoute { get; }
+
+    public InboundMailEndpoint? InboundMail { get; }
 
     public string Name { get; }
 

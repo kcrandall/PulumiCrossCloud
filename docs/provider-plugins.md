@@ -6,12 +6,16 @@ Each is a separate plugin, so a program downloads only the ones it uses.
 
 | Plugin | Package | Resources |
 | --- | --- | --- |
-| `pulumi-resource-crosscloud-bird` | [PulumiCrossCloud.Bird](../src/PulumiCrossCloud.Bird/README.md) | `crosscloud-bird:index:SendingDomain`, `DomainVerification`, `DomainReceiving`, `getSendingDomain` |
+| `pulumi-resource-crosscloud-bird` | [PulumiCrossCloud.Bird](../src/PulumiCrossCloud.Bird/README.md) | `crosscloud-bird:index:SendingDomain`, `DomainVerification`, `DomainReceiving`, `Webhook`, `Suppression`, `getSendingDomain` |
 | `pulumi-resource-crosscloud-posthog` | PulumiCrossCloud.PostHog | `crosscloud-posthog:index:Organization` |
 | `pulumi-resource-crosscloud-mailgun` | PulumiCrossCloud.Mailgun | `crosscloud-mailgun:index:DomainVerification` |
+| `pulumi-resource-crosscloud-cloudflare` | [PulumiCrossCloud.Cloudflare](../src/PulumiCrossCloud.Cloudflare/README.md) | `crosscloud-cloudflare:index:AccountToken` |
+| `pulumi-resource-crosscloud-neon` | PulumiCrossCloud.Neon | `crosscloud-neon:index:EndpointSettings` |
+| `pulumi-resource-crosscloud-koyeb` | PulumiCrossCloud.Koyeb | `crosscloud-koyeb:index:ServiceSleep` |
 
-The `crosscloud-` prefix keeps them distinct from the official `posthog` and `mailgun` providers,
-which the same packages also use for the resources those providers do support.
+The `crosscloud-` prefix keeps them distinct from the official `posthog`, `mailgun`,
+`cloudflare`, `neon` and `koyeb` providers, which the same packages also use for the resources
+those providers do support.
 
 Unlike `Pulumi.Command` resources, these providers implement the full lifecycle. Inputs are
 checked during preview, each property is either updated in place or replaces the resource,
@@ -27,8 +31,12 @@ used directly fall back to each plugin's default provider:
 | crosscloud-bird | `crosscloud-bird:apiKey`, `crosscloud-bird:region` (`us1`/`eu1`) | `BIRD_API_KEY`, `BIRD_REGION` |
 | crosscloud-posthog | `crosscloud-posthog:apiKey`, `crosscloud-posthog:host` | `POSTHOG_API_KEY`, `POSTHOG_HOST` |
 | crosscloud-mailgun | `crosscloud-mailgun:apiKey`, `crosscloud-mailgun:region` (`us`/`eu`) | `MAILGUN_API_KEY`, `MAILGUN_REGION` |
+| crosscloud-cloudflare | `crosscloud-cloudflare:apiToken` | `CLOUDFLARE_API_TOKEN` |
+| crosscloud-neon | `crosscloud-neon:apiKey` | `NEON_API_KEY` |
+| crosscloud-koyeb | `crosscloud-koyeb:apiToken` | `KOYEB_TOKEN` |
 
-`BIRD_API_URL` and `MAILGUN_API_URL` point a plugin at another endpoint, such as a local fake.
+`BIRD_API_URL`, `MAILGUN_API_URL`, `CLOUDFLARE_API_URL`, `NEON_API_URL` and `KOYEB_API_URL` point
+a plugin at another endpoint, such as a local fake.
 
 ## Distribution
 
@@ -68,6 +76,11 @@ plugins:
     - name: crosscloud-bird
       path: ./plugins/bird
 ```
+
+## Adding a provider
+
+See [writing a provider plugin](provider-authoring.md). The release workflow picks up every
+`providers/PulumiCrossCloud.Plugin.<Name>` project automatically.
 
 ## Tests
 
