@@ -564,7 +564,9 @@ public class GcpCloudRunCompute : ICompute
 
     private Output<string> GetContainerImageUri()
     {
-        if (_containerImage is null)
+        // A pipeline-owned image is pushed by the pipeline, not this stack, so its container
+        // image is only named: point Cloud Run at the repository and the seed tag.
+        if (_containerImage is null || (_containerImage.DeploymentResult is null && ImageDeployedByPipeline))
             return ContainerRegistry.RegistryUrlOutput.Apply(url =>
                 $"{url.TrimEnd('/')}/{_imageName}:{_imageTag}"
             );
@@ -572,7 +574,8 @@ public class GcpCloudRunCompute : ICompute
         var deploymentResult = _containerImage.DeploymentResult;
         if (deploymentResult is null)
             throw new InvalidOperationException(
-                $"Container image '{_containerImage.Name}' must be pushed before building Cloud Run compute '{Name}'."
+                $"Container image '{_containerImage.Name}' must be pushed before building Cloud Run compute '{Name}', "
+                    + "or set ImageDeployedByPipeline when a deployment pipeline pushes it."
             );
 
         return deploymentResult.Apply(result =>

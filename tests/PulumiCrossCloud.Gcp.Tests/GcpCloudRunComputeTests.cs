@@ -26,6 +26,26 @@ public sealed class GcpCloudRunComputeTests(CloudRunDeployment deployment)
     }
 
     [Fact]
+    public void PipelineOwnedNamedImage_UsesTheRegistryAndSeedTagWithoutAPush()
+    {
+        // A stack that only names the image the pipeline pushes, as Nightfall does.
+        Assert.True(
+            PulumiPropertyPath.TryResolve(
+                deployment.ServiceInputs("pipeline-named-image-api"),
+                GcpCloudRunCompute.ContainerImagePropertyPath,
+                out var image
+            )
+        );
+        Assert.Equal(CloudRunDeployment.ExpectedImageUri, image);
+    }
+
+    [Fact]
+    public void UnpushedImage_StillFailsWhenPulumiOwnsTheImage()
+    {
+        Assert.Contains("must be pushed before building", CloudRunStack.UnpushedImageError);
+    }
+
+    [Fact]
     public void RequiredSecret_WaitsForTheSecretVersion()
     {
         Assert.Contains(
@@ -237,6 +257,7 @@ public sealed class CloudRunStack : Pulumi.Stack
     public const string BuiltImageUri =
         "us-central1-docker.pkg.dev/unit-test-project/test-registry/api:sha-12345678";
     public static ComputeConfigurationResponse SecretConfiguration { get; private set; } = null!;
+    public static string UnpushedImageError { get; private set; } = "";
 
     public CloudRunStack()
         : base(new StackOptions { ResourceTransformations = [Record] })
@@ -286,6 +307,28 @@ public sealed class CloudRunStack : Pulumi.Stack
 
         var image = new TestContainerImage(registry);
         new GcpCloudRunCompute("built-image-api", registry, containerImage: image).Build();
+
+        new GcpCloudRunCompute(
+            "pipeline-named-image-api",
+            registry,
+            imageTag: CloudRunDeployment.ImageTag,
+            containerImage: new GcpContainerImage(CloudRunDeployment.ImageName, registry)
+        )
+        {
+            ImageDeployedByPipeline = true,
+        }.Build();
+        try
+        {
+            new GcpCloudRunCompute(
+                "pulumi-owned-unpushed-api",
+                registry,
+                containerImage: new GcpContainerImage("unpushed", registry)
+            ).Build();
+        }
+        catch (InvalidOperationException error)
+        {
+            UnpushedImageError = error.Message;
+        }
 
         var secret = new GcpSecret("api-password", "test-value");
         var secretCompute = new GcpCloudRunCompute("secret-api", registry, "api");

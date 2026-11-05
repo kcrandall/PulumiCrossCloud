@@ -5,6 +5,13 @@ These releases replaced shell commands (`Pulumi.Command`) with native provider p
 repository's GitHub releases. In CI, set `GITHUB_TOKEN` (any token; in GitHub Actions,
 `${{ github.token }}`) so the downloads don't hit GitHub's anonymous rate limit.
 
+The packages now need `Pulumi` 3.116.1 or later, `Pulumi.Cloudflare` 6.23.2 and `Pulumi.Gcp`
+10.2.0; raise direct references in your project to match, or the build fails with NU1605.
+
+`HealthCheckConfiguration.StartupIntervalSeconds`, `StartupTimeoutSeconds` and
+`StartupUnhealthyThreshold` now reach Cloud Run's startup probe. A stack that set them while
+they were ignored sees its Cloud Run service update to the values in its code.
+
 Run `pulumi preview` after upgrading and before `pulumi up`. The sections below say what the
 preview should show.
 
