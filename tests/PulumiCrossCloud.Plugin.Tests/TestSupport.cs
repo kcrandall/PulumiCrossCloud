@@ -185,7 +185,12 @@ internal static class Props
             PropertyValue property => property,
             string text => new PropertyValue(text),
             bool flag => new PropertyValue(flag),
+            double number => new PropertyValue(number),
+            int number => new PropertyValue(number),
             string[] items => new PropertyValue([.. items.Select(item => new PropertyValue(item))]),
+            IDictionary<string, string> map => new PropertyValue(
+                map.ToImmutableDictionary(pair => pair.Key, pair => new PropertyValue(pair.Value))
+            ),
             _ => throw new ArgumentException($"Unsupported test value {value}"),
         };
 

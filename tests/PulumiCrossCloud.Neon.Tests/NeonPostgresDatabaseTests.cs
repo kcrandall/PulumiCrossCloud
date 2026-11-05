@@ -14,16 +14,21 @@ public sealed class NeonPostgresDatabaseTests(NeonDeployment deployment)
     [Fact]
     public void ExplicitSettings_ManageTheImplicitEndpointInPlace()
     {
-        var command = deployment.Resources.Single(r => r.Name == "prod-db-compute-settings");
-        var environment = (ImmutableDictionary<string, object>)command.Inputs["environment"];
-        Assert.Equal("prod-db-project-id", environment["NEON_PROJECT_ID"]);
-        Assert.Equal("main-branch", environment["NEON_BRANCH_ID"]);
-        Assert.Equal("0.25", environment["NEON_MIN_CU"]);
-        Assert.Equal("0.25", environment["NEON_MAX_CU"]);
-        Assert.Equal("-1", environment["NEON_SUSPEND_TIMEOUT_SECONDS"]);
+        var settings = deployment.Resources.Single(r => r.Name == "prod-db-compute-settings");
+        Assert.Equal(NeonEndpointSettings.TypeToken, settings.Type);
+        Assert.Equal("prod-db-project-id", settings.Inputs["projectId"]);
+        Assert.Equal("main-branch", settings.Inputs["branchId"]);
+        Assert.Equal(0.25, settings.Inputs["minCu"]);
+        Assert.Equal(1.0, settings.Inputs["maxCu"]);
+        Assert.Equal(-1, Convert.ToInt32(settings.Inputs["suspendTimeoutSeconds"]));
         Assert.DoesNotContain(deployment.Resources, r => r.Type == "neon:index/endpoint:Endpoint");
-        Assert.False(command.Inputs.ContainsKey("delete"));
-        Assert.Equal(command.Inputs["create"], command.Inputs["update"]);
+        Assert.DoesNotContain(deployment.Resources, r => r.Type?.StartsWith("command:") == true);
+
+        var provider = deployment.Resources.Single(r =>
+            r.Name == "prod-db-compute-settings-provider"
+        );
+        Assert.Equal("pulumi:providers:crosscloud-neon", provider.Type);
+        Assert.Equal("mock-api-key", provider.Inputs["apiKey"]);
     }
 
     [Fact]
@@ -35,20 +40,66 @@ public sealed class NeonPostgresDatabaseTests(NeonDeployment deployment)
     [Fact]
     public void PartialSettings_LeaveOtherSettingsUnspecified()
     {
-        var command = deployment.Resources.Single(r => r.Name == "partial-db-compute-settings");
-        var environment = (ImmutableDictionary<string, object>)command.Inputs["environment"];
-        Assert.Equal("", environment["NEON_MIN_CU"]);
-        Assert.Equal("", environment["NEON_MAX_CU"]);
-        Assert.Equal("300", environment["NEON_SUSPEND_TIMEOUT_SECONDS"]);
+        var settings = deployment.Resources.Single(r => r.Name == "partial-db-compute-settings");
+        Assert.False(settings.Inputs.ContainsKey("minCu"));
+        Assert.False(settings.Inputs.ContainsKey("maxCu"));
+        Assert.Equal(0, Convert.ToInt32(settings.Inputs["suspendTimeoutSeconds"]));
+    }
+
+    [Fact]
+    public void ComputeSettingsKeepsThePreviousJsonFormat()
+    {
+        Assert.Equal(
+            "{\"autoscaling_limit_max_cu\": 1.0, \"autoscaling_limit_min_cu\": 0.25, \"endpointId\": \"ep-1\", \"suspend_timeout_seconds\": -1}",
+            deployment.ProdComputeSettings
+        );
+        Assert.Equal(
+            "{\"endpointId\": \"ep-1\", \"suspend_timeout_seconds\": 300}",
+            deployment.PartialComputeSettings
+        );
     }
 }
 
 public sealed class NeonDeployment : IMocks, IAsyncLifetime
 {
-    public ConcurrentQueue<MockResourceArgs> Resources { get; } = new();
+    private Task<string>? _prod;
+    private Task<string>? _partial;
 
-    public async Task InitializeAsync() =>
-        await Deployment.TestAsync<NeonStack>(this, new TestOptions { IsPreview = false });
+    public ConcurrentQueue<MockResourceArgs> Resources { get; } = new();
+    public string? ProdComputeSettings { get; private set; }
+    public string? PartialComputeSettings { get; private set; }
+
+    public async Task InitializeAsync()
+    {
+        await Deployment.TestAsync(
+            this,
+            new TestOptions { IsPreview = false },
+            () =>
+            {
+                var factory = new NeonCloudResourceFactory("mock-api-key");
+                var prod = (NeonPostgresDatabase)
+                    factory.CreatePostgresDatabase(
+                        "prod-db",
+                        new NeonPostgresOptions
+                        {
+                            MinCu = 0.25,
+                            MaxCu = 1,
+                            SuspendTimeoutSeconds = -1,
+                        }
+                    );
+                factory.CreatePostgresDatabase("default-db");
+                var partial = (NeonPostgresDatabase)
+                    factory.CreatePostgresDatabase(
+                        "partial-db",
+                        new NeonPostgresOptions { SuspendTimeoutSeconds = 0 }
+                    );
+                _prod = prod.ComputeSettings!.GetValueAsync();
+                _partial = partial.ComputeSettings!.GetValueAsync();
+            }
+        );
+        ProdComputeSettings = await _prod!;
+        PartialComputeSettings = await _partial!;
+    }
 
     public Task DisposeAsync() => Task.CompletedTask;
 
@@ -59,7 +110,7 @@ public sealed class NeonDeployment : IMocks, IAsyncLifetime
         state.TryAdd("defaultBranchId", "main-branch");
         state.TryAdd("databaseHost", "test.neon.tech");
         state.TryAdd("password", "mock-password");
-        state.TryAdd("stdout", "{}");
+        state.TryAdd("endpointId", "ep-1");
         return Task.FromResult<(string? id, object state)>(($"{args.Name}-id", state));
     }
 
@@ -67,24 +118,18 @@ public sealed class NeonDeployment : IMocks, IAsyncLifetime
         Task.FromResult<object>(ImmutableDictionary<string, object>.Empty);
 }
 
-public sealed class NeonStack : Stack
+internal static class OutputTestExtensions
 {
-    public NeonStack()
+    public static Task<T> GetValueAsync<T>(this Output<T> output)
     {
-        var factory = new NeonCloudResourceFactory("mock-api-key");
-        factory.CreatePostgresDatabase(
-            "prod-db",
-            new NeonPostgresOptions
-            {
-                MinCu = 0.25,
-                MaxCu = 0.25,
-                SuspendTimeoutSeconds = -1,
-            }
+        var completion = new TaskCompletionSource<T>(
+            TaskCreationOptions.RunContinuationsAsynchronously
         );
-        factory.CreatePostgresDatabase("default-db");
-        factory.CreatePostgresDatabase(
-            "partial-db",
-            new NeonPostgresOptions { SuspendTimeoutSeconds = 300 }
-        );
+        output.Apply(value =>
+        {
+            completion.TrySetResult(value);
+            return value;
+        });
+        return completion.Task;
     }
 }

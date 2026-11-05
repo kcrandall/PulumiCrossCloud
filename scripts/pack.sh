@@ -84,7 +84,6 @@ dotnet build "${SOLUTION_FILE}" \
   "${MSBUILD_VERSION_ARG[@]}"
 
 if [[ "${RUN_TESTS}" == "true" ]]; then
-  python3 -m unittest discover -s "${REPO_DIR}/tests/PulumiCrossCloud.Neon.Tests" -p 'test_*.py'
   TEST_FILTER_ARGS=()
   if [[ "${INCLUDE_INTEGRATION_TESTS}" != "true" ]]; then
     TEST_FILTER_ARGS=(--filter 'Category!=Integration&Category!=LiveApi')

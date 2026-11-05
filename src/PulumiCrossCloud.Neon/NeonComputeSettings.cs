@@ -1,6 +1,5 @@
 using System.Globalization;
 using Pulumi;
-using Pulumi.Command.Local;
 using Pulumi.Neon;
 
 namespace PulumiCrossCloud.Neon;
@@ -21,27 +20,20 @@ internal static class NeonComputeSettings
             );
     }
 
-    internal static Command? Create(
+    internal static NeonEndpointSettings? Create(
         string name,
         Project project,
         NeonPostgresOptions options,
-        Provider? provider
+        Pulumi.Neon.Provider? provider
     )
     {
         if (options.MinCu is null && options.MaxCu is null && options.SuspendTimeoutSeconds is null)
             return null;
 
         // Project defaultEndpointSettings describes defaults for new endpoints, not the live
-        // endpoint. The pinned provider also drops -1 from those defaults. Update the implicit
-        // endpoint in place through a tracked command; never create a duplicate read/write
-        // compute or replace a project's database. This requires python3 on the Pulumi runner.
-        using var stream =
-            typeof(NeonComputeSettings).Assembly.GetManifestResourceStream(
-                "PulumiCrossCloud.Neon.configure-neon-compute.py"
-            ) ?? throw new InvalidOperationException("Missing embedded Neon compute policy.");
-        using var reader = new StreamReader(stream);
-        var command =
-            $"python3 - <<'NEON_COMPUTE_POLICY'\n{reader.ReadToEnd()}\nNEON_COMPUTE_POLICY";
+        // endpoint, and the pinned provider drops -1 from those defaults. The native
+        // crosscloud-neon provider updates the implicit endpoint in place; it never creates a
+        // duplicate read/write compute or replaces a project's database.
         var apiKey = provider is null
             ? new Pulumi.Config("neon").RequireSecret("apiKey")
             : provider.ApiKey.Apply(value =>
@@ -50,25 +42,53 @@ internal static class NeonComputeSettings
                     "Neon compute settings require an explicit API key."
                 )
             );
-
-        return new Command(
-            $"{name}-compute-settings",
-            new CommandArgs
-            {
-                Create = command,
-                Update = command,
-                Environment =
-                {
-                    ["NEON_API_KEY"] = Output.CreateSecret(apiKey),
-                    ["NEON_PROJECT_ID"] = project.Id,
-                    ["NEON_BRANCH_ID"] = project.DefaultBranchId,
-                    ["NEON_MIN_CU"] = options.MinCu?.ToString(CultureInfo.InvariantCulture) ?? "",
-                    ["NEON_MAX_CU"] = options.MaxCu?.ToString(CultureInfo.InvariantCulture) ?? "",
-                    ["NEON_SUSPEND_TIMEOUT_SECONDS"] =
-                        options.SuspendTimeoutSeconds?.ToString(CultureInfo.InvariantCulture) ?? "",
-                },
-            },
-            new CustomResourceOptions { DependsOn = [project] }
+        var settingsProvider = new CrossCloudNeonProvider(
+            $"{name}-compute-settings-provider",
+            new CrossCloudNeonProviderArgs { ApiKey = apiKey }
         );
+
+        return new NeonEndpointSettings(
+            $"{name}-compute-settings",
+            new NeonEndpointSettingsArgs
+            {
+                ProjectId = project.Id,
+                BranchId = project.DefaultBranchId,
+                MinCu = options.MinCu,
+                MaxCu = options.MaxCu,
+                SuspendTimeoutSeconds = options.SuspendTimeoutSeconds,
+            },
+            new CustomResourceOptions { Provider = settingsProvider }
+        );
+    }
+
+    /// <summary>
+    /// The applied settings as JSON, in the format earlier releases printed, for example
+    /// <c>{"autoscaling_limit_max_cu": 0.25, "autoscaling_limit_min_cu": 0.25, "endpointId": "ep-1", "suspend_timeout_seconds": 300}</c>.
+    /// </summary>
+    internal static Output<string> Describe(
+        NeonEndpointSettings settings,
+        NeonPostgresOptions options
+    ) =>
+        settings.EndpointId.Apply(endpointId =>
+        {
+            // Keys sorted, matching the previous script's json.dumps(..., sort_keys=True).
+            List<string> fields = [];
+            if (options.MaxCu is { } maxCu)
+                fields.Add($"\"autoscaling_limit_max_cu\": {FormatFloat(maxCu)}");
+            if (options.MinCu is { } minCu)
+                fields.Add($"\"autoscaling_limit_min_cu\": {FormatFloat(minCu)}");
+            fields.Add($"\"endpointId\": \"{endpointId}\"");
+            if (options.SuspendTimeoutSeconds is { } suspend)
+                fields.Add(
+                    $"\"suspend_timeout_seconds\": {(suspend == 0 ? 300 : suspend).ToString(CultureInfo.InvariantCulture)}"
+                );
+            return $"{{{string.Join(", ", fields)}}}";
+        });
+
+    // Python prints whole floats with a trailing .0.
+    private static string FormatFloat(double value)
+    {
+        var text = value.ToString("R", CultureInfo.InvariantCulture);
+        return text.Contains('.') || text.Contains('E') ? text : $"{text}.0";
     }
 }

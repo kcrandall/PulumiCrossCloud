@@ -80,16 +80,6 @@ class ReleaseScriptTests(unittest.TestCase):
         source = self.repo / "src" / "PulumiCrossCloud.Core"
         source.mkdir(parents=True)
         (source / "PulumiCrossCloud.Core.csproj").write_text("<Project />\n")
-        test_dir = self.repo / "tests" / "PulumiCrossCloud.Neon.Tests"
-        test_dir.mkdir(parents=True)
-        # Python 3.14 fails unittest discovery when it finds no tests. Keep this
-        # fixture valid while the outer tests inspect only the dotnet arguments.
-        (test_dir / "test_fixture.py").write_text(
-            "import unittest\n"
-            "class FixtureTests(unittest.TestCase):\n"
-            "    def test_fixture(self):\n"
-            "        pass\n"
-        )
         executable_dir = self.repo / "bin"
         executable_dir.mkdir()
         dotnet = executable_dir / "dotnet"

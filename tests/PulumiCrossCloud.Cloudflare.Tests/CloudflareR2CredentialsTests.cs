@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Pulumi;
 using Pulumi.Testing;
 
@@ -24,36 +23,51 @@ public sealed class CloudflareR2CredentialsTests
     }
 
     [Fact]
-    public void TokenPayload_PreservesTheBucketResourceWithoutAddingAccountWideAccess()
+    public async Task Token_IsScopedToTheBucketWithoutAccountWideAccess()
     {
+        var deployment = await R2Deployment.RunAsync();
+        var token = deployment.Resources.Single(r => r.Type == CloudflareAccountToken.TypeToken);
         var policy = CloudflareR2Credentials.CreateBucketPolicy(AccountId, BucketName);
-        var payload = AccountApiToken.SerializePayload(
-            "nightfall-assets-creds",
+
+        Assert.Equal("nightfall-assets-creds-token", token.Name);
+        Assert.Equal("nightfall-assets-creds", token.Inputs["name"]);
+        Assert.Equal(AccountId, token.Inputs["accountId"]);
+        Assert.Equal(
             [policy.PermissionGroupId],
-            new Dictionary<string, string> { [policy.Resource] = "*" }
+            ((IEnumerable<object>)token.Inputs["permissionGroupIds"]).Cast<string>()
         );
-
-        using var document = JsonDocument.Parse(payload);
-        var root = document.RootElement;
-        var tokenPolicy = root.GetProperty("policies").EnumerateArray().Single();
-        var resources = tokenPolicy.GetProperty("resources").EnumerateObject().ToArray();
-        var permissionGroups = tokenPolicy
-            .GetProperty("permission_groups")
-            .EnumerateArray()
-            .ToArray();
-
-        Assert.Equal("nightfall-assets-creds", root.GetProperty("name").GetString());
-        Assert.Equal("allow", tokenPolicy.GetProperty("effect").GetString());
+        var resources = (IDictionary<string, object>)token.Inputs["resources"];
+        Assert.Equal("*", Assert.Single(resources, pair => pair.Key == policy.Resource).Value);
         Assert.Single(resources);
-        Assert.Equal(policy.Resource, resources[0].Name);
-        Assert.Equal("*", resources[0].Value.GetString());
-        Assert.DoesNotContain(
-            resources,
-            resource =>
-                resource.Name.StartsWith("com.cloudflare.api.account.", StringComparison.Ordinal)
+    }
+
+    [Fact]
+    public async Task Credentials_DeriveTheS3KeysFromTheTokenAndKeepThemSecret()
+    {
+        var deployment = await R2Deployment.RunAsync();
+
+        Assert.Equal("nightfall-assets-creds-token-id", deployment.AccessKeyId);
+        Assert.Equal(
+            Convert.ToHexStringLower(
+                System.Security.Cryptography.SHA256.HashData("test-token-value"u8.ToArray())
+            ),
+            deployment.SecretAccessKey
         );
-        Assert.Single(permissionGroups);
-        Assert.Equal(policy.PermissionGroupId, permissionGroups[0].GetProperty("id").GetString());
+        Assert.True(deployment.SecretAccessKeyIsSecret);
+        Assert.True(deployment.TokenValueIsSecret);
+    }
+
+    [Fact]
+    public async Task Token_UsesAnExplicitProviderWithThePrimaryTokenAsASecret()
+    {
+        var deployment = await R2Deployment.RunAsync();
+        var provider = deployment.Resources.Single(r =>
+            r.Type == "pulumi:providers:crosscloud-cloudflare"
+        );
+
+        Assert.Equal("nightfall-assets-creds-provider", provider.Name);
+        Assert.Equal("test-primary-token", provider.Inputs["apiToken"]);
+        Assert.DoesNotContain(deployment.Resources, r => r.Type?.StartsWith("command:") == true);
     }
 
     [Theory]
@@ -65,62 +79,71 @@ public sealed class CloudflareR2CredentialsTests
             CloudflareR2Credentials.CreateBucketPolicy(accountId, bucketName)
         );
     }
-
-    [Fact]
-    public async Task TokenCommand_DeletesTheOldTokenBeforeCreatingItsReplacement()
-    {
-        await Deployment.TestAsync<R2CredentialsStack>(
-            new R2CredentialsMocks(),
-            new TestOptions { IsPreview = false }
-        );
-
-        var options = Assert.IsType<CustomResourceOptions>(R2CredentialsStack.TokenCommandOptions);
-        Assert.True(options.DeleteBeforeReplace);
-    }
 }
 
-public sealed class R2CredentialsStack : Stack
+internal sealed record R2Deployment(
+    IReadOnlyList<MockResourceArgs> Resources,
+    string AccessKeyId,
+    string SecretAccessKey,
+    bool SecretAccessKeyIsSecret,
+    bool TokenValueIsSecret
+)
 {
-    internal static ResourceOptions? TokenCommandOptions { get; private set; }
-
-    public R2CredentialsStack()
-        : base(new StackOptions { ResourceTransformations = [RecordTokenCommandOptions] })
+    public static async Task<R2Deployment> RunAsync()
     {
-        TokenCommandOptions = null;
-        _ = new CloudflareR2Credentials(
-            "nightfall-assets-creds",
-            "0123456789abcdef0123456789abcdef",
-            "nightfall-assets",
-            "test-primary-token"
+        var mocks = new R2CredentialsMocks();
+        CloudflareR2Credentials? credentials = null;
+        await Deployment.TestAsync(
+            mocks,
+            new TestOptions { IsPreview = false },
+            () =>
+            {
+                credentials = new CloudflareR2Credentials(
+                    "nightfall-assets-creds",
+                    "0123456789abcdef0123456789abcdef",
+                    "nightfall-assets",
+                    "test-primary-token"
+                );
+            }
         );
+
+        var (accessKeyId, _) = await Values(credentials!.AccessKeyId);
+        var (secretAccessKey, secret) = await Values(credentials.SecretAccessKey);
+        var token = (AccountApiToken)
+            typeof(CloudflareR2Credentials)
+                .GetField("_token", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+                .GetValue(credentials)!;
+        var (_, tokenSecret) = await Values(token.TokenValue);
+        return new R2Deployment([.. mocks.Resources], accessKeyId, secretAccessKey, secret, tokenSecret);
     }
 
-    private static ResourceTransformationResult? RecordTokenCommandOptions(
-        ResourceTransformationArgs args
-    )
+    private static async Task<(string Value, bool Secret)> Values(Output<string> output)
     {
-        if (
-            args.Resource.GetResourceType() == "command:local:Command"
-            && args.Resource.GetResourceName() == "nightfall-assets-creds-create"
-        )
-            TokenCommandOptions = args.Options;
-
-        return null;
+        var completion = new TaskCompletionSource<string>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+        output.Apply(value =>
+        {
+            completion.TrySetResult(value);
+            return value;
+        });
+        return (await completion.Task, await Output.IsSecretAsync(output));
     }
 }
 
 public sealed class R2CredentialsMocks : IMocks
 {
+    public System.Collections.Concurrent.ConcurrentQueue<MockResourceArgs> Resources { get; } = new();
+
     public Task<(string? id, object state)> NewResourceAsync(MockResourceArgs args)
     {
+        Resources.Enqueue(args);
         var name = args.Name ?? "resource";
         var state = args.Inputs.ToDictionary(pair => pair.Key, pair => pair.Value);
-
-        if (args.Type == "command:local:Command")
+        if (args.Type == CloudflareAccountToken.TypeToken)
         {
-            state["stdout"] =
-                "{\"success\":true,\"result\":{\"id\":\"test-access-key\",\"value\":\"test-token-value\"}}";
-            state["stderr"] = "";
+            state["value"] = "test-token-value";
+            state["status"] = "active";
         }
 
         return Task.FromResult<(string? id, object state)>(($"{name}-id", state));

@@ -14,8 +14,12 @@
     <ProjectReference Include="../../providers/PulumiCrossCloud.Plugin.Bird/PulumiCrossCloud.Plugin.Bird.csproj" />
     <ProjectReference Include="../../providers/PulumiCrossCloud.Plugin.PostHog/PulumiCrossCloud.Plugin.PostHog.csproj" />
     <ProjectReference Include="../../providers/PulumiCrossCloud.Plugin.Mailgun/PulumiCrossCloud.Plugin.Mailgun.csproj" />
+    <ProjectReference Include="../../providers/PulumiCrossCloud.Plugin.Cloudflare/PulumiCrossCloud.Plugin.Cloudflare.csproj" />
+    <ProjectReference Include="../../providers/PulumiCrossCloud.Plugin.Neon/PulumiCrossCloud.Plugin.Neon.csproj" />
     <ProjectReference Include="../../src/PulumiCrossCloud.Bird/PulumiCrossCloud.Bird.csproj" />
     <ProjectReference Include="../../src/PulumiCrossCloud.PostHog/PulumiCrossCloud.PostHog.csproj" />
     <ProjectReference Include="../../src/PulumiCrossCloud.Mailgun/PulumiCrossCloud.Mailgun.csproj" />
+    <ProjectReference Include="../../src/PulumiCrossCloud.Cloudflare/PulumiCrossCloud.Cloudflare.csproj" />
+    <ProjectReference Include="../../src/PulumiCrossCloud.Neon/PulumiCrossCloud.Neon.csproj" />
   </ItemGroup>
 </Project>

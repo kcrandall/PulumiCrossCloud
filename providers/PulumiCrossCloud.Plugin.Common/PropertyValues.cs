@@ -25,6 +25,12 @@ public static class PropertyValues
     public static bool? GetBool(ImmutableDictionary<string, PropertyValue>? map, string key) =>
         Get(map, key).TryGetBool(out var value) ? value : null;
 
+    public static double? GetNumber(ImmutableDictionary<string, PropertyValue>? map, string key) =>
+        Get(map, key).TryGetNumber(out var value) ? value : null;
+
+    public static PropertyValue Number(double? value) =>
+        value is null ? PropertyValue.Null : new PropertyValue(value.Value);
+
     public static PropertyValue String(string? value) =>
         value is null ? PropertyValue.Null : new PropertyValue(value);
 

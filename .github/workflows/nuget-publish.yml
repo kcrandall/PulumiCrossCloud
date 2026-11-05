@@ -143,6 +143,9 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
       - name: Install Pulumi CLI
         run: |
           curl -fsSL https://get.pulumi.com | sh -s -- --version 3.272.0
@@ -154,7 +157,7 @@ jobs:
           # Authenticated requests avoid GitHub's anonymous API rate limit on shared runners.
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          for plugin in bird posthog mailgun; do
+          for plugin in $(bash ./scripts/package-plugins.sh --list); do
             pulumi plugin install resource "crosscloud-${plugin}" "${VERSION}" \
               --server github://api.github.com/kcrandall/PulumiCrossCloud
           done

@@ -193,13 +193,20 @@ public abstract class JsonApiClient
         {
             await using var stream = await response.Content.ReadAsStreamAsync(ct);
             using var document = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
-            // Bird: {"error":{"code","message","request_id"}}; PostHog: {"code","detail"}; Mailgun: {"message"}.
+            // Bird: {"error":{"code","message","request_id"}}; PostHog: {"code","detail"};
+            // Mailgun: {"message"}; Cloudflare and Koyeb: {"errors":[{"code","message"}]}.
             var root = document.RootElement;
             var error =
-                root.TryGetProperty("error", out var nested)
+                root.ValueKind == JsonValueKind.Object
+                && root.TryGetProperty("error", out var nested)
                 && nested.ValueKind == JsonValueKind.Object
                     ? nested
-                    : root;
+                : root.ValueKind == JsonValueKind.Object
+                && root.TryGetProperty("errors", out var errors)
+                && errors.ValueKind == JsonValueKind.Array
+                && errors.GetArrayLength() > 0
+                    ? errors[0]
+                : root;
             code = StringProperty(error, "code");
             detail = StringProperty(error, "message") ?? StringProperty(error, "detail");
             requestId = StringProperty(error, "request_id") ?? requestId;
@@ -221,10 +228,13 @@ public abstract class JsonApiClient
     }
 
     private static string? StringProperty(JsonElement element, string name) =>
-        element.ValueKind == JsonValueKind.Object
-        && element.TryGetProperty(name, out var value)
-        && value.ValueKind == JsonValueKind.String
-            ? value.GetString()
+        element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value)
+            ? value.ValueKind switch
+            {
+                JsonValueKind.String => value.GetString(),
+                JsonValueKind.Number => value.GetRawText(),
+                _ => null,
+            }
             : null;
 }
 

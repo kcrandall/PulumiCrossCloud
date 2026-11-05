@@ -72,7 +72,10 @@ public class NeonPostgresDatabase : IPostgresDatabase
         );
         var branchId = _project.DefaultBranchId;
 
-        ComputeSettings = NeonComputeSettings.Create(name, _project, neonOptions, provider)?.Stdout;
+        EndpointSettings = NeonComputeSettings.Create(name, _project, neonOptions, provider);
+        ComputeSettings = EndpointSettings is null
+            ? null
+            : NeonComputeSettings.Describe(EndpointSettings, neonOptions);
 
         var masterUser = options?.MasterUsername ?? "admin";
         _role = new Role(
@@ -123,7 +126,12 @@ public class NeonPostgresDatabase : IPostgresDatabase
     public Output<string> ProjectId => _project.Id;
     public Output<string> BranchId => _project.DefaultBranchId;
 
-    /// <summary>The confirmed default compute policy, when explicit settings are supplied.</summary>
+    /// <summary>
+    /// The settings of the default compute, when explicit settings are supplied.
+    /// </summary>
+    public NeonEndpointSettings? EndpointSettings { get; }
+
+    /// <summary>The confirmed default compute policy as JSON, when explicit settings are supplied.</summary>
     public Output<string>? ComputeSettings { get; }
 
     public void EnableExtension(string extensionName)

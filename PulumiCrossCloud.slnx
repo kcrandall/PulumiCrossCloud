@@ -6,8 +6,10 @@
   </Configurations>
   <Folder Name="/providers/">
     <Project Path="providers/PulumiCrossCloud.Plugin.Bird/PulumiCrossCloud.Plugin.Bird.csproj" />
+    <Project Path="providers/PulumiCrossCloud.Plugin.Cloudflare/PulumiCrossCloud.Plugin.Cloudflare.csproj" />
     <Project Path="providers/PulumiCrossCloud.Plugin.Common/PulumiCrossCloud.Plugin.Common.csproj" />
     <Project Path="providers/PulumiCrossCloud.Plugin.Mailgun/PulumiCrossCloud.Plugin.Mailgun.csproj" />
+    <Project Path="providers/PulumiCrossCloud.Plugin.Neon/PulumiCrossCloud.Plugin.Neon.csproj" />
     <Project Path="providers/PulumiCrossCloud.Plugin.PostHog/PulumiCrossCloud.Plugin.PostHog.csproj" />
   </Folder>
   <Folder Name="/samples/">

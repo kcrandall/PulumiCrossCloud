@@ -8,7 +8,19 @@ VERSION=""
 MODE="aot"
 RIDS=()
 PLUGINS=()
-ALL_PLUGINS=(bird posthog mailgun)
+LIST_ONLY="false"
+
+# Every providers/PulumiCrossCloud.Plugin.<Name> project except the shared library is a plugin,
+# published as pulumi-resource-crosscloud-<name> (lowercase).
+PLUGIN_NAMES=()
+PLUGIN_PROJECTS=()
+for project_dir in "${REPO_DIR}"/providers/PulumiCrossCloud.Plugin.*/; do
+  suffix="$(basename "${project_dir}")"
+  suffix="${suffix#PulumiCrossCloud.Plugin.}"
+  [[ "${suffix}" == "Common" ]] && continue
+  PLUGIN_NAMES+=("$(printf '%s' "${suffix}" | tr '[:upper:]' '[:lower:]')")
+  PLUGIN_PROJECTS+=("${project_dir}PulumiCrossCloud.Plugin.${suffix}.csproj")
+done
 
 usage() {
   cat <<EOF
@@ -21,7 +33,8 @@ name Pulumi expects for github:// plugin downloads:
 Options:
   --version <semver>     Plugin version; must match the PulumiCrossCloud package version.
   --rid <rid>            linux-x64, linux-arm64, osx-arm64, win-x64 or win-arm64.
-  --plugin <name>        bird, posthog or mailgun (repeatable; default: all).
+  --plugin <name>        A plugin name such as bird (repeatable; default: all).
+  --list                 Print the plugin names, one per line, and exit.
   --framework-dependent  Publish a small single-file executable that needs the .NET 10 runtime
                          instead of a Native AOT binary.
   --output <path>        Output directory (default: artifacts/plugins).
@@ -45,6 +58,10 @@ while (($# > 0)); do
       PLUGINS+=("${2:-}")
       shift 2
       ;;
+    --list)
+      LIST_ONLY="true"
+      shift
+      ;;
     --framework-dependent)
       MODE="framework"
       shift
@@ -65,28 +82,31 @@ while (($# > 0)); do
   esac
 done
 
+if [[ "${LIST_ONLY}" == "true" ]]; then
+  printf '%s\n' "${PLUGIN_NAMES[@]}"
+  exit 0
+fi
+
 if [[ -z "${VERSION}" || ${#RIDS[@]} -eq 0 ]]; then
   usage >&2
   exit 1
 fi
 if [[ ${#PLUGINS[@]} -eq 0 ]]; then
-  PLUGINS=("${ALL_PLUGINS[@]}")
+  PLUGINS=("${PLUGIN_NAMES[@]}")
 fi
 
 mkdir -p "${OUTPUT_DIR}"
 OUTPUT_DIR="$(cd -- "${OUTPUT_DIR}" && pwd)"
 
 for plugin in "${PLUGINS[@]}"; do
-  case "${plugin}" in
-    bird) project="Bird" ;;
-    posthog) project="PostHog" ;;
-    mailgun) project="Mailgun" ;;
-    *)
-      echo "Unknown plugin: ${plugin}" >&2
-      exit 1
-      ;;
-  esac
-  project_file="${REPO_DIR}/providers/PulumiCrossCloud.Plugin.${project}/PulumiCrossCloud.Plugin.${project}.csproj"
+  project_file=""
+  for index in "${!PLUGIN_NAMES[@]}"; do
+    [[ "${PLUGIN_NAMES[${index}]}" == "${plugin}" ]] && project_file="${PLUGIN_PROJECTS[${index}]}"
+  done
+  if [[ -z "${project_file}" ]]; then
+    echo "Unknown plugin: ${plugin} (available: ${PLUGIN_NAMES[*]})" >&2
+    exit 1
+  fi
 
   for rid in "${RIDS[@]}"; do
     case "${rid}" in

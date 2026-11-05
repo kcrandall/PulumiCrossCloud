@@ -2,9 +2,13 @@ using System.Reflection;
 using System.Text.Json;
 using Pulumi;
 using PulumiCrossCloud.Bird;
+using PulumiCrossCloud.Cloudflare;
+using PulumiCrossCloud.Neon;
 using PulumiCrossCloud.Mailgun;
 using PulumiCrossCloud.PostHog;
 using BirdPlugin = PulumiCrossCloud.Plugin.Bird;
+using CloudflarePlugin = PulumiCrossCloud.Plugin.Cloudflare;
+using NeonPlugin = PulumiCrossCloud.Plugin.Neon;
 using MailgunPlugin = PulumiCrossCloud.Plugin.Mailgun;
 using PostHogPlugin = PulumiCrossCloud.Plugin.PostHog;
 
@@ -49,6 +53,18 @@ public sealed class SchemaConsistencyTests
                 typeof(MailgunDomainVerification),
                 typeof(MailgunDomainVerificationArgs)
             },
+            {
+                NeonPlugin.NeonSchema.Json,
+                NeonEndpointSettings.TypeToken,
+                typeof(NeonEndpointSettings),
+                typeof(NeonEndpointSettingsArgs)
+            },
+            {
+                CloudflarePlugin.CloudflareSchema.Json,
+                CloudflareAccountToken.TypeToken,
+                typeof(CloudflareAccountToken),
+                typeof(CloudflareAccountTokenArgs)
+            },
         };
 
     public static TheoryData<string, string, Type> Providers =>
@@ -64,6 +80,16 @@ public sealed class SchemaConsistencyTests
                 MailgunPlugin.MailgunSchema.Json,
                 CrossCloudMailgunProvider.Package,
                 typeof(CrossCloudMailgunProviderArgs)
+            },
+            {
+                NeonPlugin.NeonSchema.Json,
+                CrossCloudNeonProvider.Package,
+                typeof(CrossCloudNeonProviderArgs)
+            },
+            {
+                CloudflarePlugin.CloudflareSchema.Json,
+                CrossCloudCloudflareProvider.Package,
+                typeof(CrossCloudCloudflareProviderArgs)
             },
         };
 
