@@ -124,7 +124,7 @@ public sealed class EmailServiceLibraryTests
     public async Task PostHogOrganizationUsesTheNativeProvider()
     {
         var mocks = new Mocks();
-        Task<string>? json = null;
+        Task<string>? slug = null;
         await Deployment.TestAsync(
             mocks,
             new TestOptions { IsPreview = false },
@@ -140,7 +140,7 @@ public sealed class EmailServiceLibraryTests
                         DeleteOnDestroy = true,
                     }
                 );
-                json = organization.RawJson.GetValueAsync();
+                slug = organization.Slug.GetValueAsync();
             }
         );
 
@@ -149,7 +149,7 @@ public sealed class EmailServiceLibraryTests
         Assert.True((bool)resource.Inputs["deleteOnDestroy"]);
         var provider = mocks.Resources.Single(r => r.Type == "pulumi:providers:crosscloud-posthog");
         Assert.Equal("https://eu.posthog.com", provider.Inputs["host"]);
-        Assert.Contains("\"slug\":\"acme\"", await json!);
+        Assert.Equal("acme", await slug!);
         Assert.DoesNotContain(mocks.Resources, r => r.Type?.StartsWith("command:") == true);
     }
 

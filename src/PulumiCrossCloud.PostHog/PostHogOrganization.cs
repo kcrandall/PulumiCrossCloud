@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Pulumi;
 using PulumiCrossCloud.Core;
 
@@ -32,11 +31,6 @@ public sealed class PostHogOrganization : ComponentResource
     public Output<string> Slug { get; }
 
     /// <summary>
-    /// The organization's id, name and slug as JSON, kept for compatibility with earlier releases.
-    /// </summary>
-    public Output<string> RawJson { get; }
-
-    /// <summary>
     /// The underlying <c>crosscloud-posthog:index:Organization</c> resource.
     /// </summary>
     public PostHogOrganizationResource Organization { get; }
@@ -67,19 +61,6 @@ public sealed class PostHogOrganization : ComponentResource
 
         OrganizationId = Organization.Id;
         Slug = Organization.Slug.Apply(slug => slug ?? string.Empty);
-        RawJson = Output
-            .Tuple(Organization.Id, Organization.Name, Slug)
-            .Apply(values =>
-                JsonSerializer.Serialize(
-                    new Dictionary<string, string>
-                    {
-                        ["id"] = values.Item1,
-                        ["name"] = values.Item2,
-                        ["slug"] = values.Item3,
-                    }
-                )
-            );
-
         RegisterOutputs(
             new Dictionary<string, object?> { ["organizationId"] = OrganizationId, ["slug"] = Slug }
         );
