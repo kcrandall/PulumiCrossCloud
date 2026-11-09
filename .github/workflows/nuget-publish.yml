@@ -166,6 +166,10 @@ jobs:
   publish:
     needs: [version, verify-plugins]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # NuGet trusted publishing exchanges this job's OIDC token for a short-lived API key.
+      id-token: write
     env:
       DOTNET_NOLOGO: true
     steps:
@@ -183,13 +187,13 @@ jobs:
           name: nuget-packages
           path: artifacts/nuget
 
+      - name: Log in to NuGet with trusted publishing
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: kcrandall
+
       - name: Publish packages to NuGet
         env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-        run: |
-          if [[ -z "${NUGET_API_KEY}" ]]; then
-            echo "NUGET_API_KEY is not configured; skipping publish."
-            exit 0
-          fi
-
-          bash ./scripts/publish-nuget.sh
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+        run: bash ./scripts/publish-nuget.sh
